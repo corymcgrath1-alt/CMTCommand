@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CMTCommand</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand">
+        <div class="brand-mark">CM</div>
+        <div>
+          <strong>CMTCommand</strong>
+          <span>Operations center</span>
+        </div>
+      </div>
+
+      <label class="role-switcher">
+        <span>Role</span>
+        <select id="roleSelect">
+          <option>Executive</option>
+          <option>Branch Manager</option>
+          <option>Dispatcher</option>
+          <option>Project Manager</option>
+          <option>Lab Manager</option>
+          <option>Field Technician</option>
+          <option>Geotechnical Engineer</option>
+          <option>Admin / Billing</option>
+        </select>
+      </label>
+
+      <nav id="navList" class="nav-list"></nav>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="roleEyebrow">Executive view</p>
+          <h1 id="pageTitle">Command Center</h1>
+        </div>
+        <div class="topbar-actions">
+          <div class="search-wrap">
+            <span aria-hidden="true">/</span>
+            <input id="globalSearch" type="search" placeholder="Search projects, work orders, technicians...">
+          </div>
+          <button class="icon-button" id="refreshButton" type="button" title="Refresh dashboard">Refresh</button>
+        </div>
+      </header>
+
+      <section id="globalResults" class="global-results" hidden></section>
+      <section id="app" class="page"></section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
