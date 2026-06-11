@@ -32,5 +32,10 @@ If the default `python` command is unavailable on this machine, use the bundled 
 - Global search
 - Sortable and filterable tables
 - Realistic sample data generated fully in-browser
+- Field Status & Dispatch Location with work-hour-only operational visibility
+- Cascading coverage analysis for emergency dispatch decisions
+- Approved partner firm recommendations using local demo vendor data
+- Outsource decision support for when internal coverage would leave critical work uncovered
+- Escalation summary for manager review
 
 This MVP is local-only and does not call any external APIs.

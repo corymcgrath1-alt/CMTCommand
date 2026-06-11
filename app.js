@@ -69,6 +69,176 @@ const serviceCatalog = [
   ["Geotechnical boring observation", ["WACEL Soils"], ["Drill rig", "Sample jars"]]
 ];
 
+const emergencyRequest = {
+  project: "Potomac Secure Logistics Center",
+  contractor: "Atlantic Concrete Partners",
+  service: "Last-minute concrete testing",
+  truckEta: "90 minutes",
+  requiredCerts: ["Level 2 Concrete"],
+  requiredAccess: ["Secure Site Access"],
+  requiredEquipment: ["Slump cone", "Air meter", "Thermometer", "Cylinder molds", "Sample tags"],
+  priority: "Emergency"
+};
+
+const emergencyTechnicians = [
+  {
+    name: "Marcus Lee",
+    certs: ["Level 2 Concrete", "Secure Site Access"],
+    access: ["Secure Site Access"],
+    equipment: ["Slump cone", "Air meter", "Thermometer", "Cylinder molds", "Sample tags"],
+    distance: 18,
+    availability: "Available soon",
+    status: "Available",
+    currentAssignment: null
+  },
+  {
+    name: "Dana Ortiz",
+    certs: ["Level 2 Concrete", "Secure Site Access"],
+    access: ["Secure Site Access"],
+    equipment: ["Slump cone", "Thermometer", "Cylinder molds", "Sample tags"],
+    distance: 38,
+    availability: "Available after lab pickup",
+    status: "Available",
+    currentAssignment: null,
+    limitation: "Needs air meter pickup"
+  },
+  {
+    name: "Mike Harris",
+    certs: ["Level 2 Concrete", "Secure Site Access"],
+    access: ["Secure Site Access"],
+    equipment: ["Slump cone", "Air meter", "Thermometer", "Cylinder molds", "Sample tags"],
+    distance: 22,
+    availability: "Assigned until covered",
+    status: "Assigned",
+    currentAssignment: {
+      service: "Rebar inspection",
+      project: "Arlington Medical Pavilion",
+      priority: "Critical",
+      requiredCerts: ["ICC Reinforced Concrete"],
+      requiredEquipment: ["Inspection tablet", "Camera", "Rebar gauge"],
+      requiredAccess: ["Standard Site Access"],
+      startTime: "10:30 AM",
+      movable: false,
+      clientImpact: "Inspection hold point blocks concrete placement if uncovered.",
+      driveTimeImpact: "Adds 22 minutes to emergency site after coverage handoff.",
+      overtimeImpact: "Possible 0.5 hr overtime if emergency runs long."
+    }
+  },
+  {
+    name: "James Walker",
+    certs: ["ICC Reinforced Concrete", "Secure Site Access"],
+    access: ["Secure Site Access", "Standard Site Access"],
+    equipment: ["Inspection tablet", "Camera", "Rebar gauge"],
+    distance: 46,
+    distanceToMikeJob: 14,
+    availability: "Available after 10:10 AM",
+    status: "Available",
+    currentAssignment: null,
+    note: "Can cover Mike's rebar inspection but cannot cover emergency concrete request."
+  },
+  {
+    name: "Cory McGrath",
+    certs: ["Level 2 Concrete"],
+    access: ["Standard Site Access"],
+    equipment: ["Slump cone", "Air meter", "Thermometer", "Cylinder molds", "Sample tags"],
+    distance: 12,
+    availability: "Available",
+    status: "Available",
+    currentAssignment: null
+  },
+  {
+    name: "Elena Brooks",
+    certs: ["Level 2 Concrete expired", "Secure Site Access"],
+    access: ["Secure Site Access"],
+    equipment: ["Slump cone", "Air meter", "Thermometer", "Cylinder molds", "Sample tags"],
+    distance: 28,
+    availability: "Available",
+    status: "Available",
+    currentAssignment: null
+  },
+  {
+    name: "Rob Chen",
+    certs: ["ICC Reinforced Concrete", "WACEL Soils"],
+    access: ["Secure Site Access", "Airport Badge"],
+    equipment: ["Inspection tablet", "Camera", "Proof roll kit"],
+    distance: 31,
+    availability: "Assigned",
+    status: "Assigned",
+    currentAssignment: {
+      service: "Airport proof roll",
+      project: "Dulles Apron Repair",
+      priority: "Critical",
+      requiredCerts: ["WACEL Soils"],
+      requiredEquipment: ["Proof roll kit", "Vehicle", "Tablet"],
+      requiredAccess: ["Airport Badge"],
+      startTime: "10:00 AM",
+      movable: false,
+      clientImpact: "Airfield access window is difficult to recover if missed.",
+      driveTimeImpact: "High cross-region drive impact.",
+      overtimeImpact: "Likely overtime and schedule compression."
+    }
+  }
+];
+
+const approvedPartnerFirms = [
+  {
+    name: "Metro Materials Testing",
+    services: ["Concrete testing", "Soil compaction", "Masonry"],
+    certifications: ["ACI Field", "WACEL Concrete", "WACEL Soils"],
+    secureAccess: "Available for select technicians",
+    region: "DC / Northern Virginia / Maryland",
+    responseMinutes: 120,
+    typicalResponse: "2 hours",
+    status: "Active",
+    rating: 4.5,
+    contact: "Tanya Brooks",
+    phone: "(202) 555-0184",
+    email: "dispatch@metromaterialstesting.demo"
+  },
+  {
+    name: "Capitol Geotech & Testing",
+    services: ["Geotechnical drilling", "Soils lab", "Density testing", "Foundation observations"],
+    certifications: ["WACEL Soils", "AASHTO lab capability"],
+    secureAccess: "No",
+    region: "DC / Maryland",
+    responseMinutes: 240,
+    typicalResponse: "Same day if scheduled before noon",
+    status: "Backup Only",
+    rating: 4.0,
+    contact: "Andre Mills",
+    phone: "(301) 555-0198",
+    email: "coordination@capitolgeotech.demo"
+  },
+  {
+    name: "Atlantic Inspection Partners",
+    services: ["Rebar inspection", "Post-tension", "Structural steel", "Fireproofing"],
+    certifications: ["ICC Reinforced Concrete", "ICC Structural Steel", "ICC Fireproofing"],
+    secureAccess: "Yes",
+    region: "VA / DC / MD",
+    responseMinutes: 150,
+    typicalResponse: "1-3 hours",
+    status: "Active",
+    rating: 4.7,
+    contact: "Monica Reyes",
+    phone: "(703) 555-0166",
+    email: "partners@atlanticinspection.demo"
+  },
+  {
+    name: "Mid-Atlantic Lab & Field Services",
+    services: ["Concrete testing", "Lab testing", "Aggregate testing", "CCRL/AASHTO-accredited lab support"],
+    certifications: ["ACI", "AASHTO", "CCRL-related lab capabilities"],
+    secureAccess: "Limited",
+    region: "DMV",
+    responseMinutes: 300,
+    typicalResponse: "Next day, emergency by approval",
+    status: "Active",
+    rating: 4.2,
+    contact: "Renee Patel",
+    phone: "(571) 555-0139",
+    email: "fielddesk@midatlanticlab.demo"
+  }
+];
+
 const projects = [
   {
     id: "P-24018",
@@ -400,6 +570,122 @@ function locationVisibility(tech) {
 
 function locationDistance(tech, order) {
   return 3 + ((Number(tech.id.slice(-2)) * 4 + order.distanceSeed) % 31);
+}
+
+function hasAll(values, required) {
+  return required.every(item => values.some(value => value.toLowerCase() === item.toLowerCase()));
+}
+
+function hasActiveCert(values, required) {
+  return required.every(item => values.some(value => value.toLowerCase() === item.toLowerCase() && !/expired/i.test(value)));
+}
+
+function missingItems(values, required) {
+  return required.filter(item => !values.some(value => value.toLowerCase() === item.toLowerCase() && !/expired/i.test(value)));
+}
+
+function canCoverAssignment(candidate, assignment) {
+  if (!assignment) return false;
+  const certsOk = hasActiveCert(candidate.certs, assignment.requiredCerts);
+  const equipmentOk = hasAll(candidate.equipment, assignment.requiredEquipment);
+  const accessOk = hasAll(candidate.access, assignment.requiredAccess);
+  const etaOk = candidate.distanceToMikeJob ? candidate.distanceToMikeJob <= 20 : candidate.distance <= 30;
+  const available = candidate.status === "Available" || /available/i.test(candidate.availability);
+  return certsOk && equipmentOk && accessOk && etaOk && available;
+}
+
+function analyzeEmergencyCandidate(candidate) {
+  const missingCerts = missingItems(candidate.certs, emergencyRequest.requiredCerts);
+  const missingAccess = missingItems(candidate.access, emergencyRequest.requiredAccess);
+  const missingEquipment = missingItems(candidate.equipment, emergencyRequest.requiredEquipment);
+  const qualified = missingCerts.length === 0 && missingAccess.length === 0 && missingEquipment.length === 0;
+  const current = candidate.currentAssignment;
+  let category = "Not Qualified";
+  let score = qualified ? 70 : 20;
+  let risk = qualified ? "Low" : "High";
+  let coverage = null;
+  let reason = "Does not meet all emergency requirements.";
+
+  if (qualified) {
+    score += Math.max(0, 35 - candidate.distance);
+    if (candidate.status === "Available") {
+      category = candidate.limitation ? "Backup With Risk" : "Best Direct Match";
+      risk = candidate.limitation ? "Moderate" : "Low";
+      reason = candidate.limitation || "Available, qualified, has secure access, and can reach the site inside the truck ETA.";
+    } else if (current) {
+      const replacement = emergencyTechnicians.find(other => other.name !== candidate.name && canCoverAssignment(other, current));
+      coverage = replacement ? {
+        replacement,
+        uncovered: false,
+        steps: [
+          `Assign ${candidate.name} to ${emergencyRequest.project}.`,
+          `Assign ${replacement.name} to ${candidate.name}'s ${current.service}.`,
+          "No uncovered work remains."
+        ]
+      } : {
+        replacement: null,
+        uncovered: true,
+        steps: ["No internal technician can cover this technician's current critical assignment."]
+      };
+      if (current.priority === "Critical" && replacement) {
+        category = "Best Match With Coverage Plan";
+        risk = "Moderate";
+        reason = `${candidate.name} is qualified, but current critical work must be backfilled before reassignment.`;
+        score -= 8;
+      } else if (current.priority === "Critical") {
+        category = "Backup With Risk";
+        risk = "High";
+        reason = "No internal technician can cover this technician's current critical assignment. Reassigning would leave another job uncovered.";
+        score -= 35;
+      } else {
+        category = "Backup With Risk";
+        risk = "Moderate";
+        reason = "Current assignment is lower priority and may be movable with dispatcher approval.";
+        score -= 15;
+      }
+    }
+  }
+
+  if (!qualified) {
+    const gaps = [
+      missingCerts.length ? `missing/expired certification: ${missingCerts.join(", ")}` : "",
+      missingAccess.length ? `missing access: ${missingAccess.join(", ")}` : "",
+      missingEquipment.length ? `missing equipment: ${missingEquipment.join(", ")}` : ""
+    ].filter(Boolean);
+    reason = gaps.join("; ");
+  }
+
+  return { candidate, qualified, category, score: Math.max(0, Math.min(100, Math.round(score))), risk, coverage, reason, missingCerts, missingAccess, missingEquipment };
+}
+
+function partnerMatchScore(partner) {
+  const serviceMatch = partner.services.some(service => /concrete testing/i.test(service));
+  const certMatch = partner.certifications.some(cert => /aci|wacel concrete/i.test(cert));
+  const accessMatch = /yes|available|limited/i.test(partner.secureAccess);
+  const regionMatch = /dc|va|virginia|dmv|maryland/i.test(partner.region);
+  const responseOk = partner.responseMinutes <= 180;
+  let score = 0;
+  if (serviceMatch) score += 28;
+  if (certMatch) score += 22;
+  if (accessMatch) score += partner.secureAccess === "Yes" ? 18 : 12;
+  if (regionMatch) score += 14;
+  if (responseOk) score += 10;
+  if (partner.status === "Active") score += 8;
+  score += Math.round(partner.rating * 2);
+  return { partner, score, serviceMatch, certMatch, accessMatch, regionMatch, responseOk };
+}
+
+function analyzeEmergencyDispatch() {
+  const candidates = emergencyTechnicians
+    .map(analyzeEmergencyCandidate)
+    .sort((a, b) => b.score - a.score);
+  const categories = ["Best Direct Match", "Best Match With Coverage Plan", "Backup With Risk", "Not Qualified"];
+  const partners = approvedPartnerFirms
+    .map(partnerMatchScore)
+    .sort((a, b) => b.score - a.score);
+  const bestPartner = partners.find(item => item.serviceMatch && item.certMatch && item.accessMatch && item.regionMatch && item.partner.status === "Active");
+  const internalCoverageSafe = candidates.some(item => item.category === "Best Direct Match" || item.category === "Best Match With Coverage Plan");
+  return { candidates, categories, partners, bestPartner, internalCoverageSafe };
 }
 
 function logLocationView(scope) {
@@ -750,6 +1036,7 @@ function renderDispatch() {
         <button class="primary-button assign-button" type="button">${bestMatch?.qualified ? `Assign ${bestMatch.tech.name}` : "Assign Technician"}</button>
       </aside>
     </section>
+    ${renderCoverageImpactAnalysis()}
     ${renderTablePanel("Today's Work Orders", "Filter, sort, and select work by priority, status, project, or technician.", "dispatchOrders", workOrders.slice(0, 16), [
       ["id", "WO"],
       ["project", "Project"],
@@ -758,6 +1045,221 @@ function renderDispatch() {
       ["priority", "Priority"],
       ["status", "Status"]
     ])}
+  `;
+}
+
+function renderCoverageImpactAnalysis() {
+  const analysis = analyzeEmergencyDispatch();
+  return `
+    <section class="coverage-panel panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Emergency dispatch workflow</p>
+          <h2>Coverage Impact Analysis</h2>
+          <p>Checks direct technician fit, then verifies whether a technician's current assignment can be safely covered before recommending reassignment.</p>
+        </div>
+        <span class="badge bad">${emergencyRequest.priority}</span>
+      </div>
+      <div class="emergency-request-card">
+        <div>
+          <span class="subtle">Emergency request</span>
+          <strong>${emergencyRequest.project}</strong>
+          <span>${emergencyRequest.contractor} called after a last-minute concrete truck was added to the schedule.</span>
+        </div>
+        <dl>
+          <div><dt>Service</dt><dd>${emergencyRequest.service}</dd></div>
+          <div><dt>Truck ETA</dt><dd>${emergencyRequest.truckEta}</dd></div>
+          <div><dt>Certification</dt><dd>${emergencyRequest.requiredCerts.join(", ")}</dd></div>
+          <div><dt>Access</dt><dd>${emergencyRequest.requiredAccess.join(", ")}</dd></div>
+          <div><dt>Equipment</dt><dd>${emergencyRequest.requiredEquipment.join(", ")}</dd></div>
+        </dl>
+      </div>
+      <div class="coverage-actions">
+        <button class="primary-button" type="button">Assign Direct Match</button>
+        <button class="primary-button" type="button">Assign With Coverage Plan</button>
+        <button class="ghost-button" type="button">Recommend Outsource</button>
+        <button class="ghost-button" type="button">Escalate to Branch Manager</button>
+      </div>
+      <div class="coverage-category-grid">
+        ${analysis.categories.map(category => renderCoverageCategory(category, analysis.candidates.filter(item => item.category === category))).join("")}
+        ${renderOutsourceRecommendation(analysis)}
+      </div>
+      ${renderPartnerFirmReview(analysis.partners)}
+      ${renderEscalationSummary(analysis)}
+    </section>
+  `;
+}
+
+function renderCoverageCategory(category, items) {
+  const tone = category === "Best Direct Match" ? "good" : category === "Best Match With Coverage Plan" ? "info" : category === "Backup With Risk" ? "warn" : "bad";
+  return `
+    <article class="coverage-category">
+      <div class="coverage-category-head">
+        <h3>${category}</h3>
+        <span class="badge ${tone}">${items.length} reviewed</span>
+      </div>
+      <div class="status-list">
+        ${items.length ? items.map(renderCoverageCandidate).join("") : `<div class="empty-state">No candidates in this category.</div>`}
+      </div>
+    </article>
+  `;
+}
+
+function renderCoverageCandidate(item) {
+  const current = item.candidate.currentAssignment;
+  return `
+    <div class="coverage-card ${toneForStatus(item.risk)}">
+      <div class="coverage-card-top">
+        <div>
+          <strong>${item.candidate.name}</strong>
+          <span class="subtle">${item.candidate.distance} min away / ${item.candidate.availability}</span>
+        </div>
+        <div class="pill-list">
+          <span class="badge ${item.qualified ? "good" : "bad"}">${item.qualified ? `${item.score}% fit` : "Not qualified"}</span>
+          <span class="badge ${toneForStatus(item.risk)}">${item.risk} risk</span>
+        </div>
+      </div>
+      <p>${item.reason}</p>
+      <div class="coverage-detail-grid">
+        <div><span>Certifications</span><strong>${item.candidate.certs.join(", ")}</strong></div>
+        <div><span>Access</span><strong>${item.candidate.access.join(", ")}</strong></div>
+        <div><span>Equipment</span><strong>${item.candidate.equipment.join(", ")}</strong></div>
+      </div>
+      ${current ? renderCurrentAssignmentImpact(item, current) : `<div class="coverage-note good"><strong>Current assignment</strong><span>Available without pulling coverage from another job.</span></div>`}
+    </div>
+  `;
+}
+
+function renderCurrentAssignmentImpact(item, current) {
+  return `
+    <div class="assignment-impact">
+      <div class="assignment-impact-head">
+        <strong>Current assignment: ${current.project}</strong>
+        <span class="badge ${current.priority === "Critical" ? "bad" : "warn"}">${current.priority}</span>
+      </div>
+      <div class="coverage-detail-grid">
+        <div><span>Service</span><strong>${current.service}</strong></div>
+        <div><span>Required certs</span><strong>${current.requiredCerts.join(", ")}</strong></div>
+        <div><span>Required equipment</span><strong>${current.requiredEquipment.join(", ")}</strong></div>
+        <div><span>Movable</span><strong>${current.movable ? "Yes" : "No without coverage"}</strong></div>
+        <div><span>Replacement</span><strong>${item.coverage?.replacement ? item.coverage.replacement.name : "No internal coverage found"}</strong></div>
+        <div><span>Drive time</span><strong>${current.driveTimeImpact}</strong></div>
+        <div><span>Overtime</span><strong>${current.overtimeImpact}</strong></div>
+      </div>
+      <div class="coverage-note ${item.coverage?.uncovered ? "bad" : "info"}">
+        <strong>${item.coverage?.uncovered ? "Coverage gap" : "Coverage plan"}</strong>
+        <span>${item.coverage?.steps.join(" ")}</span>
+      </div>
+      <div class="coverage-note warn">
+        <strong>Client/project impact</strong>
+        <span>${current.clientImpact}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderOutsourceRecommendation(analysis) {
+  const partner = analysis.bestPartner;
+  if (!partner) {
+    return `
+      <article class="coverage-category outsource-card">
+        <div class="coverage-category-head">
+          <h3>Outsource Recommended</h3>
+          <span class="badge bad">Escalate</span>
+        </div>
+        <div class="coverage-note bad">
+          <strong>No approved internal or partner coverage found.</strong>
+          <span>Escalate to Branch Manager.</span>
+        </div>
+      </article>
+    `;
+  }
+  return `
+    <article class="coverage-category outsource-card">
+      <div class="coverage-category-head">
+        <h3>Outsource Recommended</h3>
+        <span class="badge info">Sample/demo partner firm</span>
+      </div>
+      <div class="partner-recommendation">
+        <strong>${partner.partner.name}</strong>
+        <span class="subtle">${partner.partner.status} vendor / ${partner.partner.rating}/5 preferred rating / ${partner.partner.typicalResponse}</span>
+        <p>${partner.partner.name} matches concrete testing capability, regional coverage, active vendor status, and ${partner.partner.secureAccess.toLowerCase()} secure-site access.</p>
+        <div class="coverage-detail-grid">
+          <div><span>Contact</span><strong>${partner.partner.contact}</strong></div>
+          <div><span>Phone</span><strong>${partner.partner.phone}</strong></div>
+          <div><span>Email</span><strong>${partner.partner.email}</strong></div>
+          <div><span>Services matched</span><strong>${partner.partner.services.filter(service => /concrete/i.test(service)).join(", ") || partner.partner.services[0]}</strong></div>
+          <div><span>Certifications</span><strong>${partner.partner.certifications.join(", ")}</strong></div>
+          <div><span>Risk</span><strong>${partner.responseOk ? "May miss 90-minute truck ETA; call immediately." : "Response time likely exceeds truck ETA."}</strong></div>
+        </div>
+        <div class="coverage-actions compact">
+          <button class="ghost-button" type="button">Call Partner</button>
+          <button class="ghost-button" type="button">Create Outsource Request</button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderPartnerFirmReview(partners) {
+  return `
+    <section class="partner-review">
+      <div class="section-title">
+        <div>
+          <h2>Approved Partner Firm Review</h2>
+          <p>Sample/demo partner firms reviewed only when internal coverage risks leaving critical work uncovered.</p>
+        </div>
+      </div>
+      <div class="partner-grid">
+        ${partners.map(item => `
+          <article class="partner-card">
+            <div class="coverage-card-top">
+              <div>
+                <strong>${item.partner.name}</strong>
+                <span class="subtle">${item.partner.region}</span>
+              </div>
+              <span class="badge ${item.partner.status === "Active" ? "good" : "warn"}">${item.partner.status}</span>
+            </div>
+            <div class="partner-score"><span style="width:${Math.min(100, item.score)}%"></span></div>
+            <div class="coverage-detail-grid">
+              <div><span>Services</span><strong>${item.partner.services.join(", ")}</strong></div>
+              <div><span>Certifications</span><strong>${item.partner.certifications.join(", ")}</strong></div>
+              <div><span>Secure access</span><strong>${item.partner.secureAccess}</strong></div>
+              <div><span>Response</span><strong>${item.partner.typicalResponse}</strong></div>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderEscalationSummary(analysis) {
+  const best = analysis.candidates[0];
+  const notQualified = analysis.candidates.filter(item => item.category === "Not Qualified").map(item => `${item.candidate.name}: ${item.reason}`);
+  const coveragePlans = analysis.candidates
+    .filter(item => item.coverage)
+    .map(item => `${item.candidate.name}: ${item.coverage.uncovered ? "coverage failed" : `coverage via ${item.coverage.replacement.name}`}`);
+  return `
+    <section class="escalation-summary">
+      <div class="section-title">
+        <div>
+          <h2>Escalation Summary</h2>
+          <p>Manager-ready decision record for the emergency request.</p>
+        </div>
+      </div>
+      <div class="escalation-grid">
+        <div><strong>Emergency request</strong><span>${emergencyRequest.service} for ${emergencyRequest.project}; truck ETA ${emergencyRequest.truckEta}.</span></div>
+        <div><strong>Required certifications/access</strong><span>${emergencyRequest.requiredCerts.join(", ")} / ${emergencyRequest.requiredAccess.join(", ")}.</span></div>
+        <div><strong>Internal candidates reviewed</strong><span>${analysis.candidates.length} technicians reviewed across direct, coverage-chain, backup, and not-qualified categories.</span></div>
+        <div><strong>Unavailable or not qualified</strong><span>${notQualified.join(" ")}</span></div>
+        <div><strong>Coverage chains attempted</strong><span>${coveragePlans.join(" ") || "No coverage chains required for direct available matches."}</span></div>
+        <div><strong>Partner firms reviewed</strong><span>${analysis.partners.map(item => item.partner.name).join(", ")}.</span></div>
+        <div><strong>Best available option</strong><span>${best.category}: ${best.candidate.name}. ${analysis.bestPartner ? `Partner fallback: ${analysis.bestPartner.partner.name}.` : ""}</span></div>
+        <div><strong>Remaining risks</strong><span>Emergency work may compete with critical inspections; partner response may exceed the 90-minute truck ETA.</span></div>
+        <div><strong>Decision needed</strong><span>Approve direct internal dispatch, approve coverage-chain reassignment, recommend outsource, or escalate to Branch Manager.</span></div>
+      </div>
+    </section>
   `;
 }
 
