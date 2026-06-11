@@ -38,5 +38,8 @@ If the default `python` command is unavailable on this machine, use the bundled 
 - Outsource decision support for when internal coverage would leave critical work uncovered
 - Escalation summary for manager review
 - Emergency Dispatch Decision Log created from local action-button clicks and shown in Dispatch plus Command Center activity
+- Data Intake Center for local CSV import/export, document upload staging, and smart extraction preview
+- CSV import previews with required-column validation and local apply/cancel controls
+- Future OCR/AI extraction roadmap placeholder with review-assisted confirmation before saving
 
 This MVP is local-only and does not call any external APIs.

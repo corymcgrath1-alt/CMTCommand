@@ -10,18 +10,19 @@ const pages = [
   ["geotechnical", "Geotechnical", "GT"],
   ["reports", "Reports", "RP"],
   ["billing", "Billing / Profitability", "BI"],
+  ["dataintake", "Data Intake", "DI"],
   ["settings", "Settings", "ST"]
 ];
 
 const roleAccess = {
   "Executive": pages.map(([id]) => id),
   "Branch Manager": pages.map(([id]) => id),
-  "Dispatcher": ["command", "dispatch", "projects", "workorders", "technicians", "certifications", "equipment"],
-  "Project Manager": ["command", "projects", "workorders", "technicians", "laboratory", "geotechnical", "reports", "billing"],
-  "Lab Manager": ["command", "workorders", "technicians", "certifications", "equipment", "laboratory", "reports"],
+  "Dispatcher": ["command", "dispatch", "projects", "workorders", "technicians", "certifications", "equipment", "dataintake"],
+  "Project Manager": ["command", "projects", "workorders", "technicians", "laboratory", "geotechnical", "reports", "billing", "dataintake"],
+  "Lab Manager": ["command", "workorders", "technicians", "certifications", "equipment", "laboratory", "reports", "dataintake"],
   "Field Technician": ["workorders", "technicians", "certifications", "equipment", "reports"],
-  "Geotechnical Engineer": ["command", "projects", "workorders", "equipment", "laboratory", "geotechnical", "reports"],
-  "Admin / Billing": ["command", "projects", "workorders", "reports", "billing", "settings"]
+  "Geotechnical Engineer": ["command", "projects", "workorders", "equipment", "laboratory", "geotechnical", "reports", "dataintake"],
+  "Admin / Billing": ["command", "projects", "workorders", "reports", "billing", "dataintake", "settings"]
 };
 
 const authorizedLocationRoles = new Set(["Executive", "Branch Manager", "Dispatcher"]);
@@ -35,7 +36,14 @@ const state = {
   sorts: {},
   locationViewLog: [],
   lastLocationLogKey: "",
-  emergencyDecisionLog: []
+  emergencyDecisionLog: [],
+  intakeImport: null,
+  intakeImportedRecords: [],
+  intakeDocuments: [],
+  extractionSample: null,
+  extractionSaved: [],
+  extractionMessage: "",
+  lastCsvExport: null
 };
 
 const certTypes = [
@@ -239,6 +247,179 @@ const approvedPartnerFirms = [
     email: "fielddesk@midatlanticlab.demo"
   }
 ];
+
+const intakeEntityConfig = {
+  technicians: {
+    label: "Technicians",
+    buttonLabel: "Export Technicians",
+    requiredColumns: ["name", "role", "branch", "status", "certifications", "clearance", "phone", "email"],
+    rows: () => technicians.map(tech => ({
+      name: tech.name,
+      role: tech.role,
+      branch: tech.branch,
+      status: tech.status,
+      certifications: tech.certifications.join("; "),
+      clearance: tech.access || tech.trackingSource.includes("Personal") ? "Secure Site Access" : "Standard Site Access",
+      phone: tech.phone,
+      email: tech.email
+    }))
+  },
+  certifications: {
+    label: "Certifications",
+    buttonLabel: "Export Certifications",
+    requiredColumns: ["technician", "certification", "issuing_body", "issue_date", "expiration_date", "status"],
+    rows: () => certifications.map(cert => ({
+      technician: cert.technician,
+      certification: cert.type,
+      issuing_body: cert.issuer,
+      issue_date: cert.issue,
+      expiration_date: cert.expiration,
+      status: cert.status
+    }))
+  },
+  equipment: {
+    label: "Equipment",
+    buttonLabel: "Export Equipment",
+    requiredColumns: ["equipment_id", "type", "serial_number", "assigned_to", "calibration_due", "status"],
+    rows: () => equipment.map(item => ({
+      equipment_id: item.id,
+      type: item.category,
+      serial_number: item.serial,
+      assigned_to: item.assignedTech,
+      calibration_due: item.calibrationDue,
+      status: item.status
+    }))
+  },
+  workorders: {
+    label: "Work Orders",
+    buttonLabel: "Export Work Orders",
+    requiredColumns: ["work_order", "project", "service_type", "required_certifications", "required_equipment", "priority", "status", "requested_start"],
+    rows: () => workOrders.map(order => ({
+      work_order: order.id,
+      project: order.project,
+      service_type: order.service,
+      required_certifications: order.requiredCerts.join("; "),
+      required_equipment: order.requiredEquipment.join("; "),
+      priority: order.priority,
+      status: order.status,
+      requested_start: order.requiredTime
+    }))
+  },
+  partners: {
+    label: "Partner Firms",
+    buttonLabel: "Export Partner Firms",
+    requiredColumns: ["firm_name", "services", "certifications", "clearance_capability", "region", "response_time", "status", "preferred_rating"],
+    rows: () => approvedPartnerFirms.map(firm => ({
+      firm_name: firm.name,
+      services: firm.services.join("; "),
+      certifications: firm.certifications.join("; "),
+      clearance_capability: firm.secureAccess,
+      region: firm.region,
+      response_time: firm.typicalResponse,
+      status: firm.status,
+      preferred_rating: firm.rating
+    }))
+  },
+  projects: {
+    label: "Projects",
+    buttonLabel: "Export Projects",
+    requiredColumns: ["project_name", "project_number", "client", "contractor", "location", "project_manager", "status"],
+    rows: () => projects.map(project => ({
+      project_name: project.name,
+      project_number: project.id,
+      client: project.client,
+      contractor: project.contractor,
+      location: project.address,
+      project_manager: project.manager,
+      status: project.status
+    }))
+  }
+};
+
+const intakeDocumentTypes = [
+  "Concrete field report",
+  "Soil density report",
+  "Cylinder break report",
+  "Certification card",
+  "Calibration certificate",
+  "CCRL proficiency sample instruction",
+  "USACE validation document",
+  "Proctor report",
+  "Boring log field sheet",
+  "Chain of custody",
+  "Other"
+];
+
+const extractionSamples = {
+  concrete: {
+    title: "Concrete Field Report",
+    module: "Reports",
+    fields: {
+      Project: "Potomac Secure Logistics Center",
+      Contractor: "Atlantic Concrete Partners",
+      Technician: "Marcus Lee",
+      Date: "Today",
+      Placement: "Loading dock slab",
+      Truck: "18",
+      "Mix ID": "4500 AE",
+      Slump: "4.5 in",
+      Air: "5.8%",
+      Temperature: "72 F",
+      "Cylinders made": "5",
+      "Required certification": "Level 2 Concrete",
+      "Equipment used": "Air Meter AM-14, Thermometer T-09",
+      "Report status": "Needs review"
+    },
+    confidence: {
+      Project: "High",
+      Technician: "High",
+      Truck: "Medium",
+      "Mix ID": "Medium",
+      Air: "High",
+      Slump: "High",
+      "Equipment ID": "Low"
+    },
+    warnings: ["Equipment ID confidence is low", "Confirm technician certification", "Confirm placement location", "Confirm cylinder count"]
+  },
+  calibration: {
+    title: "Calibration Certificate",
+    module: "Equipment",
+    fields: {
+      "Equipment ID": "AM-14",
+      "Equipment type": "Air Meter",
+      "Serial number": "84722",
+      "Calibration date": "05/28/2026",
+      "Calibration due": "05/28/2027",
+      Status: "Current",
+      "Related equipment": "Air Meter AM-14"
+    },
+    confidence: {
+      "Equipment ID": "Medium",
+      "Serial number": "High",
+      "Calibration due": "High",
+      Status: "High"
+    },
+    warnings: ["Confirm equipment ID before updating calibration record", "Verify certificate source"]
+  },
+  certification: {
+    title: "Certification Card",
+    module: "Certifications",
+    fields: {
+      Technician: "Marcus Lee",
+      Certification: "Level 2 Concrete",
+      "Issuing body": "WACEL",
+      "Expiration date": "11/30/2026",
+      Status: "Active"
+    },
+    confidence: {
+      Technician: "High",
+      Certification: "High",
+      "Issuing body": "Medium",
+      "Expiration date": "High"
+    },
+    warnings: ["Confirm technician identity", "Verify issuing body and expiration date"]
+  }
+};
 
 const projects = [
   {
@@ -848,6 +1029,7 @@ function render() {
     geotechnical: renderGeotechnical,
     reports: renderReports,
     billing: renderBilling,
+    dataintake: renderDataIntake,
     settings: renderSettings
   }[state.activePage];
   document.getElementById("app").innerHTML = view();
@@ -1913,6 +2095,304 @@ function renderBilling() {
   `;
 }
 
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function rowsToCsv(rows, columns) {
+  return [columns.join(","), ...rows.map(row => columns.map(column => csvEscape(row[column])).join(","))].join("\n");
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      i += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(cell.trim());
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") i += 1;
+      row.push(cell.trim());
+      if (row.some(value => value.length)) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  row.push(cell.trim());
+  if (row.some(value => value.length)) rows.push(row);
+  if (!rows.length) return [];
+  const headers = rows[0].map(header => header.trim());
+  return rows.slice(1).map(values => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+}
+
+function validateImport(entity, rows) {
+  const config = intakeEntityConfig[entity];
+  const headers = rows.length ? Object.keys(rows[0]) : [];
+  const missingColumns = config.requiredColumns.filter(column => !headers.includes(column));
+  const rowWarnings = rows.flatMap((row, index) => config.requiredColumns
+    .filter(column => !String(row[column] || "").trim())
+    .map(column => `Row ${index + 1}: missing ${column}`));
+  return { missingColumns, rowWarnings };
+}
+
+function makeTemplateRows(entity) {
+  const config = intakeEntityConfig[entity];
+  const sample = Object.fromEntries(config.requiredColumns.map(column => [column, `Sample ${column.replaceAll("_", " ")}`]));
+  if (entity === "technicians") {
+    return [{ name: "Taylor Grant", role: "CMT Technician II", branch: "Northern Virginia", status: "Available", certifications: "Level 2 Concrete; Secure Site Access", clearance: "Secure Site Access", phone: "(703) 555-0212", email: "taylor.grant@example.test" }];
+  }
+  if (entity === "partners") {
+    return [{ firm_name: "Sample Field Testing Partner", services: "Concrete testing; Soil compaction", certifications: "ACI Field; WACEL Concrete", clearance_capability: "Limited", region: "DC / Northern Virginia", response_time: "2 hours", status: "Active", preferred_rating: "4.3" }];
+  }
+  return [sample];
+}
+
+function renderDataIntake() {
+  return `
+    <section class="panel data-intake-hero">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Local data operations</p>
+          <h2>Data Intake Center</h2>
+          <p>Import/export operational records, stage local document uploads, and preview review-assisted extraction workflows. No external APIs are used.</p>
+        </div>
+        <span class="badge info">Local only</span>
+      </div>
+      <div class="kpi-strip">
+        <div class="activity-row"><strong>${Object.keys(intakeEntityConfig).length} data types</strong><span class="subtle">CSV import/export ready</span></div>
+        <div class="activity-row"><strong>${state.intakeDocuments.length} documents</strong><span class="subtle">Stored in this browser session</span></div>
+        <div class="activity-row"><strong>${state.intakeImportedRecords.length} imported rows</strong><span class="subtle">Added to local app state</span></div>
+        <div class="activity-row"><strong>${state.extractionSaved.length} saved extractions</strong><span class="subtle">Review-assisted mock workflow</span></div>
+      </div>
+    </section>
+    ${renderImportExportSection()}
+    ${renderDocumentUploadSection()}
+    ${renderSmartExtractionSection()}
+  `;
+}
+
+function renderImportExportSection() {
+  const importState = state.intakeImport;
+  return `
+    <section class="panel intake-section">
+      <div class="panel-head">
+        <div>
+          <h2>Import / Export</h2>
+          <p>Generate clean CSV exports locally or preview uploaded CSV records before applying them to local app state.</p>
+        </div>
+      </div>
+      <div class="intake-export-grid">
+        ${Object.entries(intakeEntityConfig).map(([key, config]) => `
+          <article class="intake-card">
+            <div>
+              <strong>${config.label}</strong>
+              <span class="subtle">Required: ${config.requiredColumns.join(", ")}</span>
+            </div>
+            <div class="coverage-actions compact">
+              <button class="ghost-button" type="button" data-export-csv="${key}">${config.buttonLabel}</button>
+              <button class="ghost-button" type="button" data-template-csv="${key}">Download Template</button>
+              <button class="ghost-button" type="button" data-demo-import="${key}">Preview Demo Import</button>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+      ${state.lastCsvExport ? `
+        <div class="coverage-note good">
+          <strong>${state.lastCsvExport.status}</strong>
+          <span>${state.lastCsvExport.filename} / ${state.lastCsvExport.rows} rows / ${state.lastCsvExport.columns} columns / ${state.lastCsvExport.timestamp}</span>
+        </div>
+      ` : ""}
+      <div class="csv-import-box">
+        <div>
+          <h3>Local CSV upload</h3>
+          <p class="subtle">Choose a data type, upload a CSV file, review required-column warnings, then apply or cancel. Existing sample records are not overwritten.</p>
+        </div>
+        <div class="form-grid">
+          <label>Import type
+            <select id="importEntitySelect">
+              ${Object.entries(intakeEntityConfig).map(([key, config]) => `<option value="${key}">${config.label}</option>`).join("")}
+            </select>
+          </label>
+          <label>CSV file
+            <input id="csvImportFile" type="file" accept=".csv,text/csv">
+          </label>
+        </div>
+      </div>
+      ${importState ? renderImportPreview(importState) : ""}
+    </section>
+  `;
+}
+
+function renderImportPreview(importState) {
+  const config = intakeEntityConfig[importState.entity];
+  const rows = importState.rows.slice(0, 6);
+  const headers = rows.length ? Object.keys(rows[0]) : config.requiredColumns;
+  return `
+    <section class="import-preview">
+      <div class="panel-head compact">
+        <div>
+          <h2>Import Preview: ${config.label}</h2>
+          <p>${importState.rows.length} rows staged. Review warnings before applying.</p>
+        </div>
+        <span class="badge ${importState.validation.missingColumns.length ? "bad" : "good"}">${importState.validation.missingColumns.length ? "Needs review" : "Ready"}</span>
+      </div>
+      <div class="warning-list">
+        ${importState.validation.missingColumns.map(column => `<span class="badge bad">Missing column: ${column}</span>`).join("")}
+        ${importState.validation.rowWarnings.slice(0, 8).map(warning => `<span class="badge warn">${warning}</span>`).join("")}
+        ${!importState.validation.missingColumns.length && !importState.validation.rowWarnings.length ? `<span class="badge good">Required columns present</span>` : ""}
+      </div>
+      <div class="data-table-wrap">
+        <table>
+          <thead><tr>${headers.map(header => `<th>${header}</th>`).join("")}</tr></thead>
+          <tbody>${rows.map(row => `<tr>${headers.map(header => `<td>${escapeHtml(String(row[header] || ""))}</td>`).join("")}</tr>`).join("")}</tbody>
+        </table>
+      </div>
+      <div class="coverage-actions">
+        <button class="primary-button" type="button" data-apply-import>Apply Import</button>
+        <button class="ghost-button" type="button" data-cancel-import>Cancel Import</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderDocumentUploadSection() {
+  return `
+    <section class="panel intake-section">
+      <div class="panel-head">
+        <div>
+          <h2>Document Uploads</h2>
+          <p>Stage files locally for demo review. Documents are not uploaded to a server.</p>
+        </div>
+      </div>
+      <div class="document-upload-grid">
+        <div class="form-grid">
+          <label>Document type
+            <select id="documentTypeSelect">${intakeDocumentTypes.map(type => `<option>${type}</option>`).join("")}</select>
+          </label>
+          <label>Related project
+            <select id="documentProjectSelect">${projects.map(project => `<option>${project.name}</option>`).join("")}</select>
+          </label>
+          <label>Related technician
+            <select id="documentTechSelect">${technicians.slice(0, 12).map(tech => `<option>${tech.name}</option>`).join("")}</select>
+          </label>
+          <label>Related equipment
+            <select id="documentEquipmentSelect">${equipment.slice(0, 12).map(item => `<option>${item.id}</option>`).join("")}</select>
+          </label>
+          <label>Notes
+            <textarea id="documentNotesInput" rows="3">Local demo intake item.</textarea>
+          </label>
+          <label>Files
+            <input id="documentUploadInput" type="file" multiple>
+          </label>
+        </div>
+        <div class="document-list">
+          ${state.intakeDocuments.length ? state.intakeDocuments.map(doc => `
+            <article class="document-card">
+              <div class="coverage-card-top">
+                <strong>${doc.fileName}</strong>
+                <span class="badge ${toneForStatus(doc.status)}">${doc.status}</span>
+              </div>
+              <div class="coverage-detail-grid">
+                <div><span>Type</span><strong>${doc.type}</strong></div>
+                <div><span>Project</span><strong>${doc.project}</strong></div>
+                <div><span>Technician</span><strong>${doc.technician}</strong></div>
+                <div><span>Equipment</span><strong>${doc.equipment}</strong></div>
+                <div><span>Upload date</span><strong>${doc.uploadDate}</strong></div>
+                <div><span>Notes</span><strong>${doc.notes}</strong></div>
+              </div>
+            </article>
+          `).join("") : `<div class="empty-state">No local documents staged yet. Choose files to add demo upload records.</div>`}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderSmartExtractionSection() {
+  const sample = state.extractionSample ? extractionSamples[state.extractionSample] : null;
+  return `
+    <section class="panel intake-section">
+      <div class="panel-head">
+        <div>
+          <h2>Smart Extraction Preview</h2>
+          <p>Smart Extraction is a review-assisted workflow. Extracted data must be verified before saving.</p>
+        </div>
+        <span class="badge warn">Review required</span>
+      </div>
+      <div class="extraction-controls">
+        <label>Sample document
+          <select id="sampleExtractionSelect">
+            <option value="concrete">Concrete Field Report</option>
+            <option value="calibration">Calibration Certificate</option>
+            <option value="certification">Certification Card</option>
+          </select>
+        </label>
+        <button class="primary-button" type="button" data-scan-sample>Scan Sample Document</button>
+        <label>Send to module
+          <select id="sendExtractionModule">
+            <option>Reports</option>
+            <option>Equipment</option>
+            <option>Certifications</option>
+            <option>Laboratory</option>
+            <option>Projects</option>
+          </select>
+        </label>
+      </div>
+      ${sample ? renderExtractionPreview(sample) : `<div class="empty-state">Select a sample and click Scan Sample Document to preview extracted fields.</div>`}
+      ${state.extractionMessage ? `<div class="coverage-note good"><strong>${state.extractionMessage}</strong><span>Saved locally for review in this browser session.</span></div>` : ""}
+      ${state.extractionSaved.length ? `
+        <section class="location-audit">
+          <strong>Extraction activity log</strong>
+          ${state.extractionSaved.map(item => `<span>${item.timestamp} / ${item.title} saved to ${item.module} by ${item.role}.</span>`).join("")}
+        </section>
+      ` : ""}
+    </section>
+  `;
+}
+
+function renderExtractionPreview(sample) {
+  return `
+    <div class="extraction-preview-grid">
+      <div class="document-preview-placeholder">
+        <strong>${sample.title}</strong>
+        <span>Document preview placeholder</span>
+        <span class="subtle">Local demo only. No OCR or external AI service is called.</span>
+      </div>
+      <div class="extracted-fields">
+        <h3>Extracted fields</h3>
+        <div class="coverage-detail-grid">
+          ${Object.entries(sample.fields).map(([key, value]) => `<div><span>${key}</span><strong>${value}</strong></div>`).join("")}
+        </div>
+      </div>
+      <div class="extracted-fields">
+        <h3>Confidence levels</h3>
+        <div class="warning-list">
+          ${Object.entries(sample.confidence).map(([key, value]) => `<span class="badge ${value === "High" ? "good" : value === "Medium" ? "warn" : "bad"}">${key}: ${value}</span>`).join("")}
+        </div>
+        <h3>Fields needing review</h3>
+        <div class="status-list">
+          ${sample.warnings.map(warning => `<div class="activity-row"><strong>${warning}</strong><span class="subtle">Verify before saving.</span></div>`).join("")}
+        </div>
+      </div>
+    </div>
+    <div class="coverage-actions">
+      <button class="primary-button" type="button" data-confirm-extraction>Confirm and Save</button>
+    </div>
+  `;
+}
+
 function renderSettings() {
   const settings = [
     "Company profile",
@@ -2015,6 +2495,95 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function downloadCsv(filename, rows, columns) {
+  state.lastCsvExport = {
+    filename,
+    rows: rows.length,
+    columns: columns.length,
+    timestamp: new Date().toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
+    status: "CSV prepared locally"
+  };
+  const blob = new Blob([rowsToCsv(rows, columns)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  try {
+    link.click();
+  } catch (error) {
+    state.lastCsvExport.status = "CSV prepared; download blocked by browser preview";
+  }
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function stageImport(entity, rows, source = "Uploaded CSV") {
+  state.intakeImport = {
+    entity,
+    rows,
+    source,
+    validation: validateImport(entity, rows)
+  };
+  render();
+}
+
+function applyImport() {
+  if (!state.intakeImport) return;
+  const entry = {
+    entity: intakeEntityConfig[state.intakeImport.entity].label,
+    rows: state.intakeImport.rows,
+    appliedAt: new Date().toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
+    source: state.intakeImport.source
+  };
+  state.intakeImportedRecords.unshift(entry);
+  state.intakeImport = null;
+  render();
+}
+
+function stageUploadedDocuments(files) {
+  const type = document.getElementById("documentTypeSelect")?.value || "Other";
+  const project = document.getElementById("documentProjectSelect")?.value || "";
+  const technician = document.getElementById("documentTechSelect")?.value || "";
+  const equipmentId = document.getElementById("documentEquipmentSelect")?.value || "";
+  const notes = document.getElementById("documentNotesInput")?.value || "";
+  const uploadDate = new Date().toLocaleDateString();
+  const docs = Array.from(files).map(file => ({
+    fileName: file.name,
+    type,
+    project,
+    technician,
+    equipment: equipmentId,
+    uploadDate,
+    status: "Needs review",
+    notes
+  }));
+  state.intakeDocuments.unshift(...docs);
+  render();
+}
+
+function scanSampleDocument() {
+  const selected = document.getElementById("sampleExtractionSelect")?.value || "concrete";
+  state.extractionSample = selected;
+  state.extractionMessage = "";
+  render();
+}
+
+function confirmExtractionSave() {
+  const key = state.extractionSample || "concrete";
+  const sample = extractionSamples[key];
+  const module = document.getElementById("sendExtractionModule")?.value || sample.module;
+  state.extractionSaved.unshift({
+    title: sample.title,
+    module,
+    role: state.role,
+    timestamp: new Date().toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
+    fields: sample.fields
+  });
+  state.extractionMessage = "Document extracted and saved for review";
+  render();
+}
+
 function wirePageControls() {
   document.querySelectorAll(".table-filter").forEach(input => {
     input.addEventListener("input", event => {
@@ -2040,6 +2609,67 @@ function wirePageControls() {
       render();
     });
   }
+
+  document.querySelectorAll("[data-export-csv]").forEach(button => {
+    button.addEventListener("click", event => {
+      const entity = event.currentTarget.dataset.exportCsv;
+      const config = intakeEntityConfig[entity];
+      downloadCsv(`cmtcommand-${entity}.csv`, config.rows(), config.requiredColumns);
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-template-csv]").forEach(button => {
+    button.addEventListener("click", event => {
+      const entity = event.currentTarget.dataset.templateCsv;
+      const config = intakeEntityConfig[entity];
+      downloadCsv(`cmtcommand-${entity}-template.csv`, makeTemplateRows(entity), config.requiredColumns);
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-demo-import]").forEach(button => {
+    button.addEventListener("click", event => {
+      const entity = event.currentTarget.dataset.demoImport;
+      stageImport(entity, makeTemplateRows(entity), "Demo template preview");
+    });
+  });
+
+  const csvImportFile = document.getElementById("csvImportFile");
+  if (csvImportFile) {
+    csvImportFile.addEventListener("change", event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const entity = document.getElementById("importEntitySelect")?.value || "technicians";
+      const reader = new FileReader();
+      reader.onload = () => stageImport(entity, parseCsv(String(reader.result || "")), file.name);
+      reader.readAsText(file);
+    });
+  }
+
+  const applyImportButton = document.querySelector("[data-apply-import]");
+  if (applyImportButton) applyImportButton.addEventListener("click", applyImport);
+
+  const cancelImportButton = document.querySelector("[data-cancel-import]");
+  if (cancelImportButton) {
+    cancelImportButton.addEventListener("click", () => {
+      state.intakeImport = null;
+      render();
+    });
+  }
+
+  const documentUploadInput = document.getElementById("documentUploadInput");
+  if (documentUploadInput) {
+    documentUploadInput.addEventListener("change", event => {
+      if (event.target.files.length) stageUploadedDocuments(event.target.files);
+    });
+  }
+
+  const scanSampleButton = document.querySelector("[data-scan-sample]");
+  if (scanSampleButton) scanSampleButton.addEventListener("click", scanSampleDocument);
+
+  const confirmExtractionButton = document.querySelector("[data-confirm-extraction]");
+  if (confirmExtractionButton) confirmExtractionButton.addEventListener("click", confirmExtractionSave);
 }
 
 function renderGlobalResults(query) {

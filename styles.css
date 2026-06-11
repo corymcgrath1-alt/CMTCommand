@@ -1612,6 +1612,136 @@ h3 {
   line-height: 1.35;
 }
 
+.data-intake-hero,
+.intake-section {
+  display: grid;
+  gap: 16px;
+}
+
+.intake-export-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.intake-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: var(--tight-shadow);
+}
+
+.intake-card strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.csv-import-box,
+.import-preview,
+.document-card,
+.document-preview-placeholder,
+.extracted-fields {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: var(--tight-shadow);
+}
+
+.csv-import-box {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.25fr);
+  gap: 18px;
+  padding: 16px;
+}
+
+.import-preview {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.warning-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.document-upload-grid {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.document-list {
+  display: grid;
+  gap: 10px;
+}
+
+.document-card {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+}
+
+.extraction-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) auto minmax(180px, 0.8fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.extraction-controls label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.extraction-controls select {
+  min-height: 40px;
+  border: 1px solid #cdd7e2;
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px 10px;
+}
+
+.extraction-preview-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) minmax(280px, 0.85fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.document-preview-placeholder {
+  min-height: 280px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px;
+  text-align: center;
+  background:
+    linear-gradient(90deg, rgba(55, 76, 95, 0.08) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(55, 76, 95, 0.08) 1px, transparent 1px),
+    #f8fafc;
+  background-size: 28px 28px;
+}
+
+.document-preview-placeholder strong {
+  font-size: 18px;
+}
+
+.extracted-fields {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
 .table-panel {
   border-radius: 6px;
 }
@@ -1770,7 +1900,12 @@ tbody tr:hover {
   .coverage-category-grid,
   .partner-grid,
   .escalation-grid,
-  .decision-log-grid {
+  .decision-log-grid,
+  .intake-export-grid,
+  .csv-import-box,
+  .document-upload-grid,
+  .extraction-controls,
+  .extraction-preview-grid {
     grid-template-columns: 1fr;
   }
 
