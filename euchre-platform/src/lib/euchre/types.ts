@@ -1,0 +1,105 @@
+export const SUITS = ["clubs", "diamonds", "hearts", "spades"] as const;
+export const RANKS = ["9", "10", "J", "Q", "K", "A"] as const;
+
+export type Suit = (typeof SUITS)[number];
+export type Rank = (typeof RANKS)[number];
+export type PlayerIndex = 0 | 1 | 2 | 3;
+export type TeamIndex = 0 | 1;
+export type Phase =
+  | "idle"
+  | "ordering"
+  | "discarding"
+  | "calling"
+  | "playing"
+  | "handComplete"
+  | "gameComplete";
+
+export interface Card {
+  suit: Suit;
+  rank: Rank;
+}
+
+export interface GameConfig {
+  stickDealer: boolean;
+  targetScore: number;
+}
+
+export interface Play {
+  player: PlayerIndex;
+  card: Card;
+}
+
+export interface Trick {
+  leader: PlayerIndex;
+  plays: Play[];
+  winner?: PlayerIndex;
+}
+
+export interface BidDecision {
+  round: 1 | 2;
+  player: PlayerIndex;
+  decision: "pass" | "order-up" | "call";
+  suit?: Suit;
+  alone?: boolean;
+}
+
+export interface HandResult {
+  makers: TeamIndex;
+  maker: PlayerIndex;
+  trump: Suit;
+  tricksWon: [number, number];
+  pointsAwarded: [number, number];
+  lone: boolean;
+  euchred: boolean;
+  march: boolean;
+}
+
+export type GameAction =
+  | { type: "START_HAND"; seed: number }
+  | { type: "PASS"; player: PlayerIndex }
+  | { type: "ORDER_UP"; player: PlayerIndex; alone?: boolean }
+  | { type: "CALL_TRUMP"; player: PlayerIndex; suit: Suit; alone?: boolean }
+  | { type: "DISCARD"; player: PlayerIndex; card: Card }
+  | { type: "PLAY_CARD"; player: PlayerIndex; card: Card }
+  | { type: "NEXT_HAND"; seed: number }
+  | { type: "RESET_GAME" };
+
+export interface MoveEvent {
+  id: string;
+  sequence: number;
+  action: GameAction;
+  player?: PlayerIndex;
+  createdAt: string;
+}
+
+export interface GameState {
+  id: string;
+  config: GameConfig;
+  phase: Phase;
+  handNumber: number;
+  dealer: PlayerIndex;
+  activePlayer: PlayerIndex;
+  scores: [number, number];
+  hands: Record<PlayerIndex, Card[]>;
+  kitty: Card[];
+  upcard?: Card;
+  turnedDownSuit?: Suit;
+  trump?: Suit;
+  maker?: PlayerIndex;
+  makerTeam?: TeamIndex;
+  lonePlayer?: PlayerIndex;
+  bids: BidDecision[];
+  currentTrick: Trick | null;
+  completedTricks: Trick[];
+  tricksWon: [number, number];
+  handResult?: HandResult;
+  moveLog: MoveEvent[];
+}
+
+export interface LegalActionSummary {
+  canPass: boolean;
+  canOrderUp: boolean;
+  callableSuits: Suit[];
+  playableCards: Card[];
+  mustDiscard: boolean;
+}

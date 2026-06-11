@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: #071411;
+  color: #eef8f4;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
