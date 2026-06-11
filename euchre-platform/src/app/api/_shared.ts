@@ -55,7 +55,26 @@ export const gameActionSchema = z.discriminatedUnion("type", [
   })
 ]);
 
+export class MalformedJsonError extends Error {
+  constructor() {
+    super("Malformed JSON request body");
+    this.name = "MalformedJsonError";
+  }
+}
+
+export async function parseJsonBody(request: Request): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    throw new MalformedJsonError();
+  }
+}
+
 export function apiError(error: unknown) {
+  if (error instanceof MalformedJsonError) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
   if (error instanceof z.ZodError) {
     return NextResponse.json({ error: "Invalid request", issues: error.issues }, { status: 400 });
   }

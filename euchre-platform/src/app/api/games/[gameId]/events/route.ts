@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEventStore } from "@/lib/persistence/event-store";
-import { apiError, gameActionSchema } from "../../../_shared";
+import { apiError, gameActionSchema, parseJsonBody } from "../../../_shared";
 
 export async function GET(
   _request: Request,
@@ -21,7 +21,7 @@ export async function POST(
 ) {
   try {
     const { gameId } = await context.params;
-    const body = await request.json();
+    const body = await parseJsonBody(request) as { expectedSequence?: unknown; action?: unknown };
     const event = await getEventStore().appendMove({
       gameId,
       expectedSequence: Number(body.expectedSequence),
