@@ -6,17 +6,16 @@ import {
   cardLabel,
   createDefaultBotProfiles,
   createInitialGameState,
-  dispatchAction,
   legalActionsForPlayer,
-  replayMoveLog,
   type Card,
   type GameAction,
   type GameState,
   type MoveEvent,
   type PlayerIndex
 } from "@/lib/euchre";
+import type { LoadedGame } from "@/lib/persistence/event-store";
 
-const STORAGE_KEY = "euchre-platform-phase-1";
+const STORAGE_KEY = "euchre-platform-active-game-id";
 const PLAYER_NAMES: Record<PlayerIndex, string> = {
   0: "South",
   1: "West",
@@ -24,56 +23,109 @@ const PLAYER_NAMES: Record<PlayerIndex, string> = {
   3: "East"
 };
 
-interface StoredGame {
-  config: GameState["config"];
-  moveLog: MoveEvent[];
-}
-
 export default function Home() {
   const [stickDealer, setStickDealer] = useState(false);
   const [state, setState] = useState<GameState>(() => createInitialGameState({ stickDealer }));
   const [alone, setAlone] = useState(false);
+  const [persistedGameId, setPersistedGameId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [status, setStatus] = useState("Local state ready");
   const bots = useMemo(() => createDefaultBotProfiles(), []);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
+    const savedGameId = window.localStorage.getItem(STORAGE_KEY);
+    if (!savedGameId) {
       return;
     }
 
-    try {
-      const stored = JSON.parse(raw) as StoredGame;
-      setStickDealer(stored.config.stickDealer);
-      setState(replayMoveLog(stored.moveLog, stored.config));
-    } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
+    void loadPersistedGame(savedGameId);
   }, []);
 
-  useEffect(() => {
-    const stored: StoredGame = {
-      config: state.config,
-      moveLog: state.moveLog
-    };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
-  }, [state]);
-
-  function act(action: GameAction) {
-    setState((current) => dispatchAction(current, action));
-    setAlone(false);
+  async function loadPersistedGame(gameId: string) {
+    setIsSaving(true);
+    setStatus("Loading saved game events...");
+    try {
+      const loaded = await fetchJson<LoadedGame>(`/api/games/${gameId}`);
+      setPersistedGameId(loaded.game.id);
+      setStickDealer(loaded.game.config.stickDealer);
+      setState(loaded.state);
+      setStatus(`Restored ${loaded.events.length} persisted event${loaded.events.length === 1 ? "" : "s"}`);
+      window.localStorage.setItem(STORAGE_KEY, loaded.game.id);
+    } catch (error) {
+      setPersistedGameId(null);
+      window.localStorage.removeItem(STORAGE_KEY);
+      setStatus(error instanceof Error ? error.message : "Unable to restore saved game");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function startNewGame() {
-    const next = createInitialGameState({ stickDealer, targetScore: 10 });
-    setState(dispatchAction(next, { type: "START_HAND", seed: Date.now() % 1_000_000 }));
-    setAlone(false);
+  async function act(action: GameAction) {
+    if (!persistedGameId) {
+      setStatus("Create a persisted game before playing moves");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await fetchJson<Pick<LoadedGame, "game" | "state">>(`/api/games/${persistedGameId}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expectedSequence: state.moveLog.length,
+          action
+        })
+      });
+      setState(result.state);
+      setStatus(`Persisted event #${result.state.moveLog.length - 1}`);
+      setAlone(false);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Move could not be persisted");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function startNewGame() {
+    setIsSaving(true);
+    setStatus("Creating persisted game...");
+    try {
+      const created = await fetchJson<{ game: LoadedGame["game"] }>("/api/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          config: { stickDealer, targetScore: 10 },
+          metadata: { source: "local-phase-1-ui" }
+        })
+      });
+      setPersistedGameId(created.game.id);
+      window.localStorage.setItem(STORAGE_KEY, created.game.id);
+
+      const started = await fetchJson<Pick<LoadedGame, "state">>(`/api/games/${created.game.id}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expectedSequence: 0,
+          action: { type: "START_HAND", seed: Date.now() % 1_000_000 }
+        })
+      });
+      setState(started.state);
+      setStatus(`Persisted game ${created.game.id}`);
+      setAlone(false);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to create persisted game");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function resetGame() {
     const next = createInitialGameState({ stickDealer, targetScore: 10 });
     setState(next);
+    setPersistedGameId(null);
     setAlone(false);
     window.localStorage.removeItem(STORAGE_KEY);
+    setStatus("Local state reset; persisted events were left immutable");
   }
 
   return (
@@ -97,6 +149,7 @@ export default function Home() {
             </label>
             <button
               className="rounded bg-brass px-4 py-2 text-sm font-semibold text-[#201602]"
+              disabled={isSaving}
               onClick={state.phase === "idle" ? startNewGame : resetGame}
             >
               {state.phase === "idle" ? "Start hand" : "Reset"}
@@ -104,13 +157,18 @@ export default function Home() {
           </div>
         </header>
 
+        <section className="rounded border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/70">
+          <span className="font-semibold text-white">Persistence:</span>{" "}
+          {persistedGameId ? `Game ${persistedGameId}` : "No persisted game selected"} | {status}
+        </section>
+
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <section className="flex flex-col gap-4">
             <GameSummary state={state} />
-            <BiddingControls state={state} alone={alone} setAlone={setAlone} act={act} />
+            <BiddingControls state={state} alone={alone} setAlone={setAlone} act={act} disabled={isSaving} />
             <div className="grid gap-3 md:grid-cols-2">
               {([0, 1, 2, 3] as PlayerIndex[]).map((player) => (
-                <PlayerPanel key={player} player={player} state={state} act={act} />
+                <PlayerPanel key={player} player={player} state={state} act={act} disabled={isSaving} />
               ))}
             </div>
             <TrickTable state={state} />
@@ -179,12 +237,14 @@ function BiddingControls({
   state,
   alone,
   setAlone,
-  act
+  act,
+  disabled
 }: {
   state: GameState;
   alone: boolean;
   setAlone: (value: boolean) => void;
   act: (action: GameAction) => void;
+  disabled: boolean;
 }) {
   if (state.phase === "idle") {
     return null;
@@ -195,6 +255,7 @@ function BiddingControls({
       <section className="rounded border border-white/10 bg-white/[0.04] p-4">
         <button
           className="rounded bg-white px-4 py-2 text-sm font-semibold text-[#071411]"
+          disabled={disabled}
           onClick={() => act({ type: "NEXT_HAND", seed: Date.now() % 1_000_000 })}
         >
           Deal next hand
@@ -230,7 +291,7 @@ function BiddingControls({
       <div className="flex flex-wrap gap-2">
         <button
           className="rounded border border-white/20 px-3 py-2 text-sm text-white"
-          disabled={!legal.canPass}
+          disabled={disabled || !legal.canPass}
           onClick={() => act({ type: "PASS", player: state.activePlayer })}
         >
           Pass
@@ -238,7 +299,7 @@ function BiddingControls({
         {state.phase === "ordering" ? (
           <button
             className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
-            disabled={!legal.canOrderUp}
+            disabled={disabled || !legal.canOrderUp}
             onClick={() => act({ type: "ORDER_UP", player: state.activePlayer, alone })}
           >
             Order up {state.upcard ? state.upcard.suit : ""}
@@ -249,6 +310,7 @@ function BiddingControls({
               <button
                 key={suit}
                 className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
+                disabled={disabled}
                 onClick={() => act({ type: "CALL_TRUMP", player: state.activePlayer, suit, alone })}
               >
                 Call {suit}
@@ -263,11 +325,13 @@ function BiddingControls({
 function PlayerPanel({
   player,
   state,
-  act
+  act,
+  disabled
 }: {
   player: PlayerIndex;
   state: GameState;
   act: (action: GameAction) => void;
+  disabled: boolean;
 }) {
   const legal = legalActionsForPlayer(state, player);
   const playable = new Set(legal.playableCards.map(cardId));
@@ -301,7 +365,7 @@ function PlayerPanel({
             <button
               key={cardId(card)}
               className="h-16 rounded border border-white/15 bg-white px-2 text-lg font-bold text-[#071411] shadow-sm disabled:bg-white/30"
-              disabled={!enabled}
+              disabled={disabled || !enabled}
               onClick={() => onCard(card)}
             >
               {cardLabel(card)}
@@ -311,6 +375,16 @@ function PlayerPanel({
       </div>
     </section>
   );
+}
+
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(typeof payload.error === "string" ? payload.error : "Request failed");
+  }
+
+  return payload as T;
 }
 
 function TrickTable({ state }: { state: GameState }) {
