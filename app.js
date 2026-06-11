@@ -34,7 +34,8 @@ const state = {
   filters: {},
   sorts: {},
   locationViewLog: [],
-  lastLocationLogKey: ""
+  lastLocationLogKey: "",
+  emergencyDecisionLog: []
 };
 
 const certTypes = [
@@ -688,6 +689,89 @@ function analyzeEmergencyDispatch() {
   return { candidates, categories, partners, bestPartner, internalCoverageSafe };
 }
 
+function createEmergencyDecision(decisionType) {
+  const analysis = analyzeEmergencyDispatch();
+  const direct = analysis.candidates.find(item => item.category === "Best Direct Match");
+  const coverage = analysis.candidates.find(item => item.category === "Best Match With Coverage Plan");
+  const outsource = analysis.bestPartner;
+  const fallback = analysis.candidates[0];
+  const base = {
+    id: `EDL-${String(state.emergencyDecisionLog.length + 1).padStart(3, "0")}`,
+    timestamp: new Date().toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
+    role: state.role,
+    emergencyWorkOrder: `${emergencyRequest.project} / ${emergencyRequest.service}`,
+    required: `${emergencyRequest.requiredCerts.join(", ")} / ${emergencyRequest.requiredAccess.join(", ")}`,
+    jobsAffected: [emergencyRequest.project],
+    equipmentAffected: emergencyRequest.requiredEquipment,
+    partnerFirm: "",
+    assignedTechnician: "",
+    replacementTechnician: "",
+    remainingRisks: "Emergency request is last-minute; truck ETA is 90 minutes and site access must be confirmed.",
+    statusAfterDecision: "Pending manager review"
+  };
+
+  if (decisionType === "direct" && direct) {
+    return {
+      ...base,
+      decisionType: "Assign Direct Match",
+      assignedTechnician: direct.candidate.name,
+      reason: direct.reason,
+      remainingRisks: "Low operational risk; confirm concrete kit and secure-site check-in before dispatch.",
+      jobsAffected: [emergencyRequest.project],
+      statusAfterDecision: `${direct.candidate.name} assigned to emergency concrete request.`
+    };
+  }
+
+  if (decisionType === "coverage" && coverage) {
+    const current = coverage.candidate.currentAssignment;
+    return {
+      ...base,
+      decisionType: "Assign With Coverage Plan",
+      assignedTechnician: coverage.candidate.name,
+      replacementTechnician: coverage.coverage?.replacement?.name || "",
+      reason: coverage.reason,
+      remainingRisks: "Moderate risk; replacement must arrive before the critical rebar inspection start time.",
+      jobsAffected: [emergencyRequest.project, current?.project || "Current covered assignment"].filter(Boolean),
+      equipmentAffected: [...emergencyRequest.requiredEquipment, ...(current?.requiredEquipment || [])],
+      statusAfterDecision: coverage.coverage?.replacement
+        ? `${coverage.candidate.name} assigned to emergency request; ${coverage.coverage.replacement.name} assigned to ${current.service}.`
+        : "Coverage plan requested but no replacement technician was found."
+    };
+  }
+
+  if (decisionType === "outsource" && outsource) {
+    return {
+      ...base,
+      decisionType: "Recommend Outsource",
+      partnerFirm: outsource.partner.name,
+      reason: `${outsource.partner.name} is the strongest approved partner match for concrete testing, regional coverage, active vendor status, and secure-site capability.`,
+      remainingRisks: outsource.responseOk ? "Partner may still miss the 90-minute truck ETA; call immediately." : "Partner response time likely exceeds truck ETA.",
+      jobsAffected: [emergencyRequest.project],
+      statusAfterDecision: `${outsource.partner.name} recommended for outsource request.`
+    };
+  }
+
+  return {
+    ...base,
+    decisionType: "Escalate to Branch Manager",
+    assignedTechnician: fallback?.candidate?.name || "",
+    replacementTechnician: coverage?.coverage?.replacement?.name || "",
+    partnerFirm: outsource?.partner?.name || "",
+    reason: "Dispatcher escalated because the emergency request may compete with critical scheduled work or partner response may exceed the truck ETA.",
+    remainingRisks: "Manager decision needed: approve direct dispatch, approve coverage-chain reassignment, authorize outsource, or decline request.",
+    jobsAffected: [emergencyRequest.project, ...analysis.candidates.filter(item => item.candidate.currentAssignment).map(item => item.candidate.currentAssignment.project)],
+    equipmentAffected: [...new Set([...emergencyRequest.requiredEquipment, ...analysis.candidates.flatMap(item => item.candidate.currentAssignment?.requiredEquipment || [])])],
+    statusAfterDecision: "Escalated to Branch Manager."
+  };
+}
+
+function logEmergencyDecision(decisionType) {
+  const entry = createEmergencyDecision(decisionType);
+  state.emergencyDecisionLog.unshift(entry);
+  state.emergencyDecisionLog = state.emergencyDecisionLog.slice(0, 8);
+  render();
+}
+
 function logLocationView(scope) {
   if (!canViewFieldLocation()) return;
   const minute = new Date().toISOString().slice(0, 16);
@@ -892,6 +976,7 @@ function renderCommandCenter() {
         "Unbilled work orders: 11"
       ], "billing")}
     </section>
+    ${renderEmergencyDecisionLog("command")}
   `;
 }
 
@@ -1075,17 +1160,62 @@ function renderCoverageImpactAnalysis() {
         </dl>
       </div>
       <div class="coverage-actions">
-        <button class="primary-button" type="button">Assign Direct Match</button>
-        <button class="primary-button" type="button">Assign With Coverage Plan</button>
-        <button class="ghost-button" type="button">Recommend Outsource</button>
-        <button class="ghost-button" type="button">Escalate to Branch Manager</button>
+        <button class="primary-button" type="button" data-emergency-decision="direct">Assign Direct Match</button>
+        <button class="primary-button" type="button" data-emergency-decision="coverage">Assign With Coverage Plan</button>
+        <button class="ghost-button" type="button" data-emergency-decision="outsource">Recommend Outsource</button>
+        <button class="ghost-button" type="button" data-emergency-decision="escalate">Escalate to Branch Manager</button>
       </div>
+      ${renderEmergencyDecisionLog("coverage")}
       <div class="coverage-category-grid">
         ${analysis.categories.map(category => renderCoverageCategory(category, analysis.candidates.filter(item => item.category === category))).join("")}
         ${renderOutsourceRecommendation(analysis)}
       </div>
       ${renderPartnerFirmReview(analysis.partners)}
       ${renderEscalationSummary(analysis)}
+    </section>
+  `;
+}
+
+function renderEmergencyDecisionLog(context = "full") {
+  const compact = context === "command";
+  const entries = compact ? state.emergencyDecisionLog.slice(0, 4) : state.emergencyDecisionLog;
+  return `
+    <section class="decision-log ${compact ? "compact" : ""}">
+      <div class="section-title">
+        <div>
+          <h2>Emergency Dispatch Decision Log</h2>
+          <p>Local-only record of emergency dispatch choices made in this session.</p>
+        </div>
+        <span class="badge info">${state.emergencyDecisionLog.length} entries</span>
+      </div>
+      ${entries.length ? `
+        <div class="decision-log-list">
+          ${entries.map(entry => `
+            <article class="decision-log-entry">
+              <div class="decision-log-head">
+                <div>
+                  <strong>${entry.decisionType}</strong>
+                  <span class="subtle">${entry.timestamp} / ${entry.role} / ${entry.emergencyWorkOrder}</span>
+                </div>
+                <span class="badge ${toneForStatus(entry.statusAfterDecision)}">${entry.id}</span>
+              </div>
+              <div class="decision-log-grid">
+                <div><span>Assigned technician</span><strong>${entry.assignedTechnician || "None"}</strong></div>
+                <div><span>Replacement technician</span><strong>${entry.replacementTechnician || "None"}</strong></div>
+                <div><span>Partner firm</span><strong>${entry.partnerFirm || "None"}</strong></div>
+                <div><span>Required certs/access</span><strong>${entry.required}</strong></div>
+                <div><span>Jobs affected</span><strong>${entry.jobsAffected.join(", ")}</strong></div>
+                <div><span>Equipment affected</span><strong>${entry.equipmentAffected.join(", ")}</strong></div>
+                ${compact ? "" : `
+                  <div><span>Reason</span><strong>${entry.reason}</strong></div>
+                  <div><span>Remaining risks</span><strong>${entry.remainingRisks}</strong></div>
+                  <div><span>Status after decision</span><strong>${entry.statusAfterDecision}</strong></div>
+                `}
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      ` : `<div class="empty-state">No emergency dispatch decisions logged yet. Use an emergency action button to create the first local entry.</div>`}
     </section>
   `;
 }
@@ -1939,6 +2069,11 @@ function renderGlobalResults(query) {
 }
 
 document.addEventListener("click", event => {
+  const emergencyDecision = event.target.closest("[data-emergency-decision]");
+  if (emergencyDecision) {
+    logEmergencyDecision(emergencyDecision.dataset.emergencyDecision);
+    return;
+  }
   const nav = event.target.closest("[data-page]");
   if (nav) {
     setPage(nav.dataset.page);

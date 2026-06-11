@@ -37,5 +37,6 @@ If the default `python` command is unavailable on this machine, use the bundled 
 - Approved partner firm recommendations using local demo vendor data
 - Outsource decision support for when internal coverage would leave critical work uncovered
 - Escalation summary for manager review
+- Emergency Dispatch Decision Log created from local action-button clicks and shown in Dispatch plus Command Center activity
 
 This MVP is local-only and does not call any external APIs.
