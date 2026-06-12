@@ -15,6 +15,7 @@ import {
   type PlayerIndex
 } from "@/lib/euchre";
 import type { LoadedGame } from "@/lib/persistence/event-store";
+import type { GameReviewSummary, SeatReviewStats } from "@/lib/review/game-review";
 
 const STORAGE_KEY = "euchre-platform-active-game-id";
 const PLAYER_NAMES: Record<PlayerIndex, string> = {
@@ -31,6 +32,7 @@ export default function Home() {
   const [persistedGameId, setPersistedGameId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState("Local state ready");
+  const [review, setReview] = useState<GameReviewSummary | null>(null);
   const bots = useMemo(() => createDefaultBotProfiles(), []);
   const lastBotActionKey = useRef<string | null>(null);
 
@@ -51,6 +53,7 @@ export default function Home() {
       setPersistedGameId(loaded.game.id);
       setStickDealer(loaded.game.config.stickDealer);
       setState(loaded.state);
+      setReview(null);
       setStatus(`Restored ${loaded.events.length} persisted event${loaded.events.length === 1 ? "" : "s"}`);
       window.localStorage.setItem(STORAGE_KEY, loaded.game.id);
     } catch (error) {
@@ -87,6 +90,30 @@ export default function Home() {
       setIsSaving(false);
     }
   }, [persistedGameId, state.moveLog.length]);
+
+  useEffect(() => {
+    if (!persistedGameId || state.phase !== "gameComplete") {
+      setReview(null);
+      return;
+    }
+
+    let cancelled = false;
+    void fetchJson<{ review: GameReviewSummary }>(`/api/games/${persistedGameId}/review`)
+      .then((result) => {
+        if (!cancelled) {
+          setReview(result.review);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setStatus(error instanceof Error ? error.message : "Unable to load game review");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [persistedGameId, state.phase, state.moveLog.length]);
 
   useEffect(() => {
     if (!persistedGameId || isSaving) {
@@ -130,6 +157,7 @@ export default function Home() {
       });
       setPersistedGameId(created.game.id);
       lastBotActionKey.current = null;
+      setReview(null);
       window.localStorage.setItem(STORAGE_KEY, created.game.id);
 
       const started = await fetchJson<Pick<LoadedGame, "state">>(`/api/games/${created.game.id}/events`, {
@@ -155,6 +183,7 @@ export default function Home() {
     setState(next);
     setPersistedGameId(null);
     lastBotActionKey.current = null;
+    setReview(null);
     setAlone(false);
     window.localStorage.removeItem(STORAGE_KEY);
     setStatus("Local state reset; persisted events were left immutable");
@@ -198,6 +227,7 @@ export default function Home() {
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <section className="flex flex-col gap-4">
             <GameSummary state={state} />
+            {review ? <GameReviewPanel review={review} /> : null}
             <BiddingControls state={state} alone={alone} setAlone={setAlone} act={act} disabled={isSaving} />
             <div className="grid gap-3 md:grid-cols-2">
               {([0, 1, 2, 3] as PlayerIndex[]).map((player) => (
@@ -273,6 +303,75 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase tracking-[0.15em] text-white/45">{label}</p>
       <p className="mt-1 text-base font-semibold text-white">{value}</p>
     </div>
+  );
+}
+
+function GameReviewPanel({ review }: { review: GameReviewSummary }) {
+  return (
+    <section className="rounded border border-brass/35 bg-brass/10 p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-brass">Game review</h2>
+          <p className="mt-1 text-lg font-semibold text-white">
+            Team {review.winningTeam} wins {review.finalScore[0]} - {review.finalScore[1]}
+          </p>
+        </div>
+        <p className="text-sm text-white/60">{review.totalHandsPlayed} hands | {review.totalEvents} events</p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <ReviewMetric label="Euchres" value={review.totalEuchres} />
+        <ReviewMetric label="Maker wins" value={review.totalSuccessfulMakerHands} />
+        <ReviewMetric label="Maker fails" value={review.totalFailedMakerHands} />
+        <ReviewMetric label="Lone attempts" value={review.totalLoneAttempts} />
+      </div>
+
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[680px] border-collapse text-left text-sm">
+          <thead className="text-xs uppercase tracking-[0.12em] text-white/45">
+            <tr>
+              <th className="border-b border-white/10 py-2 pr-3">Seat</th>
+              <th className="border-b border-white/10 px-3 py-2">Team</th>
+              <th className="border-b border-white/10 px-3 py-2">Deals</th>
+              <th className="border-b border-white/10 px-3 py-2">Calls</th>
+              <th className="border-b border-white/10 px-3 py-2">Call W-L</th>
+              <th className="border-b border-white/10 px-3 py-2">Tricks</th>
+              <th className="border-b border-white/10 px-3 py-2">Cards</th>
+              <th className="border-b border-white/10 pl-3 py-2">Loners</th>
+            </tr>
+          </thead>
+          <tbody className="text-white/75">
+            {review.seats.map((seat) => (
+              <ReviewSeatRow key={seat.seat} seat={seat} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ReviewMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded border border-white/10 bg-[#071411]/40 px-3 py-2">
+      <p className="text-xs uppercase tracking-[0.12em] text-white/45">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function ReviewSeatRow({ seat }: { seat: SeatReviewStats }) {
+  return (
+    <tr>
+      <td className="border-b border-white/10 py-2 pr-3 font-semibold text-white">{PLAYER_NAMES[seat.seat]}</td>
+      <td className="border-b border-white/10 px-3 py-2">{seat.team}</td>
+      <td className="border-b border-white/10 px-3 py-2">{seat.handsDealt}</td>
+      <td className="border-b border-white/10 px-3 py-2">{seat.timesCaller}</td>
+      <td className="border-b border-white/10 px-3 py-2">{seat.successfulCalls}-{seat.failedCalls}</td>
+      <td className="border-b border-white/10 px-3 py-2">{seat.tricksWon}</td>
+      <td className="border-b border-white/10 px-3 py-2">{seat.cardsPlayed}</td>
+      <td className="border-b border-white/10 py-2 pl-3">{seat.successfulLoners}/{seat.loneAttempts}</td>
+    </tr>
   );
 }
 

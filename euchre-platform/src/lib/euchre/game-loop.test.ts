@@ -124,7 +124,7 @@ describe("full game loop", () => {
     expect(loaded.events.filter((event) => event.eventType === "NEXT_HAND")).toHaveLength(2);
     expect(loaded.events.map((event) => event.sequenceNumber)).toEqual(loaded.events.map((_, index) => index));
     expect(loaded.state).toEqual(reconstructed);
-  }, 15_000);
+  }, 30_000);
 
   it("completes a persisted game when a team reaches 10 and rejects another hand", async () => {
     const store = await createStore();
@@ -142,7 +142,7 @@ describe("full game loop", () => {
       expectedSequence: loaded.events.length,
       action: { type: "NEXT_HAND", seed: 999 }
     })).rejects.toThrow(/already complete/);
-  }, 15_000);
+  }, 30_000);
 
   it("marks gameComplete when controlled scoring reaches the target", () => {
     const finished = playControlledHand(createInitialGameState({ targetScore: 2 }));

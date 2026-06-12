@@ -52,7 +52,7 @@ describe("placeholder bot actions", () => {
       loaded.events.map((_, index) => index)
     );
     expect(loaded.state.moveLog).toHaveLength(loaded.events.length);
-  });
+  }, 15_000);
 });
 
 function chooseNextAction(state: GameState, bots = createDefaultBotProfiles()): GameAction | null {

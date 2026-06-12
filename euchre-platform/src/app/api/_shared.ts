@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { InvalidGameActionError } from "@/lib/euchre";
+import { GameReviewUnavailableError } from "@/lib/review/game-review";
 import {
   DuplicateSequenceError,
   GameNotFoundError,
@@ -90,6 +91,10 @@ export function apiError(error: unknown) {
 
   if (error instanceof InvalidGameActionError) {
     return NextResponse.json({ error: error.message }, { status: 409 });
+  }
+
+  if (error instanceof GameReviewUnavailableError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
   }
 
   const message = error instanceof Error ? error.message : "Unexpected server error";
