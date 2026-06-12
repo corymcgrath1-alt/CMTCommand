@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   cardId,
   cardLabel,
+  chooseBotAction,
   createDefaultBotProfiles,
   createInitialGameState,
   legalActionsForPlayer,
@@ -31,6 +32,7 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState("Local state ready");
   const bots = useMemo(() => createDefaultBotProfiles(), []);
+  const lastBotActionKey = useRef<string | null>(null);
 
   useEffect(() => {
     const savedGameId = window.localStorage.getItem(STORAGE_KEY);
@@ -60,7 +62,7 @@ export default function Home() {
     }
   }
 
-  async function act(action: GameAction) {
+  const act = useCallback(async (action: GameAction, actorLabel = "Human") => {
     if (!persistedGameId) {
       setStatus("Create a persisted game before playing moves");
       return;
@@ -77,14 +79,42 @@ export default function Home() {
         })
       });
       setState(result.state);
-      setStatus(`Persisted event #${result.state.moveLog.length - 1}`);
+      setStatus(`${actorLabel} persisted event #${result.state.moveLog.length - 1}`);
       setAlone(false);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Move could not be persisted");
     } finally {
       setIsSaving(false);
     }
-  }
+  }, [persistedGameId, state.moveLog.length]);
+
+  useEffect(() => {
+    if (!persistedGameId || isSaving) {
+      return;
+    }
+
+    const activeBot = bots.find((bot) => bot.enabled && bot.seat === state.activePlayer);
+    if (!activeBot) {
+      return;
+    }
+
+    const action = chooseBotAction(state, activeBot);
+    if (!action) {
+      return;
+    }
+
+    const actionKey = `${persistedGameId}:${state.moveLog.length}:${state.phase}:${state.activePlayer}`;
+    if (lastBotActionKey.current === actionKey) {
+      return;
+    }
+    lastBotActionKey.current = actionKey;
+
+    const timeout = window.setTimeout(() => {
+      void act(action, activeBot.name);
+    }, 450);
+
+    return () => window.clearTimeout(timeout);
+  }, [act, bots, isSaving, persistedGameId, state]);
 
   async function startNewGame() {
     setIsSaving(true);
@@ -99,6 +129,7 @@ export default function Home() {
         })
       });
       setPersistedGameId(created.game.id);
+      lastBotActionKey.current = null;
       window.localStorage.setItem(STORAGE_KEY, created.game.id);
 
       const started = await fetchJson<Pick<LoadedGame, "state">>(`/api/games/${created.game.id}/events`, {
@@ -123,6 +154,7 @@ export default function Home() {
     const next = createInitialGameState({ stickDealer, targetScore: 10 });
     setState(next);
     setPersistedGameId(null);
+    lastBotActionKey.current = null;
     setAlone(false);
     window.localStorage.removeItem(STORAGE_KEY);
     setStatus("Local state reset; persisted events were left immutable");
@@ -135,6 +167,7 @@ export default function Home() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">Phase 1 foundation</p>
             <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Euchre Platform</h1>
+            <p className="mt-1 text-sm text-white/55">You are South. West, North, and East are placeholder bots.</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -277,21 +310,24 @@ function BiddingControls({
   }
 
   const legal = legalActionsForPlayer(state, state.activePlayer);
+  const humanTurn = state.activePlayer === 0;
 
   return (
     <section className="flex flex-col gap-3 rounded border border-white/10 bg-white/[0.04] p-4">
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-semibold text-white">{PLAYER_NAMES[state.activePlayer]} to bid</span>
-        <label className="flex items-center gap-2 text-sm text-white/70">
-          <input type="checkbox" checked={alone} onChange={(event) => setAlone(event.target.checked)} />
-          Alone
-        </label>
+        {humanTurn ? (
+          <label className="flex items-center gap-2 text-sm text-white/70">
+            <input type="checkbox" checked={alone} onChange={(event) => setAlone(event.target.checked)} />
+            Alone
+          </label>
+        ) : <span className="text-sm text-white/50">Bot thinking...</span>}
       </div>
 
       <div className="flex flex-wrap gap-2">
         <button
           className="rounded border border-white/20 px-3 py-2 text-sm text-white"
-          disabled={disabled || !legal.canPass}
+          disabled={disabled || !humanTurn || !legal.canPass}
           onClick={() => act({ type: "PASS", player: state.activePlayer })}
         >
           Pass
@@ -299,7 +335,7 @@ function BiddingControls({
         {state.phase === "ordering" ? (
           <button
             className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
-            disabled={disabled || !legal.canOrderUp}
+            disabled={disabled || !humanTurn || !legal.canOrderUp}
             onClick={() => act({ type: "ORDER_UP", player: state.activePlayer, alone })}
           >
             Order up {state.upcard ? state.upcard.suit : ""}
@@ -310,7 +346,7 @@ function BiddingControls({
               <button
                 key={suit}
                 className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
-                disabled={disabled}
+                disabled={disabled || !humanTurn}
                 onClick={() => act({ type: "CALL_TRUMP", player: state.activePlayer, suit, alone })}
               >
                 Call {suit}
@@ -336,6 +372,7 @@ function PlayerPanel({
   const legal = legalActionsForPlayer(state, player);
   const playable = new Set(legal.playableCards.map(cardId));
   const isActive = state.activePlayer === player;
+  const humanSeat = player === 0;
 
   function onCard(card: Card) {
     if (legal.mustDiscard) {
@@ -360,10 +397,12 @@ function PlayerPanel({
 
       <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
         {state.hands[player].map((card) => {
-          const enabled = legal.mustDiscard || playable.has(cardId(card));
+          const enabled = humanSeat && (legal.mustDiscard || playable.has(cardId(card)));
           return (
             <button
               key={cardId(card)}
+              data-seat={player}
+              data-testid={`seat-${player}-card-${cardId(card)}`}
               className="h-16 rounded border border-white/15 bg-white px-2 text-lg font-bold text-[#071411] shadow-sm disabled:bg-white/30"
               disabled={disabled || !enabled}
               onClick={() => onCard(card)}
