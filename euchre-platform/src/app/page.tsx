@@ -15,7 +15,7 @@ import {
   type PlayerIndex
 } from "@/lib/euchre";
 import type { LoadedGame } from "@/lib/persistence/event-store";
-import type { GameReviewSummary, SeatReviewStats } from "@/lib/review/game-review";
+import type { GameReviewSummary, HandReview, SeatReviewStats, TrickReview } from "@/lib/review/game-review";
 
 const STORAGE_KEY = "euchre-platform-active-game-id";
 const PLAYER_NAMES: Record<PlayerIndex, string> = {
@@ -347,6 +347,13 @@ function GameReviewPanel({ review }: { review: GameReviewSummary }) {
           </tbody>
         </table>
       </div>
+
+      <div className="mt-5 space-y-3">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Hand by hand</h3>
+        {review.hands.map((hand) => (
+          <HandReviewCard key={hand.handNumber} hand={hand} />
+        ))}
+      </div>
     </section>
   );
 }
@@ -373,6 +380,68 @@ function ReviewSeatRow({ seat }: { seat: SeatReviewStats }) {
       <td className="border-b border-white/10 py-2 pl-3">{seat.successfulLoners}/{seat.loneAttempts}</td>
     </tr>
   );
+}
+
+function HandReviewCard({ hand }: { hand: HandReview }) {
+  return (
+    <details className="rounded border border-white/10 bg-[#071411]/35 px-3 py-2 text-sm" open={hand.handNumber === 1}>
+      <summary className="cursor-pointer text-white">
+        Hand {hand.handNumber}: dealer {PLAYER_NAMES[hand.dealer]}, caller {hand.maker !== undefined ? PLAYER_NAMES[hand.maker] : "None"}, trump {hand.trumpSuit ?? "None"} | {formatScoringResult(hand)}
+      </summary>
+      <div className="mt-3 grid gap-2 text-white/70 sm:grid-cols-2 lg:grid-cols-4">
+        <ReviewDetail label="Score after" value={`${hand.teamScoreAfterHand[0]} - ${hand.teamScoreAfterHand[1]}`} />
+        <ReviewDetail label="Upcard" value={hand.upcard ? cardLabel(hand.upcard) : "None"} />
+        <ReviewDetail label="Maker tricks" value={String(hand.makerTricks)} />
+        <ReviewDetail label="Defender tricks" value={String(hand.defenderTricks)} />
+      </div>
+      {hand.dealerPickup ? (
+        <p className="mt-2 text-white/60">
+          Dealer picked up {cardLabel(hand.dealerPickup.upcard)}
+          {hand.dealerDiscard ? ` and discarded ${cardLabel(hand.dealerDiscard.card)}` : ""}
+        </p>
+      ) : null}
+      <div className="mt-3 space-y-2">
+        {hand.tricks.map((trick) => (
+          <TrickReviewLine key={trick.trickNumber} trick={trick} />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function ReviewDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-[0.12em] text-white/40">{label}</p>
+      <p className="font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function TrickReviewLine({ trick }: { trick: TrickReview }) {
+  return (
+    <div className="rounded border border-white/10 px-3 py-2 text-white/65">
+      <p>
+        Trick {trick.trickNumber}: {trick.cardsPlayed.map((play) => `${PLAYER_NAMES[play.player]} ${cardLabel(play.card)}`).join(", ")}
+      </p>
+      <p className="mt-1 text-xs text-white/45">
+        Led {trick.ledSuit}; winner {PLAYER_NAMES[trick.winningSeat]} ({trick.winnerRelationToCaller})
+        {trick.trumpPlayed ? "; trump played" : ""}
+      </p>
+    </div>
+  );
+}
+
+function formatScoringResult(hand: HandReview): string {
+  if (hand.passed) {
+    return "passed out";
+  }
+
+  if (hand.defendersEuchredMakers) {
+    return `euchre, Team ${hand.defendingTeam} +${hand.pointsAwarded[hand.defendingTeam ?? 0]}`;
+  }
+
+  return `makers scored, Team ${hand.makerTeam} +${hand.pointsAwarded[hand.makerTeam ?? 0]}`;
 }
 
 function BiddingControls({

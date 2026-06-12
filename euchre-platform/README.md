@@ -40,8 +40,12 @@ from mutable UI counters.
 
 Included v1 stats: winner, final score, hands/events/tricks, euchres, maker success and
 failure, lone attempts and successful loners, dealer pickups, passed hands, scoring
-streaks, per-team totals, and per-seat caller/trick/card/dealer counts.
+streaks, per-team totals, and per-seat caller/trick/card/dealer counts. The same review
+payload also includes hand-by-hand and trick-by-trick replay details: dealer, upcard,
+trump, caller, bidding rounds, pickup/discard, scoring result, score after hand, trick
+leaders, cards played in order, trick winners, led suit, trump usage, and each trick
+winner's relationship to the caller.
 
-Deferred intentionally: ranked/profile aggregates, opponent-adjusted stats, advanced bot
-or human decision quality, AI coaching, hand-review annotations, realtime cross-device
-review sharing, and tournament/league reporting.
+Deferred intentionally: ranked/profile aggregates, opponent-adjusted stats, mistake
+detection, expected value, skill scoring, advanced bot or human decision quality, AI
+coaching, realtime cross-device review sharing, and tournament/league reporting.

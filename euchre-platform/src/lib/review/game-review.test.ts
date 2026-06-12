@@ -52,7 +52,81 @@ describe("game review stats extraction", () => {
     expect(review.totalPassedHands).toBe(expected.passedHands);
     expect(review.longestScoringStreakByTeam).toEqual(expected.longestStreak);
     expect(review.hands).toHaveLength(expected.handCount);
+    expect(review.hands.every((hand) => hand.tricks.length === 5 || hand.passed)).toBe(true);
   }, 30_000);
+
+  it("adds hand-by-hand bidding, scoring, and trick details", async () => {
+    const { loaded } = await createOrderedUpCompletedGame({ alone: false });
+    const review = buildGameReview({
+      gameId: loaded.game.id,
+      config: loaded.game.config,
+      events: loaded.events
+    });
+    const hand = review.hands[0];
+
+    expect(hand.handNumber).toBe(1);
+    expect(hand.dealer).toBe(0);
+    expect(hand.upcard).toBeDefined();
+    expect(hand.trumpSuit).toBe(hand.upcard?.suit);
+    expect(hand.maker).toBe(1);
+    expect(hand.makerTeam).toBe(teamOf(1));
+    expect(hand.defendingTeam).toBe(teamOf(1) === 0 ? 1 : 0);
+    expect(hand.roundOneBids).toEqual([
+      expect.objectContaining({ player: 1, round: 1, decision: "order-up", suit: hand.upcard?.suit })
+    ]);
+    expect(hand.roundTwoBids).toEqual([]);
+    expect(hand.dealerPickup).toEqual({ orderedBy: 1, dealer: 0, upcard: hand.upcard });
+    expect(hand.dealerDiscard).toEqual(expect.objectContaining({ dealer: 0 }));
+    expect(hand.pointsAwarded).toEqual(loaded.state.handResult?.pointsAwarded);
+    expect(hand.teamScoreAfterHand).toEqual(loaded.state.scores);
+    expect(hand.makerTricks).toBe(loaded.state.handResult?.tricksWon[hand.makerTeam ?? 0]);
+    expect(hand.defenderTricks).toBe(5 - hand.makerTricks);
+    expect(hand.makersSucceeded).toBe(!loaded.state.handResult?.euchred);
+    expect(hand.defendersEuchredMakers).toBe(Boolean(loaded.state.handResult?.euchred));
+  });
+
+  it("adds five trick reviews with winner, suit, trump, and caller relation data", async () => {
+    const { loaded } = await createOrderedUpCompletedGame({ alone: false });
+    const review = buildGameReview({
+      gameId: loaded.game.id,
+      config: loaded.game.config,
+      events: loaded.events
+    });
+    const hand = review.hands[0];
+
+    expect(hand.tricks).toHaveLength(5);
+    hand.tricks.forEach((trick, index) => {
+      const engineTrick = loaded.state.completedTricks[index];
+      expect(trick.handNumber).toBe(1);
+      expect(trick.trickNumber).toBe(index + 1);
+      expect(trick.leader).toBe(engineTrick.leader);
+      expect(trick.winningSeat).toBe(engineTrick.winner);
+      expect(trick.winningTeam).toBe(teamOf(engineTrick.winner as PlayerIndex));
+      expect(trick.trumpSuit).toBe(hand.trumpSuit);
+      expect(trick.cardsPlayed).toHaveLength(4);
+      expect(trick.cardsPlayed.map((play) => play.player)).toEqual(engineTrick.plays.map((play) => play.player));
+      expect(trick.cardsPlayed.every((play) => play.sequenceNumber >= 0)).toBe(true);
+      expect(["caller", "partner", "opponent"]).toContain(trick.winnerRelationToCaller);
+      expect(trick.winnerUsedTrump).toBe(
+        trick.cardsPlayed.find((play) => play.player === trick.winningSeat)?.playedTrump
+      );
+    });
+  });
+
+  it("represents lone attempts in hand review details", async () => {
+    const { loaded } = await createOrderedUpCompletedGame({ alone: true });
+    const review = buildGameReview({
+      gameId: loaded.game.id,
+      config: loaded.game.config,
+      events: loaded.events
+    });
+    const hand = review.hands[0];
+
+    expect(hand.aloneDeclared).toBe(true);
+    expect(hand.lone).toBe(true);
+    expect(hand.roundOneBids[0]).toEqual(expect.objectContaining({ alone: true }));
+    expect(hand.loneSucceeded).toBe(Boolean(loaded.state.handResult?.lone && loaded.state.handResult.march));
+  });
 
   it("extracts per-team and per-seat caller and trick counts from replay", async () => {
     const { loaded } = await createCompletedGame(13_579);
@@ -135,6 +209,39 @@ async function createCompletedGame(seed: number) {
 
   expect(loaded.state.phase).toBe("gameComplete");
   expect(loaded.state.handNumber).toBeGreaterThan(1);
+  return { store, loaded };
+}
+
+async function createOrderedUpCompletedGame({ alone }: { alone: boolean }) {
+  const store = await createStore();
+  const game = await store.createGame({ config: { stickDealer: false, targetScore: 1 } });
+  await store.appendMove({ gameId: game.id, expectedSequence: 0, action: { type: "START_HAND", seed: 42 } });
+  let loaded = await store.loadGame(game.id);
+  await store.appendMove({
+    gameId: game.id,
+    expectedSequence: loaded.events.length,
+    action: { type: "ORDER_UP", player: 1, alone }
+  });
+  loaded = await store.loadGame(game.id);
+  await store.appendMove({
+    gameId: game.id,
+    expectedSequence: loaded.events.length,
+    action: { type: "DISCARD", player: loaded.state.dealer, card: loaded.state.hands[loaded.state.dealer][0] }
+  });
+  loaded = await store.loadGame(game.id);
+
+  for (let index = 0; index < 40 && loaded.state.phase === "playing"; index += 1) {
+    const player = loaded.state.activePlayer;
+    const card = legalActionsForPlayer(loaded.state, player).playableCards[0];
+    await store.appendMove({
+      gameId: game.id,
+      expectedSequence: loaded.events.length,
+      action: { type: "PLAY_CARD", player, card }
+    });
+    loaded = await store.loadGame(game.id);
+  }
+
+  expect(loaded.state.phase).toBe("gameComplete");
   return { store, loaded };
 }
 
