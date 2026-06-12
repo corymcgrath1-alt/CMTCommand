@@ -229,8 +229,11 @@ export default function Home() {
 }
 
 function GameSummary({ state }: { state: GameState }) {
+  const winner = gameWinner(state);
+
   return (
     <section className="grid gap-3 rounded border border-white/10 bg-table p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <SummaryItem label="Hand" value={state.handNumber ? String(state.handNumber) : "Not dealt"} />
       <SummaryItem label="Score" value={`Team 0 ${state.scores[0]} - ${state.scores[1]} Team 1`} />
       <SummaryItem label="Phase" value={state.phase} />
       <SummaryItem label="Dealer" value={PLAYER_NAMES[state.dealer]} />
@@ -243,6 +246,13 @@ function GameSummary({ state }: { state: GameState }) {
         <div className="sm:col-span-2 lg:col-span-4">
           <p className="rounded border border-brass/40 bg-brass/10 px-3 py-2 text-sm text-brass">
             Hand scored: Team 0 +{state.handResult.pointsAwarded[0]}, Team 1 +{state.handResult.pointsAwarded[1]}
+          </p>
+        </div>
+      ) : null}
+      {winner !== null ? (
+        <div className="sm:col-span-2 lg:col-span-4">
+          <p className="rounded border border-brass/40 bg-brass/10 px-3 py-2 text-sm text-brass">
+            Game winner: Team {winner}
           </p>
         </div>
       ) : null}
@@ -276,7 +286,7 @@ function BiddingControls({
   state: GameState;
   alone: boolean;
   setAlone: (value: boolean) => void;
-  act: (action: GameAction) => void;
+  act: (action: GameAction) => void | Promise<void>;
   disabled: boolean;
 }) {
   if (state.phase === "idle") {
@@ -366,7 +376,7 @@ function PlayerPanel({
 }: {
   player: PlayerIndex;
   state: GameState;
-  act: (action: GameAction) => void;
+  act: (action: GameAction) => void | Promise<void>;
   disabled: boolean;
 }) {
   const legal = legalActionsForPlayer(state, player);
@@ -491,4 +501,20 @@ function describeMove(move: MoveEvent): string {
     default:
       return "Unknown move";
   }
+}
+
+function gameWinner(state: GameState): 0 | 1 | null {
+  if (state.phase !== "gameComplete") {
+    return null;
+  }
+
+  if (state.scores[0] >= state.config.targetScore) {
+    return 0;
+  }
+
+  if (state.scores[1] >= state.config.targetScore) {
+    return 1;
+  }
+
+  return null;
 }

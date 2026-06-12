@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { InvalidGameActionError } from "@/lib/euchre";
 import {
   DuplicateSequenceError,
   GameNotFoundError,
@@ -84,6 +85,10 @@ export function apiError(error: unknown) {
   }
 
   if (error instanceof DuplicateSequenceError || error instanceof MoveOrderingError) {
+    return NextResponse.json({ error: error.message }, { status: 409 });
+  }
+
+  if (error instanceof InvalidGameActionError) {
     return NextResponse.json({ error: error.message }, { status: 409 });
   }
 

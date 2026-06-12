@@ -2,7 +2,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { InvalidGameActionError } from "@/lib/euchre";
 import { LocalEventStore, resetEventStoreForTests } from "@/lib/persistence/event-store";
+import { apiError } from "./_shared";
 import { POST as createGame } from "./games/route";
 import { GET as loadGame } from "./games/[gameId]/route";
 import { POST as appendEvent } from "./games/[gameId]/events/route";
@@ -77,6 +79,14 @@ describe("API route validation", () => {
 
     expect(response.status).toBe(404);
     expect(body).toEqual({ error: "Game missing was not found" });
+  });
+
+  it("returns 409 for invalid game state transitions", async () => {
+    const response = apiError(new InvalidGameActionError("The game is already complete"));
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body).toEqual({ error: "The game is already complete" });
   });
 
 });

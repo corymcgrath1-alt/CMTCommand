@@ -24,6 +24,13 @@ const DEFAULT_CONFIG: GameConfig = {
   targetScore: 10
 };
 
+export class InvalidGameActionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidGameActionError";
+  }
+}
+
 export function createInitialGameState(config: Partial<GameConfig> = {}): GameState {
   return {
     id: cryptoSafeId(),
@@ -80,15 +87,15 @@ export function reduceGameAction(state: GameState, action: GameAction): GameStat
       return createInitialGameState(state.config);
     case "START_HAND":
       if (state.phase !== "idle") {
-        throw new Error("A new game hand can only start from idle");
+        throw new InvalidGameActionError("A new game hand can only start from idle");
       }
       return startHand(state, state.dealer, action.seed, state.handNumber + 1);
     case "NEXT_HAND":
       if (state.phase !== "handComplete" && state.phase !== "gameComplete") {
-        throw new Error("The next hand can only start after a hand is complete");
+        throw new InvalidGameActionError("The next hand can only start after a hand is complete");
       }
       if (state.phase === "gameComplete") {
-        throw new Error("The game is already complete");
+        throw new InvalidGameActionError("The game is already complete");
       }
       return startHand(state, nextPlayer(state.dealer), action.seed, state.handNumber + 1);
     case "PASS":
