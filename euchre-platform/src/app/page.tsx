@@ -1470,13 +1470,13 @@ function TableSurface({
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <div className="euchre-table-rail rounded-[2rem] p-3 shadow-xl shadow-black/20">
-        <div className="euchre-felt rounded-[1.55rem] p-3 lg:p-4">
-          <div className="grid gap-3">
+    <section className="flex flex-col gap-2">
+      <div className="euchre-table-rail rounded-[2rem] p-2 shadow-xl shadow-black/20">
+        <div className="euchre-felt rounded-[1.55rem] p-2 lg:p-3">
+          <div className="grid gap-2">
             <NorthSeatScoreRow seat={seatByPosition.north} scores={status.scores} />
 
-            <div className="grid gap-3 lg:grid-cols-[minmax(16rem,28rem)_minmax(34rem,1fr)_minmax(16rem,28rem)] xl:grid-cols-[minmax(18rem,28rem)_minmax(42rem,1fr)_minmax(18rem,28rem)] lg:items-center">
+            <div className="grid gap-2 lg:grid-cols-[minmax(16rem,28rem)_minmax(32rem,1fr)_minmax(16rem,28rem)] xl:grid-cols-[minmax(18rem,28rem)_minmax(40rem,1fr)_minmax(18rem,28rem)] lg:items-center">
               <div className="w-full max-w-md lg:justify-self-end">
                 <SeatCard seat={seatByPosition.west} />
               </div>
@@ -1502,31 +1502,37 @@ function TableSurface({
           </div>
         </div>
       </div>
-      <TableStatusBar status={status} />
+      <TableStatusBar status={status} trick={trick} />
     </section>
   );
 }
 
-function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatusView> }) {
+function TableStatusBar({
+  status,
+  trick
+}: {
+  status: ReturnType<typeof buildTableStatusView>;
+  trick: ReturnType<typeof buildCurrentTrickView>;
+}) {
   const items = [
+    ["Trick", `Trick ${trick.trickNumber}`],
+    ["Leader", trick.leaderLabel],
+    ["Led suit", trick.ledSuitLabel],
+    ["Trump", trick.trumpLabel],
+    ["Current winner", trick.currentWinnerLabel && trick.winningCardLabel ? `${trick.currentWinnerLabel} with ${trick.winningCardLabel}` : "None"],
+    ["Waiting on", waitingOnLabel(trick)],
     ["Score", status.scoreLabel],
-    ["Hand", status.handLabel],
-    ["Phase", status.phaseLabel],
-    ["Dealer", status.dealerLabel],
-    ["Turn", status.activePlayerLabel],
-    ["Trump", status.trumpLabel],
-    ["Upcard", status.upcardLabel],
-    ["Tricks", status.trickScoreLabel]
+    ["Dealer", status.dealerLabel]
   ];
 
   return (
-    <div className="rounded border border-white/10 bg-[#071411]/55 px-3 py-3">
-      <div className="grid gap-3 xl:grid-cols-[minmax(14rem,0.4fr)_minmax(0,1.6fr)] xl:items-start">
+    <div className="rounded border border-white/10 bg-[#071411]/55 px-3 py-2">
+      <div className="grid gap-2 xl:grid-cols-[minmax(14rem,0.35fr)_minmax(0,1.65fr)] xl:items-start">
         <div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brass">Table status</p>
-              <p className="mt-1 text-sm text-white/60">{status.targetLabel} | Makers: {status.makersLabel}</p>
+              <p className="mt-1 text-xs text-white/60">{status.handLabel} | {status.phaseLabel} | {status.targetLabel} | Makers: {status.makersLabel}</p>
             </div>
           </div>
         </div>
@@ -1546,6 +1552,16 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
       </div>
     </div>
   );
+}
+
+function waitingOnLabel(trick: ReturnType<typeof buildCurrentTrickView>) {
+  if (trick.unplayedSeats.length) {
+    return trick.unplayedSeats.map((seat) => TABLE_PLAYER_NAMES[seat]).join(", ");
+  }
+
+  return trick.latestCompletedWinnerLabel
+    ? `Complete: ${trick.latestCompletedWinnerLabel}`
+    : "Everyone played";
 }
 
 function NorthSeatScoreRow({ seat, scores }: { seat: TableSeatView; scores: [number, number] }) {
@@ -1659,7 +1675,7 @@ function ScoreFiveCard({
 
 function SeatCard({ seat }: { seat: TableSeatView }) {
   return (
-    <section className={`relative z-10 flex min-h-32 flex-col justify-between rounded-xl border p-3 shadow-lg shadow-black/15 ${
+    <section className={`relative z-10 flex min-h-28 flex-col justify-between rounded-xl border p-2.5 shadow-lg shadow-black/15 ${
       seat.isActive || seat.isDealer ? "border-brass bg-[#102f25]/90" : "border-white/10 bg-[#071411]/55"
     }`}>
       {seat.isDealer ? (
@@ -1677,19 +1693,19 @@ function SeatCard({ seat }: { seat: TableSeatView }) {
         {seat.isActive ? <Badge tone="brass">Turn</Badge> : null}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         {seat.isDealer ? <Badge tone="brass">Dealer</Badge> : null}
         {seat.isCaller ? <Badge>Caller</Badge> : null}
         {!seat.isCaller && seat.isPartnerOfCaller ? <Badge>Caller partner</Badge> : null}
         {seat.isMaker ? <Badge>Maker team</Badge> : null}
       </div>
 
-      <div className="mt-3">
+      <div className="mt-2">
         <CardBackFan count={seat.cardCount} compact />
       </div>
 
       {!seat.isHuman ? (
-        <p className="mt-3 min-h-8 text-xs text-white/55">{seat.recentAction ?? "No bot action yet."}</p>
+        <p className="mt-2 min-h-6 text-xs text-white/55">{seat.recentAction ?? "No bot action yet."}</p>
       ) : null}
     </section>
   );
@@ -1956,30 +1972,15 @@ function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTri
   const showingCompletedTrick = trick.plays.length === 4 && trick.unplayedSeats.length === 0;
 
   return (
-    <section className="relative z-10 min-h-72 rounded-[1.25rem] border border-brass/25 bg-[#08271f]/68 p-4 shadow-inner shadow-black/35">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brass">
-            {showingCompletedTrick ? "Completed trick" : "Current trick"}
-          </p>
-          <h2 className="mt-1 text-xl font-semibold text-white">Trick {trick.trickNumber}</h2>
-        </div>
-        <div className="grid gap-1 text-sm text-white/65 sm:text-right">
-          <span>Leader: <strong className="text-white">{trick.leaderLabel}</strong></span>
-          <span>Led suit: <strong className="text-brass">{trick.ledSuitLabel}</strong></span>
-          <span>Trump: <strong className="text-brass">{trick.trumpLabel}</strong></span>
-        </div>
-      </div>
-
-      <div className="mt-3 grid min-h-52 grid-cols-[minmax(6rem,1fr)_minmax(8rem,1.1fr)_minmax(6rem,1fr)] grid-rows-[auto_auto_auto] items-center gap-3">
+    <section className="relative z-10 rounded-[1.25rem] border border-brass/25 bg-[#08271f]/68 p-3 shadow-inner shadow-black/35">
+      <div className="grid min-h-48 grid-cols-[minmax(5.5rem,1fr)_minmax(7.5rem,1.1fr)_minmax(5.5rem,1fr)] grid-rows-[auto_auto_auto] items-center gap-2">
         <div className="col-start-2 row-start-1">
           <TrickSeatCard seat={2} entry={playBySeat.get(2)} />
         </div>
         <div className="col-start-1 row-start-2">
           <TrickSeatCard seat={1} entry={playBySeat.get(1)} />
         </div>
-        <div className="col-start-2 row-start-2 rounded-full border border-brass/25 bg-[#071411]/45 px-4 py-5 text-center shadow-inner shadow-black/40">
-          <p className="text-xs uppercase tracking-[0.14em] text-white/40">Table center</p>
+        <div className="col-start-2 row-start-2 rounded-full border border-brass/25 bg-[#071411]/45 px-3 py-4 text-center shadow-inner shadow-black/40">
           <p className="mt-1 text-sm font-semibold text-white">
             {showingCompletedTrick
               ? `${trick.currentWinnerLabel ?? "Winner"} took it`
@@ -1993,27 +1994,6 @@ function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTri
         </div>
         <div className="col-start-2 row-start-3">
           <TrickSeatCard seat={0} entry={playBySeat.get(0)} />
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-2 text-sm text-white/60 sm:grid-cols-2">
-        <div className="rounded border border-white/10 bg-[#071411]/35 px-3 py-2">
-          <p className="text-xs uppercase tracking-[0.12em] text-white/40">Current winner</p>
-          <p className="mt-1 font-semibold text-white">
-            {trick.currentWinnerLabel && trick.winningCardLabel
-              ? `${trick.currentWinnerLabel} with ${trick.winningCardLabel}`
-              : "No winner yet"}
-          </p>
-        </div>
-        <div className="rounded border border-white/10 bg-[#071411]/35 px-3 py-2">
-          <p className="text-xs uppercase tracking-[0.12em] text-white/40">Waiting on</p>
-          <p className="mt-1 font-semibold text-white">
-            {trick.unplayedSeats.length
-              ? trick.unplayedSeats.map((seat) => TABLE_PLAYER_NAMES[seat]).join(", ")
-              : trick.latestCompletedWinnerLabel
-                ? `Trick complete: ${trick.latestCompletedWinnerLabel}`
-                : "Everyone has played"}
-          </p>
         </div>
       </div>
     </section>
@@ -2030,7 +2010,7 @@ function TrickSeatCard({
   const play = entry?.play;
 
   return (
-    <div className={`min-h-32 rounded-xl border px-3 py-3 text-center ${
+    <div className={`min-h-28 rounded-xl border px-2 py-2 text-center ${
       play?.isWinningCard ? "border-brass bg-brass/15 shadow-lg shadow-brass/10" : "border-white/10 bg-[#071411]/35"
     }`}>
       <div className="flex min-h-5 items-center justify-between gap-2">
@@ -2039,18 +2019,13 @@ function TrickSeatCard({
       </div>
       {play ? (
         <>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-white/35">Played #{entry.index + 1}</p>
-          <div className="mx-auto mt-2 w-16 sm:w-20">
+          <div className="mx-auto mt-1 w-14 sm:w-16">
             <PlayingCard card={play.card} playable size="trick" winning={play.isWinningCard} />
           </div>
-          <p className="mt-1 text-xs text-white/45">
-            {play.effectiveSuit ? `Effective ${play.effectiveSuit}` : "Suit pending"}
-            {play.isTrump ? " | Trump" : ""}
-          </p>
           {play.isWinningCard ? <p className="mt-1 text-xs font-semibold text-brass">Winning</p> : null}
         </>
       ) : (
-        <div className="mt-3 rounded-lg border border-dashed border-white/15 px-2 py-8 text-xs text-white/35">
+        <div className="mt-2 rounded-lg border border-dashed border-white/15 px-2 py-6 text-xs text-white/35">
           No card yet
         </div>
       )}
