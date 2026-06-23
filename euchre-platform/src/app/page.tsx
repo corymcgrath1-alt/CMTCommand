@@ -30,8 +30,15 @@ import {
   selectReplayTrick,
   type ReplaySelection
 } from "@/lib/review/replay-viewer";
+import {
+  chooseActiveReviewSource,
+  clearHistoricalReviewState,
+  profileHistoryGameId,
+  type ActiveReviewSource,
+  type HistoricalReviewState
+} from "@/lib/review/review-drilldown";
 import type { ProfileAggregateSummary } from "@/lib/profiles/profile-aggregates";
-import type { PlayerProfileDetail, ProfileTrendStats, TrendRecord } from "@/lib/profiles/profile-detail";
+import type { PlayerProfileDetail, ProfileGameHistoryRow, ProfileTrendStats, TrendRecord } from "@/lib/profiles/profile-detail";
 
 const STORAGE_KEY = "euchre-platform-active-game-id";
 const PLAYER_NAMES: Record<PlayerIndex, string> = {
@@ -52,8 +59,12 @@ export default function Home() {
   const [profileStats, setProfileStats] = useState<ProfileAggregateSummary | null>(null);
   const [selectedProfileSeat, setSelectedProfileSeat] = useState<PlayerIndex>(0);
   const [profileDetail, setProfileDetail] = useState<PlayerProfileDetail | null>(null);
+  const [historicalReview, setHistoricalReview] = useState<HistoricalReviewState | null>(null);
+  const [loadingHistoricalReviewId, setLoadingHistoricalReviewId] = useState<string | null>(null);
+  const [historicalReviewStatus, setHistoricalReviewStatus] = useState<string | null>(null);
   const bots = useMemo(() => createDefaultBotProfiles(), []);
   const lastBotActionKey = useRef<string | null>(null);
+  const activeReviewSource = chooseActiveReviewSource({ currentReview: review, historicalReview });
 
   const loadProfileStats = useCallback(async () => {
     try {
@@ -234,6 +245,29 @@ export default function Home() {
     setStatus("Local state reset; persisted events were left immutable");
   }
 
+  async function openHistoricalReview(gameId: string) {
+    const selectedGameId = profileHistoryGameId(gameId);
+    setLoadingHistoricalReviewId(selectedGameId);
+    setHistoricalReviewStatus(`Loading review ${selectedGameId}...`);
+    try {
+      const result = await fetchJson<{ review: GameReviewSummary }>(`/api/games/${selectedGameId}/review`);
+      setHistoricalReview({
+        gameId: selectedGameId,
+        review: result.review
+      });
+      setHistoricalReviewStatus(`Loaded historical review ${selectedGameId}`);
+    } catch (error) {
+      setHistoricalReviewStatus(error instanceof Error ? error.message : "Unable to load historical review");
+    } finally {
+      setLoadingHistoricalReviewId(null);
+    }
+  }
+
+  function clearHistoricalReview() {
+    setHistoricalReview(clearHistoricalReviewState());
+    setHistoricalReviewStatus(review ? "Returned to current game review" : "Cleared historical review");
+  }
+
   return (
     <main className="min-h-screen bg-[#071411]">
       <section className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
@@ -272,7 +306,13 @@ export default function Home() {
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <section className="flex flex-col gap-4">
             <GameSummary state={state} />
-            {review ? <GameReviewPanel review={review} /> : null}
+            {activeReviewSource ? (
+              <GameReviewPanel
+                source={activeReviewSource}
+                canReturnToCurrent={activeReviewSource.kind === "historical" && Boolean(review)}
+                onClearHistoricalReview={activeReviewSource.kind === "historical" ? clearHistoricalReview : undefined}
+              />
+            ) : null}
             <BiddingControls state={state} alone={alone} setAlone={setAlone} act={act} disabled={isSaving} />
             <div className="grid gap-3 md:grid-cols-2">
               {([0, 1, 2, 3] as PlayerIndex[]).map((player) => (
@@ -299,7 +339,10 @@ export default function Home() {
               profiles={profileStats}
               selectedSeat={selectedProfileSeat}
               detail={profileDetail}
+              loadingReviewGameId={loadingHistoricalReviewId}
+              reviewStatus={historicalReviewStatus}
               onSelectSeat={setSelectedProfileSeat}
+              onOpenReview={openHistoricalReview}
             />
 
             <MoveHistory moves={state.moveLog} />
@@ -358,7 +401,16 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function GameReviewPanel({ review }: { review: GameReviewSummary }) {
+function GameReviewPanel({
+  source,
+  canReturnToCurrent,
+  onClearHistoricalReview
+}: {
+  source: ActiveReviewSource;
+  canReturnToCurrent: boolean;
+  onClearHistoricalReview?: () => void;
+}) {
+  const review = source.review;
   const [replaySelection, setReplaySelection] = useState<ReplaySelection>(() => createInitialReplaySelection(review));
 
   useEffect(() => {
@@ -374,7 +426,18 @@ function GameReviewPanel({ review }: { review: GameReviewSummary }) {
             Team {review.winningTeam} wins {review.finalScore[0]} - {review.finalScore[1]}
           </p>
         </div>
-        <p className="text-sm text-white/60">{review.totalHandsPlayed} hands | {review.totalEvents} events</p>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <p className="text-sm text-white/60">{review.totalHandsPlayed} hands | {review.totalEvents} events</p>
+          <p className="break-all text-xs text-white/45">{source.label}</p>
+          {source.kind === "historical" ? (
+            <button
+              className="rounded border border-white/20 px-3 py-2 text-xs font-semibold text-white"
+              onClick={onClearHistoricalReview}
+            >
+              {canReturnToCurrent ? "Return to current review" : "Clear historical review"}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -422,12 +485,18 @@ function ProfileStatsPanel({
   profiles,
   selectedSeat,
   detail,
-  onSelectSeat
+  loadingReviewGameId,
+  reviewStatus,
+  onSelectSeat,
+  onOpenReview
 }: {
   profiles: ProfileAggregateSummary | null;
   selectedSeat: PlayerIndex;
   detail: PlayerProfileDetail | null;
+  loadingReviewGameId: string | null;
+  reviewStatus: string | null;
   onSelectSeat: (seat: PlayerIndex) => void;
+  onOpenReview: (gameId: string) => void | Promise<void>;
 }) {
   return (
     <section className="rounded border border-white/10 bg-white/[0.04] p-4">
@@ -487,7 +556,12 @@ function ProfileStatsPanel({
             ))}
           </div>
 
-          <ProfileDetailPanel detail={detail} />
+          <ProfileDetailPanel
+            detail={detail}
+            loadingReviewGameId={loadingReviewGameId}
+            reviewStatus={reviewStatus}
+            onOpenReview={onOpenReview}
+          />
         </>
       ) : (
         <p className="mt-3 text-sm text-white/45">Complete a persisted game to populate local profile stats.</p>
@@ -496,7 +570,17 @@ function ProfileStatsPanel({
   );
 }
 
-function ProfileDetailPanel({ detail }: { detail: PlayerProfileDetail | null }) {
+function ProfileDetailPanel({
+  detail,
+  loadingReviewGameId,
+  reviewStatus,
+  onOpenReview
+}: {
+  detail: PlayerProfileDetail | null;
+  loadingReviewGameId: string | null;
+  reviewStatus: string | null;
+  onOpenReview: (gameId: string) => void | Promise<void>;
+}) {
   if (!detail) {
     return <p className="mt-3 text-sm text-white/45">Select a profile to load detail.</p>;
   }
@@ -541,24 +625,53 @@ function ProfileDetailPanel({ detail }: { detail: PlayerProfileDetail | null }) 
       </div>
 
       <div className="mt-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Game history</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Game history</p>
+          {reviewStatus ? <span className="text-xs text-white/45">{reviewStatus}</span> : null}
+        </div>
         <div className="mt-2 max-h-72 space-y-2 overflow-auto">
           {detail.gameHistory.length ? detail.gameHistory.map((game) => (
-            <div key={game.gameId} className="rounded border border-white/10 px-3 py-2 text-xs text-white/65">
-              <div className="flex items-center justify-between gap-2">
-                <span className={game.result === "win" ? "font-semibold text-brass" : "font-semibold text-white"}>
-                  {game.result.toUpperCase()} {game.pointsScored}-{game.pointsAllowed}
-                </span>
-                <span className="text-white/40">Hands {game.handsPlayed}</span>
-              </div>
-              <p className="mt-1 break-all text-white/40">{game.gameId}</p>
-              <p className="mt-1">
-                Calls {game.successfulCalls}-{game.failedCalls} | Tricks {game.tricksWon} | Loners {game.successfulLoners}/{game.loneAttempts}
-              </p>
-            </div>
+            <ProfileGameHistoryCard
+              key={game.gameId}
+              game={game}
+              isLoading={loadingReviewGameId === game.gameId}
+              onOpenReview={onOpenReview}
+            />
           )) : <p className="text-sm text-white/45">No completed games for this profile yet.</p>}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProfileGameHistoryCard({
+  game,
+  isLoading,
+  onOpenReview
+}: {
+  game: ProfileGameHistoryRow;
+  isLoading: boolean;
+  onOpenReview: (gameId: string) => void | Promise<void>;
+}) {
+  return (
+    <div className="rounded border border-white/10 px-3 py-2 text-xs text-white/65">
+      <div className="flex items-center justify-between gap-2">
+        <span className={game.result === "win" ? "font-semibold text-brass" : "font-semibold text-white"}>
+          {game.result.toUpperCase()} {game.pointsScored}-{game.pointsAllowed}
+        </span>
+        <span className="text-white/40">Hands {game.handsPlayed}</span>
+      </div>
+      <p className="mt-1 break-all text-white/40">{game.gameId}</p>
+      <p className="mt-1">
+        Calls {game.successfulCalls}-{game.failedCalls} | Tricks {game.tricksWon} | Loners {game.successfulLoners}/{game.loneAttempts}
+      </p>
+      <button
+        className="mt-2 rounded border border-brass/40 px-3 py-2 text-xs font-semibold text-brass disabled:opacity-60"
+        disabled={isLoading}
+        onClick={() => onOpenReview(game.gameId)}
+      >
+        {isLoading ? "Loading review..." : "Review Game"}
+      </button>
     </div>
   );
 }

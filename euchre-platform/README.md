@@ -72,6 +72,12 @@ records, recent win/call/trick trends, current streak, best win streak, and wors
 streak. The UI lets a player select a local placeholder profile from the sidebar and shows
 the same detail data without creating a second client-side stats source.
 
+Profile game-history rows can open completed game reviews directly from the sidebar. The
+drilldown fetches the existing `GET /api/games/[gameId]/review` payload and reuses the
+same Game Review and Hand Replay panel, so historical inspection stays derived from the
+append-only event history. This is the local foundation for future shareable game links,
+AI mistake review, and player improvement workflows.
+
 Deferred intentionally: real accounts, ranked/profile ratings, partner/opponent splits,
 opponent-adjusted stats, mistake detection, expected value, skill scoring, advanced bot or
 human decision quality, AI coaching, shareable hand links, spectator mode, realtime
