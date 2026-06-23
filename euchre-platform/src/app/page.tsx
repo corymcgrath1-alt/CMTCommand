@@ -30,6 +30,7 @@ import {
   parsePracticeSeed,
   replacementSelectionLabel,
   selectedFarmersHandReplacementCards,
+  suitColor,
   TABLE_PLAYER_NAMES,
   toggleFarmersHandReplacementSelection,
   type BotDifficulty,
@@ -1553,7 +1554,8 @@ function TableSurface({
   }
 
   return (
-    <section className="rounded border border-white/10 bg-table p-4 shadow-xl shadow-black/20">
+    <section className="euchre-table-rail rounded-[2rem] p-3 shadow-xl shadow-black/20">
+      <div className="euchre-felt rounded-[1.55rem] p-4">
       <TableStatusBar status={status} />
 
       <div className="mt-4 grid gap-3">
@@ -1573,6 +1575,7 @@ function TableSurface({
           disabled={disabled}
           onCard={onHumanCard}
         />
+      </div>
       </div>
     </section>
   );
@@ -1612,8 +1615,8 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
 
 function SeatCard({ seat }: { seat: TableSeatView }) {
   return (
-    <section className={`flex min-h-32 flex-col justify-between rounded border p-3 ${
-      seat.isActive ? "border-brass bg-brass/10" : "border-white/10 bg-white/[0.045]"
+    <section className={`relative z-10 flex min-h-36 flex-col justify-between rounded-xl border p-3 shadow-lg shadow-black/15 ${
+      seat.isActive ? "border-brass bg-[#102f25]/90" : "border-white/10 bg-[#071411]/55"
     }`}>
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -1632,9 +1635,8 @@ function SeatCard({ seat }: { seat: TableSeatView }) {
         {seat.isMaker ? <Badge>Maker team</Badge> : null}
       </div>
 
-      <div className="mt-4 rounded border border-white/10 bg-[#071411]/35 px-3 py-2">
-        <p className="text-xs uppercase tracking-[0.12em] text-white/40">Cards</p>
-        <p className="mt-1 text-lg font-semibold text-white">{seat.cardCount}</p>
+      <div className="mt-4">
+        <CardBackFan count={seat.cardCount} compact />
       </div>
 
       {!seat.isHuman ? (
@@ -1656,7 +1658,7 @@ function HumanSeatPanel({
   onCard: (card: Card, legal: boolean) => void;
 }) {
   return (
-    <section className={`rounded border p-4 ${seat.isActive ? "border-brass bg-felt" : "border-white/10 bg-white/[0.04]"}`}>
+    <section className={`relative z-10 rounded-xl border p-4 shadow-lg shadow-black/20 ${seat.isActive ? "border-brass bg-[#0c3d30]/80" : "border-white/10 bg-[#071411]/55"}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1675,21 +1677,21 @@ function HumanSeatPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
+      <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:flex lg:flex-wrap lg:justify-center">
         {hand.cards.map((card) => (
           <button
             key={card.id}
             data-seat={seat.seat}
             data-testid={`seat-${seat.seat}-card-${card.id}`}
-            className={`min-h-20 rounded border px-2 text-xl font-bold shadow-sm transition ${
+            className={`group rounded-xl p-0 transition ${
               card.legal
-                ? "border-brass/50 bg-white text-[#071411] hover:-translate-y-0.5 hover:border-brass"
-                : "border-white/10 bg-white/20 text-white/35"
+                ? "hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass"
+                : ""
             } disabled:cursor-not-allowed disabled:hover:translate-y-0`}
             disabled={disabled || !card.legal}
             onClick={() => onCard(card.card, card.legal)}
           >
-            {card.label}
+            <PlayingCard card={card.card} playable={card.legal} size="hand" />
           </button>
         ))}
       </div>
@@ -1699,7 +1701,7 @@ function HumanSeatPanel({
 
 function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTrickView> }) {
   return (
-    <section className="min-h-72 rounded border border-brass/25 bg-[#10251e] p-4">
+    <section className="relative z-10 min-h-80 rounded-[1.25rem] border border-brass/25 bg-[#08271f]/68 p-4 shadow-inner shadow-black/35">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brass">Current trick</p>
@@ -1712,19 +1714,21 @@ function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTri
         </div>
       </div>
 
-      <div className="mt-4 grid min-h-32 gap-2 sm:grid-cols-4">
+      <div className="mt-4 grid min-h-44 gap-3 sm:grid-cols-4">
         {trick.plays.length ? trick.plays.map((play, index) => (
           <div
             key={`${play.seat}-${play.cardId}`}
-            className={`rounded border px-3 py-3 ${
-              play.isWinningCard ? "border-brass bg-brass/15" : "border-white/10 bg-white/[0.045]"
+            className={`rounded-xl border px-3 py-3 text-center ${
+              play.isWinningCard ? "border-brass bg-brass/15 shadow-lg shadow-brass/10" : "border-white/10 bg-[#071411]/35"
             }`}
           >
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-white/45">#{index + 1} {play.playerName}</p>
               {play.isLeader ? <Badge>Leader</Badge> : null}
             </div>
-            <p className="mt-2 text-2xl font-semibold text-white">{play.cardLabel}</p>
+            <div className="mx-auto mt-3 w-20">
+              <PlayingCard card={play.card} playable size="trick" winning={play.isWinningCard} />
+            </div>
             <p className="mt-1 text-xs text-white/45">
               {play.effectiveSuit ? `Effective ${play.effectiveSuit}` : "Suit pending"}
               {play.isTrump ? " | Trump" : ""}
@@ -1760,6 +1764,74 @@ function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTri
       </div>
     </section>
   );
+}
+
+function PlayingCard({
+  card,
+  playable,
+  winning = false,
+  size
+}: {
+  card: Card;
+  playable: boolean;
+  winning?: boolean;
+  size: "hand" | "trick";
+}) {
+  const red = suitColor(card.suit) === "red";
+  const suit = displaySuitSymbol(card.suit);
+  const sizeClass = size === "hand" ? "w-full max-w-28 lg:w-24" : "w-20";
+  const colorClass = red ? "text-[#b71c2b]" : "text-[#111827]";
+
+  return (
+    <span
+      className={`playing-card relative inline-flex ${sizeClass} select-none flex-col justify-between overflow-hidden border bg-[#fffaf0] p-2 text-left ${colorClass} ${
+        playable ? "border-white" : "border-white/25 grayscale opacity-45"
+      } ${winning ? "ring-2 ring-brass ring-offset-2 ring-offset-[#08271f]" : ""}`}
+      aria-label={cardLabel(card)}
+    >
+      <span className="flex flex-col leading-none">
+        <span className="text-lg font-black">{card.rank}</span>
+        <span className="text-xl">{suit}</span>
+      </span>
+      <span className="absolute inset-0 flex items-center justify-center text-4xl font-black opacity-90">
+        {suit}
+      </span>
+      <span className="flex rotate-180 flex-col self-end leading-none">
+        <span className="text-lg font-black">{card.rank}</span>
+        <span className="text-xl">{suit}</span>
+      </span>
+    </span>
+  );
+}
+
+function CardBackFan({ count, compact = false }: { count: number; compact?: boolean }) {
+  const visible = Math.max(0, Math.min(count, 5));
+
+  return (
+    <div>
+      <div className="flex min-h-16 items-center justify-center">
+        {Array.from({ length: visible }).map((_, index) => (
+          <span
+            key={index}
+            className={`playing-card playing-card-back -ml-7 first:ml-0 ${compact ? "w-10" : "w-14"} border border-brass/45`}
+            style={{ transform: `rotate(${(index - Math.floor(visible / 2)) * 4}deg)` }}
+          />
+        ))}
+      </div>
+      <p className="mt-1 text-center text-xs uppercase tracking-[0.12em] text-white/45">
+        {count} card{count === 1 ? "" : "s"}
+      </p>
+    </div>
+  );
+}
+
+function displaySuitSymbol(suit: Card["suit"]): string {
+  return {
+    clubs: "♣",
+    diamonds: "♦",
+    hearts: "♥",
+    spades: "♠"
+  }[suit];
 }
 
 function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "brass" }) {

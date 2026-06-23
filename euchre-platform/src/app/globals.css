@@ -13,11 +13,56 @@
 body {
   min-height: 100vh;
   margin: 0;
-  background: #071411;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(209, 164, 76, 0.08), transparent 28rem),
+    radial-gradient(circle at 80% 0%, rgba(43, 111, 86, 0.22), transparent 32rem),
+    #071411;
   color: #eef8f4;
 }
 
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.euchre-table-rail {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(209, 164, 76, 0.38);
+  background:
+    linear-gradient(135deg, rgba(123, 72, 34, 0.82), rgba(57, 30, 15, 0.96)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 24px);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.38), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.euchre-felt {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at center, rgba(29, 121, 85, 0.92) 0%, rgba(13, 77, 56, 0.98) 58%, rgba(6, 42, 32, 1) 100%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 9px);
+  box-shadow: inset 0 0 38px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.euchre-felt::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 0 48%, rgba(0, 0, 0, 0.24) 100%),
+    repeating-radial-gradient(circle at center, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 7px);
+}
+
+.playing-card {
+  aspect-ratio: 5 / 7;
+  min-width: 3.8rem;
+  border-radius: 0.56rem;
+  box-shadow: 0 0.55rem 1rem rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(255, 255, 255, 0.74);
+}
+
+.playing-card-back {
+  background:
+    linear-gradient(135deg, rgba(209, 164, 76, 0.86), rgba(118, 33, 38, 0.95)),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.24) 0 2px, transparent 2px 8px);
 }
