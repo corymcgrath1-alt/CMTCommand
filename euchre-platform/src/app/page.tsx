@@ -278,7 +278,7 @@ export default function Home() {
   }, [act, bots, heldCompletedTrickKey, isSaving, persistedGameId, state]);
 
   useEffect(() => {
-    if (!persistedGameId || isSaving || heldCompletedTrickKey || state.phase !== "handComplete") {
+    if (!persistedGameId || isSaving || state.phase !== "handComplete") {
       return;
     }
 
@@ -290,10 +290,10 @@ export default function Home() {
 
     const timeout = window.setTimeout(() => {
       void act({ type: "NEXT_HAND", seed: Date.now() % 1_000_000 }, "Auto deal");
-    }, 1200);
+    }, 2200);
 
     return () => window.clearTimeout(timeout);
-  }, [act, heldCompletedTrickKey, isSaving, persistedGameId, state.handNumber, state.moveLog.length, state.phase]);
+  }, [act, isSaving, persistedGameId, state.handNumber, state.moveLog.length, state.phase]);
 
   async function startNewGame() {
     setIsSaving(true);
