@@ -187,14 +187,21 @@ export function buildHumanHandView(state: GameState, seat: PlayerIndex = 0): Hum
   };
 }
 
-export function buildCurrentTrickView(state: GameState): CurrentTrickView {
-  const trick = state.currentTrick;
+export function buildCurrentTrickView(state: GameState, options: { showLatestCompleted?: boolean } = {}): CurrentTrickView {
+  const latestCompleted = state.completedTricks[state.completedTricks.length - 1];
+  const showingCompleted = Boolean(options.showLatestCompleted && latestCompleted);
+  const trick = showingCompleted ? latestCompleted : state.currentTrick;
   const plays = trick?.plays ?? [];
   const trump = state.trump;
   const ledSuit = trick && trump ? ledSuitForPlays(plays, trump) : undefined;
-  const currentWinner = trump && ledSuit && plays.length ? bestPlaySoFar(plays, trump, ledSuit) : undefined;
-  const latestCompleted = state.completedTricks[state.completedTricks.length - 1];
-  const trickNumber = state.phase === "playing" && trick
+  const currentWinner = showingCompleted && latestCompleted?.winner !== undefined
+    ? latestCompleted.plays.find((play) => play.player === latestCompleted.winner)
+    : trump && ledSuit && plays.length
+      ? bestPlaySoFar(plays, trump, ledSuit)
+      : undefined;
+  const trickNumber = showingCompleted
+    ? Math.max(state.completedTricks.length, 1)
+    : state.phase === "playing" && trick
     ? Math.min(state.completedTricks.length + 1, 5)
     : Math.min(Math.max(state.completedTricks.length, 1), 5);
 
@@ -215,7 +222,7 @@ export function buildCurrentTrickView(state: GameState): CurrentTrickView {
       isLeader: trick?.leader === play.player,
       isWinningCard: currentWinner?.player === play.player && cardId(currentWinner.card) === cardId(play.card)
     })),
-    unplayedSeats: trick ? unplayedSeats(trick.leader, plays) : [...TABLE_SEATS],
+    unplayedSeats: showingCompleted ? [] : trick ? unplayedSeats(trick.leader, plays) : [...TABLE_SEATS],
     currentWinnerSeat: currentWinner?.player,
     currentWinnerLabel: currentWinner ? TABLE_PLAYER_NAMES[currentWinner.player] : undefined,
     winningCardLabel: currentWinner ? cardLabel(currentWinner.card) : undefined,

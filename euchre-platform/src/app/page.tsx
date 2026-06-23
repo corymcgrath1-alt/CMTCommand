@@ -113,6 +113,7 @@ export default function Home() {
   const bots = useMemo(() => createDefaultBotProfiles(), []);
   const lastBotActionKey = useRef<string | null>(null);
   const lastAutoNextHandKey = useRef<string | null>(null);
+  const [heldCompletedTrickKey, setHeldCompletedTrickKey] = useState<string | null>(null);
   const activeReviewSource = chooseActiveReviewSource({ currentReview: review, historicalReview });
 
   const loadProfileStats = useCallback(async () => {
@@ -230,7 +231,26 @@ export default function Home() {
   }, [state.handNumber, state.phase, state.activePlayer]);
 
   useEffect(() => {
-    if (!persistedGameId || isSaving) {
+    const latestCompleted = state.completedTricks[state.completedTricks.length - 1];
+    if (!latestCompleted || latestCompleted.plays.length !== 4) {
+      setHeldCompletedTrickKey(null);
+      return;
+    }
+
+    const key = `${state.handNumber}:${state.completedTricks.length}:${latestCompleted.winner}:${latestCompleted.plays
+      .map((play) => `${play.player}-${cardId(play.card)}`)
+      .join("|")}`;
+
+    setHeldCompletedTrickKey(key);
+    const timeout = window.setTimeout(() => {
+      setHeldCompletedTrickKey((current) => (current === key ? null : current));
+    }, 1800);
+
+    return () => window.clearTimeout(timeout);
+  }, [state.completedTricks, state.handNumber]);
+
+  useEffect(() => {
+    if (!persistedGameId || isSaving || heldCompletedTrickKey) {
       return;
     }
 
@@ -255,10 +275,10 @@ export default function Home() {
     }, 450);
 
     return () => window.clearTimeout(timeout);
-  }, [act, bots, isSaving, persistedGameId, state]);
+  }, [act, bots, heldCompletedTrickKey, isSaving, persistedGameId, state]);
 
   useEffect(() => {
-    if (!persistedGameId || isSaving || state.phase !== "handComplete") {
+    if (!persistedGameId || isSaving || heldCompletedTrickKey || state.phase !== "handComplete") {
       return;
     }
 
@@ -273,7 +293,7 @@ export default function Home() {
     }, 1200);
 
     return () => window.clearTimeout(timeout);
-  }, [act, isSaving, persistedGameId, state.handNumber, state.moveLog.length, state.phase]);
+  }, [act, heldCompletedTrickKey, isSaving, persistedGameId, state.handNumber, state.moveLog.length, state.phase]);
 
   async function startNewGame() {
     setIsSaving(true);
@@ -382,8 +402,8 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#071411]">
-      <section className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-3 border-b border-white/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
+      <section className="mx-auto flex w-full max-w-[112rem] flex-col gap-3 px-3 py-3 sm:px-4 lg:px-5">
+        <header className="flex flex-col gap-3 border-b border-white/10 pb-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">Phase 1 foundation</p>
             <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Euchre Platform</h1>
@@ -511,15 +531,16 @@ export default function Home() {
           />
         ) : null}
 
-        <section className="rounded border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/70">
+        <section className="rounded border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70">
           <span className="font-semibold text-white">Persistence:</span>{" "}
           {persistedGameId ? `Game ${persistedGameId}` : "No persisted game selected"} | {status}
         </section>
 
-        <div className="flex flex-col gap-4">
-          <section className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
+          <section className="flex flex-col gap-3">
             <TableSurface
               state={state}
+              showCompletedTrick={Boolean(heldCompletedTrickKey)}
               alone={alone}
               setAlone={setAlone}
               act={act}
@@ -527,14 +548,12 @@ export default function Home() {
               selectedReplacementIds={selectedReplacementIds}
               setSelectedReplacementIds={setSelectedReplacementIds}
             />
-            <TurnPromptPanel state={state} />
             <BiddingControls
               state={state}
               act={act}
               disabled={isSaving}
               onStartNewGame={confirmStartNewGame}
             />
-            <GameSummary state={state} />
             {activeReviewSource ? (
               <GameReviewPanel
                 source={activeReviewSource}
@@ -544,7 +563,9 @@ export default function Home() {
             ) : null}
           </section>
 
-          <aside className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_280px_320px]">
+          <aside className="grid gap-4 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.25fr)_minmax(18rem,0.9fr)_minmax(18rem,1fr)]">
+            <TurnPromptPanel state={state} />
+            <GameSummary state={state} />
             <section className="rounded border border-white/10 bg-white/[0.04] p-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Bots</h2>
@@ -1399,6 +1420,7 @@ function BiddingControls({
 
 function TableSurface({
   state,
+  showCompletedTrick,
   alone,
   setAlone,
   act,
@@ -1407,6 +1429,7 @@ function TableSurface({
   setSelectedReplacementIds
 }: {
   state: GameState;
+  showCompletedTrick: boolean;
   alone: boolean;
   setAlone: (value: boolean) => void;
   act: (action: GameAction) => void | Promise<void>;
@@ -1418,7 +1441,7 @@ function TableSurface({
   const seatByPosition = Object.fromEntries(seats.map((seat) => [seat.position, seat])) as Record<TableSeatView["position"], TableSeatView>;
   const status = buildTableStatusView(state);
   const humanHand = buildHumanHandView(state, 0);
-  const trick = buildCurrentTrickView(state);
+  const trick = buildCurrentTrickView(state, { showLatestCompleted: showCompletedTrick });
   const humanLegal = legalActionsForPlayer(state, 0);
   const farmersSelectionActive = state.phase === "farmersHand"
     && state.activePlayer === 0
@@ -1449,11 +1472,11 @@ function TableSurface({
   return (
     <section className="flex flex-col gap-3">
       <div className="euchre-table-rail rounded-[2rem] p-3 shadow-xl shadow-black/20">
-        <div className="euchre-felt rounded-[1.55rem] p-4">
+        <div className="euchre-felt rounded-[1.55rem] p-3 lg:p-4">
           <div className="grid gap-3">
             <NorthSeatScoreRow seat={seatByPosition.north} scores={status.scores} />
 
-            <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_220px] lg:items-stretch">
+            <div className="grid gap-3 lg:grid-cols-[260px_minmax(34rem,1fr)_260px] xl:grid-cols-[300px_minmax(42rem,1fr)_300px] lg:items-stretch">
               <SeatCard seat={seatByPosition.west} />
               <CurrentTrickPanel trick={trick} />
               <SeatCard seat={seatByPosition.east} />
@@ -1525,7 +1548,7 @@ function NorthSeatScoreRow({ seat, scores }: { seat: TableSeatView; scores: [num
   const teams = buildEuchreScoreCardViews(scores);
 
   return (
-    <div className="grid items-center gap-3 lg:grid-cols-[minmax(8rem,1fr)_minmax(16rem,28rem)_minmax(8rem,1fr)]">
+    <div className="grid items-center gap-3 lg:grid-cols-[minmax(14rem,1fr)_minmax(16rem,28rem)_minmax(14rem,1fr)]">
       <TeamScoreStack team={teams[0]} align="right" />
       <div className="mx-auto w-full max-w-md">
         <SeatCard seat={seat} />
@@ -1632,7 +1655,7 @@ function ScoreFiveCard({
 
 function SeatCard({ seat }: { seat: TableSeatView }) {
   return (
-    <section className={`relative z-10 flex min-h-36 flex-col justify-between rounded-xl border p-3 shadow-lg shadow-black/15 ${
+    <section className={`relative z-10 flex min-h-32 flex-col justify-between rounded-xl border p-3 shadow-lg shadow-black/15 ${
       seat.isActive || seat.isDealer ? "border-brass bg-[#102f25]/90" : "border-white/10 bg-[#071411]/55"
     }`}>
       {seat.isDealer ? (
@@ -1657,7 +1680,7 @@ function SeatCard({ seat }: { seat: TableSeatView }) {
         {seat.isMaker ? <Badge>Maker team</Badge> : null}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-3">
         <CardBackFan count={seat.cardCount} compact />
       </div>
 
@@ -1926,12 +1949,15 @@ function HumanHandActionControls({
 
 function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTrickView> }) {
   const playBySeat = new Map(trick.plays.map((play, index) => [play.seat, { play, index }]));
+  const showingCompletedTrick = trick.plays.length === 4 && trick.unplayedSeats.length === 0;
 
   return (
-    <section className="relative z-10 min-h-80 rounded-[1.25rem] border border-brass/25 bg-[#08271f]/68 p-4 shadow-inner shadow-black/35">
+    <section className="relative z-10 min-h-72 rounded-[1.25rem] border border-brass/25 bg-[#08271f]/68 p-4 shadow-inner shadow-black/35">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brass">Current trick</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brass">
+            {showingCompletedTrick ? "Completed trick" : "Current trick"}
+          </p>
           <h2 className="mt-1 text-xl font-semibold text-white">Trick {trick.trickNumber}</h2>
         </div>
         <div className="grid gap-1 text-sm text-white/65 sm:text-right">
@@ -1941,7 +1967,7 @@ function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTri
         </div>
       </div>
 
-      <div className="mt-3 grid min-h-56 grid-cols-[minmax(5rem,1fr)_minmax(7rem,1.1fr)_minmax(5rem,1fr)] grid-rows-[auto_auto_auto] items-center gap-3">
+      <div className="mt-3 grid min-h-52 grid-cols-[minmax(6rem,1fr)_minmax(8rem,1.1fr)_minmax(6rem,1fr)] grid-rows-[auto_auto_auto] items-center gap-3">
         <div className="col-start-2 row-start-1">
           <TrickSeatCard seat={2} entry={playBySeat.get(2)} />
         </div>
@@ -1950,7 +1976,13 @@ function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTri
         </div>
         <div className="col-start-2 row-start-2 rounded-full border border-brass/25 bg-[#071411]/45 px-4 py-5 text-center shadow-inner shadow-black/40">
           <p className="text-xs uppercase tracking-[0.14em] text-white/40">Table center</p>
-          <p className="mt-1 text-sm font-semibold text-white">{trick.plays.length ? `${trick.plays.length}/4 played` : "Awaiting lead"}</p>
+          <p className="mt-1 text-sm font-semibold text-white">
+            {showingCompletedTrick
+              ? `${trick.currentWinnerLabel ?? "Winner"} took it`
+              : trick.plays.length
+                ? `${trick.plays.length}/4 played`
+                : "Awaiting lead"}
+          </p>
         </div>
         <div className="col-start-3 row-start-2">
           <TrickSeatCard seat={3} entry={playBySeat.get(3)} />

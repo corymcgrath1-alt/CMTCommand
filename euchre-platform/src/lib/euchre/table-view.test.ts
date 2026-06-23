@@ -136,6 +136,45 @@ describe("current trick view models", () => {
     expect(view.plays.find((play) => play.seat === 2)).toMatchObject({ isTrump: true, isWinningCard: true });
     expect(view.unplayedSeats).toEqual([0]);
   });
+
+  it("can hold the latest completed trick with all four cards and the winner visible", () => {
+    const state = makeState({
+      phase: "playing",
+      trump: "spades",
+      completedTricks: [
+        {
+          leader: 1,
+          plays: [
+            { player: 1, card: c("A", "hearts") },
+            { player: 2, card: c("J", "clubs") },
+            { player: 3, card: c("K", "hearts") },
+            { player: 0, card: c("9", "hearts") }
+          ],
+          winner: 2
+        }
+      ],
+      currentTrick: {
+        leader: 2,
+        plays: []
+      }
+    });
+
+    const view = buildCurrentTrickView(state, { showLatestCompleted: true });
+
+    expect(view).toMatchObject({
+      trickNumber: 1,
+      leaderSeat: 1,
+      leaderLabel: "West",
+      ledSuitLabel: "hearts",
+      currentWinnerSeat: 2,
+      currentWinnerLabel: "North",
+      winningCardLabel: "JC",
+      latestCompletedWinnerLabel: "North"
+    });
+    expect(view.plays.map((play) => play.cardLabel)).toEqual(["AH", "JC", "KH", "9H"]);
+    expect(view.plays.find((play) => play.seat === 2)).toMatchObject({ isWinningCard: true });
+    expect(view.unplayedSeats).toEqual([]);
+  });
 });
 
 describe("human hand view models", () => {
