@@ -218,13 +218,19 @@ function replaceFarmersHandCards(state: GameState, player: PlayerIndex, cards: C
   if (cards.length < 1 || cards.length > 3) {
     throw new InvalidGameActionError("Farmer's hand replacement must exchange one to three cards");
   }
+  if (new Set(cards.map(cardKey)).size !== cards.length) {
+    throw new InvalidGameActionError("Farmer's hand replacement cards must be unique");
+  }
   if (cards.length > Math.max(0, state.kitty.length - 1)) {
     throw new InvalidGameActionError("Not enough kitty cards for farmer's hand replacement");
   }
 
   const replaceableIds = new Set(farmersHandReplaceableCards(state.hands[player]).map(cardKey));
+  const handIds = new Set(state.hands[player].map(cardKey));
   for (const card of cards) {
-    validateCardInHand(state.hands[player], card);
+    if (!handIds.has(cardKey(card))) {
+      throw new InvalidGameActionError("Farmer's hand replacement cards must be in the player's hand");
+    }
     if (!replaceableIds.has(cardKey(card))) {
       throw new InvalidGameActionError("Farmer's hand replacement cards must be 9s or 10s");
     }

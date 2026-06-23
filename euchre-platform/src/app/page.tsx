@@ -9,10 +9,19 @@ import {
   FARMERS_HAND_MODES,
   LONER_MODES,
   TARGET_SCORES,
+  buildRuleSummary,
   chooseBotAction,
   createDefaultBotProfiles,
   createInitialGameState,
+  formatBotDifficulty,
+  formatDealerSelection,
+  formatFarmersHandMode,
+  formatLonerMode,
   legalActionsForPlayer,
+  parsePracticeSeed,
+  replacementSelectionLabel,
+  selectedFarmersHandReplacementCards,
+  toggleFarmersHandReplacementSelection,
   type BotDifficulty,
   type Card,
   type DealerSelection,
@@ -22,6 +31,7 @@ import {
   type LonerMode,
   type MoveEvent,
   type PlayerIndex,
+  type RuleSummary,
   type TargetScore
 } from "@/lib/euchre";
 import type { LoadedGame } from "@/lib/persistence/event-store";
@@ -232,7 +242,7 @@ export default function Home() {
     setIsSaving(true);
     setStatus("Creating persisted game...");
     try {
-      const seed = resolveSeed(seedInput);
+      const { seed } = parsePracticeSeed(seedInput);
       setLastSeed(seed);
       const created = await fetchJson<{ game: LoadedGame["game"] }>("/api/games", {
         method: "POST",
@@ -314,7 +324,7 @@ export default function Home() {
   }
 
   function copySeed() {
-    const seed = lastSeed ?? resolveSeed(seedInput);
+    const seed = lastSeed ?? parsePracticeSeed(seedInput).seed;
     setLastSeed(seed);
     setSeedInput(String(seed));
     if (navigator.clipboard) {
@@ -359,7 +369,7 @@ export default function Home() {
               >
                 {BOT_DIFFICULTIES.map((difficulty) => (
                   <option key={difficulty} value={difficulty}>
-                    {formatDifficulty(difficulty)}
+                    {formatBotDifficulty(difficulty)}
                   </option>
                 ))}
               </select>
@@ -446,6 +456,12 @@ export default function Home() {
           </div>
         </header>
 
+        <SetupHelp
+          farmersHandMode={farmersHandMode}
+          lonerMode={lonerMode}
+          lastSeed={lastSeed}
+        />
+
         <section className="rounded border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/70">
           <span className="font-semibold text-white">Persistence:</span>{" "}
           {persistedGameId ? `Game ${persistedGameId}` : "No persisted game selected"} | {status}
@@ -474,7 +490,7 @@ export default function Home() {
             <section className="rounded border border-white/10 bg-white/[0.04] p-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Bots</h2>
-                <span className="text-xs font-semibold text-brass">{formatDifficulty(state.config.botDifficulty)}</span>
+                <span className="text-xs font-semibold text-brass">{formatBotDifficulty(state.config.botDifficulty)}</span>
               </div>
               <div className="mt-3 space-y-2">
                 {bots.map((bot) => (
@@ -506,6 +522,10 @@ export default function Home() {
 
 function GameSummary({ state }: { state: GameState }) {
   const winner = gameWinner(state);
+  const ruleSummary = buildRuleSummary(state.config, {
+    events: moveLogRuleEvents(state.moveLog),
+    initialDealer: state.handNumber <= 1 ? state.dealer : undefined
+  });
 
   return (
     <section className="grid gap-3 rounded border border-white/10 bg-table p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -514,7 +534,7 @@ function GameSummary({ state }: { state: GameState }) {
       <SummaryItem label="Target" value={String(state.config.targetScore)} />
       <SummaryItem label="Phase" value={state.phase} />
       <SummaryItem label="Dealer" value={PLAYER_NAMES[state.dealer]} />
-      <SummaryItem label="Bot difficulty" value={formatDifficulty(state.config.botDifficulty)} />
+      <SummaryItem label="Bot difficulty" value={formatBotDifficulty(state.config.botDifficulty)} />
       <SummaryItem label="Farmer" value={formatFarmersHandMode(state.config.farmersHandMode)} />
       <SummaryItem label="Active" value={PLAYER_NAMES[state.activePlayer]} />
       <SummaryItem label="Upcard" value={state.upcard ? cardLabel(state.upcard) : "None"} />
@@ -542,6 +562,9 @@ function GameSummary({ state }: { state: GameState }) {
           </p>
         </div>
       ) : null}
+      <div className="sm:col-span-2 lg:col-span-4">
+        <RuleSummaryPanel summary={ruleSummary} tone="dark" />
+      </div>
     </section>
   );
 }
@@ -555,55 +578,93 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function formatDifficulty(difficulty: BotDifficulty = "standard"): string {
-  return difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+function SetupHelp({
+  farmersHandMode,
+  lonerMode,
+  lastSeed
+}: {
+  farmersHandMode: FarmersHandMode;
+  lonerMode: LonerMode;
+  lastSeed: number | null;
+}) {
+  return (
+    <section className="grid gap-3 rounded border border-white/10 bg-white/[0.035] px-4 py-3 text-sm text-white/65 lg:grid-cols-3">
+      <div>
+        <p className="font-semibold text-white">Farmer&apos;s Hand</p>
+        <p className="mt-1">{farmersHandHelp(farmersHandMode)}</p>
+        <p className="mt-1 text-xs text-white/45">Qualifier: only 9s and 10s; no A, K, Q, or J.</p>
+      </div>
+      <div>
+        <p className="font-semibold text-white">Loner mode</p>
+        <p className="mt-1">
+          {lonerMode === "aloneOnly"
+            ? "Standard loners are fully supported: the caller may go alone under current scoring."
+            : "Assisted-loner mode is stored for replay safety, but assisted gameplay remains deferred."}
+        </p>
+      </div>
+      <div>
+        <p className="font-semibold text-white">Seed practice</p>
+        <p className="mt-1">
+          Enter a seed before starting to repeat the first deal, or copy the active seed after creation.
+          {lastSeed === null ? "" : ` Current seed: ${lastSeed}.`}
+        </p>
+      </div>
+    </section>
+  );
 }
 
-function formatDealerSelection(selection: DealerSelection): string {
-  switch (selection) {
-    case "human":
-      return "Human";
-    case "seat0":
-      return "Seat 0";
-    case "seat1":
-      return "Seat 1";
-    case "seat2":
-      return "Seat 2";
-    case "seat3":
-      return "Seat 3";
-    case "default":
-    default:
-      return "Default";
-  }
-}
-
-function formatFarmersHandMode(mode: FarmersHandMode): string {
+function farmersHandHelp(mode: FarmersHandMode): string {
   switch (mode) {
     case "redeal":
-      return "Redeal";
+      return "A qualifying player may claim a deterministic redeal before bidding.";
     case "replaceThree":
-      return "Replace 3";
+      return "A qualifying human may choose 1-3 low cards to exchange with the kitty.";
     case "off":
     default:
-      return "Off";
+      return "No Farmer's Hand phase; bidding begins immediately after the deal.";
   }
 }
 
-function formatLonerMode(mode: LonerMode): string {
-  return mode === "withPartnerAllowed" ? "Assisted variant" : "Alone only";
+function RuleSummaryPanel({ summary, tone = "dark" }: { summary: RuleSummary; tone?: "dark" | "brass" }) {
+  const borderClass = tone === "brass" ? "border-brass/30 bg-[#071411]/35" : "border-white/10 bg-white/[0.04]";
+
+  return (
+    <section className={`rounded border ${borderClass} px-3 py-2`}>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Rules</p>
+        {summary.defaultsApplied ? <p className="text-xs text-white/40">Normalized defaults applied where needed</p> : null}
+      </div>
+      <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+        {summary.items.map((item) => (
+          <div key={item.label} className="rounded border border-white/10 px-2 py-2">
+            <p className="uppercase tracking-[0.12em] text-white/35">{item.label}</p>
+            <p className="mt-1 font-semibold text-white">{item.value}</p>
+            {item.detail ? <p className="mt-1 text-white/45">{item.detail}</p> : null}
+          </div>
+        ))}
+      </div>
+      {summary.warnings.length ? (
+        <div className="mt-2 space-y-1">
+          {summary.warnings.map((warning) => (
+            <p key={warning} className="rounded border border-brass/35 bg-brass/10 px-2 py-1 text-xs text-brass">
+              {warning}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 function asTargetScore(score: number): TargetScore {
   return TARGET_SCORES.includes(score as TargetScore) ? score as TargetScore : 10;
 }
 
-function resolveSeed(input: string): number {
-  const parsed = Number(input.trim());
-  if (Number.isInteger(parsed) && Number.isFinite(parsed)) {
-    return Math.abs(parsed) % 1_000_000;
-  }
-
-  return Date.now() % 1_000_000;
+function moveLogRuleEvents(moves: MoveEvent[]) {
+  return moves.map((move) => ({
+    eventType: move.action.type,
+    payload: move.action
+  }));
 }
 
 function GameReviewPanel({
@@ -650,6 +711,10 @@ function GameReviewPanel({
         <ReviewMetric label="Maker wins" value={review.totalSuccessfulMakerHands} />
         <ReviewMetric label="Maker fails" value={review.totalFailedMakerHands} />
         <ReviewMetric label="Lone attempts" value={review.totalLoneAttempts} />
+      </div>
+
+      <div className="mt-4">
+        <RuleSummaryPanel summary={review.ruleSummary} tone="brass" />
       </div>
 
       <div className="mt-4 overflow-x-auto">
@@ -869,6 +934,9 @@ function ProfileGameHistoryCard({
       <p className="mt-1 break-all text-white/40">{game.gameId}</p>
       <p className="mt-1">
         Calls {game.successfulCalls}-{game.failedCalls} | Tricks {game.tricksWon} | Loners {game.successfulLoners}/{game.loneAttempts}
+      </p>
+      <p className="mt-1 text-white/40">
+        Target {game.ruleSummary.targetScoreLabel} | {game.ruleSummary.botDifficultyLabel} | Farmer {game.ruleSummary.farmersHandModeLabel} | Seed {game.ruleSummary.seedLabel}
       </p>
       <button
         className="mt-2 rounded border border-brass/40 px-3 py-2 text-xs font-semibold text-brass disabled:opacity-60"
@@ -1151,6 +1219,12 @@ function BiddingControls({
   act: (action: GameAction) => void | Promise<void>;
   disabled: boolean;
 }) {
+  const [selectedReplacementIds, setSelectedReplacementIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedReplacementIds([]);
+  }, [state.handNumber, state.phase, state.activePlayer]);
+
   if (state.phase === "idle") {
     return null;
   }
@@ -1158,7 +1232,22 @@ function BiddingControls({
   if (state.phase === "farmersHand") {
     const legal = legalActionsForPlayer(state, state.activePlayer);
     const humanTurn = state.activePlayer === 0;
-    const replaceableCards = legal.farmersHandReplaceableCards.slice(0, Math.min(3, Math.max(0, state.kitty.length - 1)));
+    const eligibleIds = new Set(legal.farmersHandReplaceableCards.map(cardId));
+    const selectedCards = selectedFarmersHandReplacementCards(state.hands[state.activePlayer], selectedReplacementIds);
+    const selectedCount = selectedCards.length;
+
+    function toggleReplacementCard(card: Card) {
+      const id = cardId(card);
+      if (!eligibleIds.has(id)) {
+        return;
+      }
+
+      setSelectedReplacementIds((current) => toggleFarmersHandReplacementSelection({
+        selectedIds: current,
+        card,
+        eligibleCards: legal.farmersHandReplaceableCards
+      }));
+    }
 
     return (
       <section className="flex flex-col gap-3 rounded border border-white/10 bg-white/[0.04] p-4">
@@ -1188,14 +1277,51 @@ function BiddingControls({
           {state.config.farmersHandMode === "replaceThree" ? (
             <button
               className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
-              disabled={disabled || !humanTurn || !legal.canClaimFarmersHand || replaceableCards.length === 0}
-              onClick={() => act({ type: "FARMERS_HAND_REPLACE", player: state.activePlayer, cards: replaceableCards })}
+              disabled={disabled || !humanTurn || !legal.canClaimFarmersHand || selectedCount === 0}
+              onClick={() => act({ type: "FARMERS_HAND_REPLACE", player: state.activePlayer, cards: selectedCards })}
             >
-              Replace {replaceableCards.length || 3}
+              Replace Selected
             </button>
           ) : null}
           {!humanTurn ? <span className="text-sm text-white/50">Bot checking...</span> : null}
         </div>
+        {state.config.farmersHandMode === "replaceThree" && humanTurn ? (
+          <div className="rounded border border-white/10 bg-[#071411]/40 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-white">Choose eligible low cards</p>
+              <span className="text-sm text-brass">{selectedCount}/3 selected</span>
+            </div>
+            <p className="mt-1 text-xs text-white/45">{replacementSelectionLabel(selectedCards)}</p>
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+              {state.hands[state.activePlayer].map((card) => {
+                const id = cardId(card);
+                const eligible = eligibleIds.has(id);
+                const selected = selectedReplacementIds.includes(id);
+                const selectionBlocked = !selected && selectedCount >= 3;
+
+                return (
+                  <button
+                    key={id}
+                    className={`h-16 rounded border px-2 text-lg font-bold shadow-sm ${
+                      selected
+                        ? "border-brass bg-brass text-[#201602]"
+                        : eligible
+                          ? "border-white/30 bg-white text-[#071411]"
+                          : "border-white/10 bg-white/20 text-white/35"
+                    }`}
+                    disabled={disabled || !eligible || selectionBlocked}
+                    onClick={() => toggleReplacementCard(card)}
+                  >
+                    {cardLabel(card)}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-white/45">
+              Eligible cards are 9s and 10s only. Non-eligible cards and a fourth selection are disabled.
+            </p>
+          </div>
+        ) : null}
       </section>
     );
   }

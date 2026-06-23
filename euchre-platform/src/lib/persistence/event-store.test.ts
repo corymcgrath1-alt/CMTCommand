@@ -11,6 +11,7 @@ import {
   getEventStore
 } from "./event-store";
 import { reconstructGameState } from "./replay";
+import { firstSeedFromEvents } from "@/lib/euchre";
 
 const testDirs: string[] = [];
 
@@ -80,6 +81,18 @@ describe("append-only local event store", () => {
 
     expect(history.map((event) => event.sequenceNumber)).toEqual([0, 1]);
     expect(history.map((event) => event.eventType)).toEqual(["START_HAND", "PASS"]);
+  });
+
+  it("keeps the first hand seed available in persisted move history", async () => {
+    const store = await createStore();
+    const game = await store.createGame({ config: { stickDealer: false, targetScore: 10 } });
+
+    await store.appendMove({ gameId: game.id, expectedSequence: 0, action: { type: "START_HAND", seed: 654321 } });
+
+    const loaded = await store.loadGame(game.id);
+
+    expect(firstSeedFromEvents(loaded.events)).toBe(654321);
+    expect(loaded.state.moveLog[0].action).toEqual({ type: "START_HAND", seed: 654321 });
   });
 
   it("reconstructs game state from stored events", async () => {

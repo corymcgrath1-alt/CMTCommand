@@ -43,6 +43,8 @@ describe("game review stats extraction", () => {
     expect(review.totalHandsPlayed).toBe(expected.handCount);
     expect(review.totalEvents).toBe(loaded.events.length);
     expect(review.totalTricksPlayed).toBe(expected.totalTricks);
+    expect(review.ruleSummary.targetScoreLabel).toBe(String(loaded.game.config.targetScore));
+    expect(review.ruleSummary.seedLabel).toBe("13579");
     expect(review.totalEuchres).toBe(expected.euchres);
     expect(review.totalSuccessfulMakerHands).toBe(expected.successfulMakers);
     expect(review.totalFailedMakerHands).toBe(expected.failedMakers);

@@ -2,6 +2,8 @@ export * from "./bots";
 export * from "./cards";
 export * from "./deck";
 export * from "./engine";
+export * from "./farmers-hand-selection";
 export * from "./models";
+export * from "./rule-summary";
 export * from "./rules";
 export * from "./types";

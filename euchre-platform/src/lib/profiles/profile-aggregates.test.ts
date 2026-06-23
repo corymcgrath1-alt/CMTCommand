@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildRuleSummary } from "@/lib/euchre";
 import type { GameReview, SeatReviewStats, TeamReviewStats } from "@/lib/review/game-review";
 import { buildProfileAggregates } from "./profile-aggregates";
 
@@ -125,7 +126,8 @@ function makeReview({
       makeSeatStats(2),
       makeSeatStats(3)
     ],
-    hands: []
+    hands: [],
+    ruleSummary: buildRuleSummary()
   };
 }
 

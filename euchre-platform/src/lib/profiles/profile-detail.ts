@@ -1,4 +1,4 @@
-import { teamOf, type PlayerIndex, type TeamIndex } from "@/lib/euchre";
+import { teamOf, type PlayerIndex, type RuleSummary, type TeamIndex } from "@/lib/euchre";
 import type { GameReview } from "@/lib/review/game-review";
 import { buildProfileAggregates, LOCAL_PLAYER_PROFILES, type PlayerProfileAggregate } from "./profile-aggregates";
 
@@ -33,6 +33,7 @@ export interface ProfileGameHistoryRow {
   loneAttempts: number;
   successfulLoners: number;
   handsPlayed: number;
+  ruleSummary: RuleSummary;
   reviewHref: string;
 }
 
@@ -124,6 +125,7 @@ function buildGameHistoryRow(source: ProfileReviewSource, seat: PlayerIndex, tea
     loneAttempts: seatStats.loneAttempts,
     successfulLoners: seatStats.successfulLoners,
     handsPlayed: review.totalHandsPlayed,
+    ruleSummary: review.ruleSummary,
     reviewHref: `/api/games/${review.gameId}/review`
   };
 }

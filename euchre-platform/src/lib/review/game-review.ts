@@ -3,6 +3,7 @@ import {
   effectiveSuit,
   createInitialGameState,
   isTrump,
+  buildRuleSummary,
   teamOf,
   type BidDecision,
   type Card,
@@ -10,6 +11,7 @@ import {
   type GameState,
   type HandResult,
   type PlayerIndex,
+  type RuleSummary,
   type Suit,
   type TeamIndex,
   type Trick
@@ -139,6 +141,7 @@ export interface GameReview {
   teams: [TeamReviewStats, TeamReviewStats];
   seats: [SeatReviewStats, SeatReviewStats, SeatReviewStats, SeatReviewStats];
   hands: HandReview[];
+  ruleSummary: RuleSummary;
 }
 
 export type GameReviewSummary = GameReview;
@@ -264,7 +267,8 @@ export function buildGameReview({
     longestScoringStreakByTeam,
     teams,
     seats,
-    hands
+    hands,
+    ruleSummary: buildRuleSummary(config, { events: orderedEvents, initialDealer: hands[0]?.dealer })
   };
 }
 

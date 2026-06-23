@@ -53,6 +53,35 @@ describe("API route validation", () => {
     expect(body.issues).toHaveLength(2);
   });
 
+  it("rejects invalid house-rule setup values", async () => {
+    const response = await createGame(jsonRequest({
+      config: {
+        stickDealer: false,
+        targetScore: 6,
+        botDifficulty: "expert",
+        dealerSelection: "left",
+        farmersHandMode: "swapAll",
+        lonerMode: "mystery"
+      }
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid request");
+    expect(body.issues).toHaveLength(5);
+  });
+
+  it("rejects malformed farmer replacement event payloads at 400", async () => {
+    const response = await appendEvent(
+      jsonRequest({ expectedSequence: 1, action: { type: "FARMERS_HAND_REPLACE", player: 0, cards: [] } }),
+      routeContext("any-game")
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid request");
+  });
+
   it("persists selected house-rule config when creating a game", async () => {
     const store = await createStore();
     resetEventStoreForTests(store);
@@ -136,6 +165,10 @@ describe("API route validation", () => {
     expect(body.review.winningTeam).toBe(0);
     expect(body.review.totalHandsPlayed).toBe(1);
     expect(body.review.totalTricksPlayed).toBe(5);
+    expect(body.review.ruleSummary).toMatchObject({
+      targetScoreLabel: "2",
+      seedLabel: "123"
+    });
   }, 15_000);
 
   it("returns 404 for missing game review", async () => {

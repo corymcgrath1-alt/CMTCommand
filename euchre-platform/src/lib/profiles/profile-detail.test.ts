@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildRuleSummary } from "@/lib/euchre";
 import type { GameReview, SeatReviewStats, TeamReviewStats } from "@/lib/review/game-review";
 import { buildPlayerProfileDetail, isProfileSeat } from "./profile-detail";
 
@@ -169,7 +170,8 @@ function makeReview(
       seatStats({ seat: 2 }),
       seatStats({ seat: 3 })
     ],
-    hands: []
+    hands: [],
+    ruleSummary: buildRuleSummary()
   };
 }
 

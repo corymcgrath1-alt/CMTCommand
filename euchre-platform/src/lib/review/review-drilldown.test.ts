@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildRuleSummary } from "@/lib/euchre";
 import type { GameReviewSummary } from "./game-review";
 import {
   chooseActiveReviewSource,
@@ -102,6 +103,7 @@ function makeReview(gameId: string): GameReviewSummary {
         loneSucceeded: false,
         passed: false
       }
-    ]
+    ],
+    ruleSummary: buildRuleSummary()
   };
 }

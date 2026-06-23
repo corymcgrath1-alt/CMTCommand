@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildRuleSummary } from "@/lib/euchre";
 import type { GameReview, HandReview, TrickReview } from "./game-review";
 import {
   createInitialReplaySelection,
@@ -83,7 +84,8 @@ function makeReview(): GameReview {
       { seat: 2, team: 0, handsDealt: 0, timesDealer: 0, timesCaller: 1, successfulCalls: 1, failedCalls: 0, loneAttempts: 0, successfulLoners: 0, tricksWon: 3, cardsPlayed: 10, firstTricksWon: 1, finalTricksWon: 1 },
       { seat: 3, team: 1, handsDealt: 0, timesDealer: 0, timesCaller: 0, successfulCalls: 0, failedCalls: 0, loneAttempts: 0, successfulLoners: 0, tricksWon: 2, cardsPlayed: 10, firstTricksWon: 0, finalTricksWon: 0 }
     ],
-    hands: [makeHand(1), makeHand(2)]
+    hands: [makeHand(1), makeHand(2)],
+    ruleSummary: buildRuleSummary()
   };
 }
 

@@ -169,6 +169,17 @@ describe("state machine", () => {
     expect(createInitialGameState({ dealerSelection: "seat2" }).dealer).toBe(2);
   });
 
+  it("repeats the same first deal for the same seed and config", () => {
+    const config = { stickDealer: true, targetScore: 10, dealerSelection: "seat2" as const };
+    const first = dispatchAction(createInitialGameState(config), { type: "START_HAND", seed: 123456 });
+    const second = dispatchAction(createInitialGameState(config), { type: "START_HAND", seed: 123456 });
+    const different = dispatchAction(createInitialGameState(config), { type: "START_HAND", seed: 123457 });
+
+    expect(second.hands).toEqual(first.hands);
+    expect(second.kitty).toEqual(first.kitty);
+    expect(different.hands).not.toEqual(first.hands);
+  });
+
   it("deals a 24-card Euchre hand with an upcard", () => {
     const state = dispatchAction(createInitialGameState(), { type: "START_HAND", seed: 42 });
 
@@ -329,6 +340,18 @@ describe("farmer's hand rules", () => {
     expect(state.kitty.slice(1, 1 + cards.length)).toEqual(cards);
     expect(replayed.hands).toEqual(state.hands);
     expect(replayed.kitty).toEqual(state.kitty);
+  });
+
+  it("rejects zero, more than three, duplicate, and non-eligible replacement payloads", () => {
+    const seed = findSeedWithFarmersHand("replaceThree");
+    const state = dispatchAction(createInitialGameState({ farmersHandMode: "replaceThree" }), { type: "START_HAND", seed });
+    const player = state.activePlayer;
+    const cards = farmersHandReplaceableCards(state.hands[player]);
+
+    expect(() => dispatchAction(state, { type: "FARMERS_HAND_REPLACE", player, cards: [] })).toThrow(/one to three/);
+    expect(() => dispatchAction(state, { type: "FARMERS_HAND_REPLACE", player, cards: [cards[0], cards[0]] })).toThrow(/unique/);
+    expect(() => dispatchAction(state, { type: "FARMERS_HAND_REPLACE", player, cards: [c("A", "clubs")] })).toThrow(/must be in the player's hand/);
+    expect(() => dispatchAction(state, { type: "FARMERS_HAND_REPLACE", player, cards: [...cards, c("9", "clubs")] })).toThrow(/one to three/);
   });
 });
 
