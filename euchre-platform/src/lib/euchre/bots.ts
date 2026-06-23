@@ -53,6 +53,10 @@ export function chooseBotAction(
     return null;
   }
 
+  if (state.phase === "farmersHand") {
+    return chooseFarmersHandAction(state, bot.seat);
+  }
+
   if (state.phase === "ordering") {
     return chooseRoundOneBid(state, bot.seat, difficulty);
   }
@@ -84,6 +88,32 @@ export function chooseBotAction(
   }
 
   return null;
+}
+
+export function chooseFarmersHandAction(state: GameState, player: PlayerIndex): GameAction | null {
+  const legal = legalActionsForPlayer(state, player);
+  if (!legal.canDeclineFarmersHand) {
+    return null;
+  }
+
+  if (legal.canClaimFarmersHand && state.config.farmersHandMode === "redeal") {
+    return {
+      type: "FARMERS_HAND_REDEAL",
+      player,
+      seed: deterministicFarmersHandRedealSeed(state, player)
+    };
+  }
+
+  if (legal.canClaimFarmersHand && state.config.farmersHandMode === "replaceThree") {
+    const cards = [...legal.farmersHandReplaceableCards]
+      .sort((a, b) => compareCardValueForBot(a, b, "clubs"))
+      .slice(0, Math.min(3, Math.max(0, state.kitty.length - 1)));
+    if (cards.length) {
+      return { type: "FARMERS_HAND_REPLACE", player, cards };
+    }
+  }
+
+  return { type: "FARMERS_HAND_DECLINE", player };
 }
 
 export function botDifficultyForState(state: GameState): BotDifficulty {
@@ -569,4 +599,8 @@ function suitOrder(suit: Suit): number {
     hearts: 2,
     spades: 3
   }[suit];
+}
+
+function deterministicFarmersHandRedealSeed(state: GameState, player: PlayerIndex): number {
+  return 800_000 + state.handNumber * 1_000 + state.moveLog.length * 10 + player;
 }

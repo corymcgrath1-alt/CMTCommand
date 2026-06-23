@@ -5,16 +5,24 @@ import {
   cardId,
   cardLabel,
   BOT_DIFFICULTIES,
+  DEALER_SELECTIONS,
+  FARMERS_HAND_MODES,
+  LONER_MODES,
+  TARGET_SCORES,
   chooseBotAction,
   createDefaultBotProfiles,
   createInitialGameState,
   legalActionsForPlayer,
   type BotDifficulty,
   type Card,
+  type DealerSelection,
+  type FarmersHandMode,
   type GameAction,
   type GameState,
+  type LonerMode,
   type MoveEvent,
-  type PlayerIndex
+  type PlayerIndex,
+  type TargetScore
 } from "@/lib/euchre";
 import type { LoadedGame } from "@/lib/persistence/event-store";
 import type { GameReviewSummary, HandReview, SeatReviewStats, TrickReview } from "@/lib/review/game-review";
@@ -52,8 +60,21 @@ const PLAYER_NAMES: Record<PlayerIndex, string> = {
 
 export default function Home() {
   const [stickDealer, setStickDealer] = useState(false);
+  const [targetScore, setTargetScore] = useState<TargetScore>(10);
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>("standard");
-  const [state, setState] = useState<GameState>(() => createInitialGameState({ stickDealer, botDifficulty }));
+  const [dealerSelection, setDealerSelection] = useState<DealerSelection>("default");
+  const [farmersHandMode, setFarmersHandMode] = useState<FarmersHandMode>("off");
+  const [lonerMode, setLonerMode] = useState<LonerMode>("aloneOnly");
+  const [seedInput, setSeedInput] = useState("");
+  const [lastSeed, setLastSeed] = useState<number | null>(null);
+  const [state, setState] = useState<GameState>(() => createInitialGameState({
+    stickDealer,
+    targetScore,
+    botDifficulty,
+    dealerSelection,
+    farmersHandMode,
+    lonerMode
+  }));
   const [alone, setAlone] = useState(false);
   const [persistedGameId, setPersistedGameId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -109,7 +130,11 @@ export default function Home() {
       const loaded = await fetchJson<LoadedGame>(`/api/games/${gameId}`);
       setPersistedGameId(loaded.game.id);
       setStickDealer(loaded.game.config.stickDealer);
+      setTargetScore(asTargetScore(loaded.game.config.targetScore));
       setBotDifficulty(loaded.game.config.botDifficulty ?? "standard");
+      setDealerSelection(loaded.game.config.dealerSelection ?? "default");
+      setFarmersHandMode(loaded.game.config.farmersHandMode ?? "off");
+      setLonerMode(loaded.game.config.lonerMode ?? "aloneOnly");
       setState(loaded.state);
       setReview(null);
       setStatus(`Restored ${loaded.events.length} persisted event${loaded.events.length === 1 ? "" : "s"}`);
@@ -207,11 +232,13 @@ export default function Home() {
     setIsSaving(true);
     setStatus("Creating persisted game...");
     try {
+      const seed = resolveSeed(seedInput);
+      setLastSeed(seed);
       const created = await fetchJson<{ game: LoadedGame["game"] }>("/api/games", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          config: { stickDealer, targetScore: 10, botDifficulty },
+          config: { stickDealer, targetScore, botDifficulty, dealerSelection, farmersHandMode, lonerMode },
           metadata: { source: "local-phase-1-ui" }
         })
       });
@@ -225,7 +252,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           expectedSequence: 0,
-          action: { type: "START_HAND", seed: Date.now() % 1_000_000 }
+          action: { type: "START_HAND", seed }
         })
       });
       setState(started.state);
@@ -239,7 +266,7 @@ export default function Home() {
   }
 
   function resetGame() {
-    const next = createInitialGameState({ stickDealer, targetScore: 10, botDifficulty });
+    const next = createInitialGameState({ stickDealer, targetScore, botDifficulty, dealerSelection, farmersHandMode, lonerMode });
     setState(next);
     setPersistedGameId(null);
     lastBotActionKey.current = null;
@@ -252,7 +279,14 @@ export default function Home() {
   function updateBotDifficulty(nextDifficulty: BotDifficulty) {
     setBotDifficulty(nextDifficulty);
     if (state.phase === "idle") {
-      setState(createInitialGameState({ stickDealer, targetScore: 10, botDifficulty: nextDifficulty }));
+      setState(createInitialGameState({
+        stickDealer,
+        targetScore,
+        botDifficulty: nextDifficulty,
+        dealerSelection,
+        farmersHandMode,
+        lonerMode
+      }));
     }
   }
 
@@ -279,6 +313,16 @@ export default function Home() {
     setHistoricalReviewStatus(review ? "Returned to current game review" : "Cleared historical review");
   }
 
+  function copySeed() {
+    const seed = lastSeed ?? resolveSeed(seedInput);
+    setLastSeed(seed);
+    setSeedInput(String(seed));
+    if (navigator.clipboard) {
+      void navigator.clipboard.writeText(String(seed));
+    }
+    setStatus(`Seed ${seed} ready to reuse`);
+  }
+
   return (
     <main className="min-h-screen bg-[#071411]">
       <section className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
@@ -290,6 +334,21 @@ export default function Home() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+              Target
+              <select
+                className="rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
+                value={targetScore}
+                disabled={state.phase !== "idle"}
+                onChange={(event) => setTargetScore(Number(event.target.value) as TargetScore)}
+              >
+                {TARGET_SCORES.map((score) => (
+                  <option key={score} value={score}>
+                    {score}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
               Bot difficulty
               <select
@@ -306,6 +365,21 @@ export default function Home() {
               </select>
             </label>
             <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+              Dealer
+              <select
+                className="rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
+                value={dealerSelection}
+                disabled={state.phase !== "idle"}
+                onChange={(event) => setDealerSelection(event.target.value as DealerSelection)}
+              >
+                {DEALER_SELECTIONS.map((selection) => (
+                  <option key={selection} value={selection}>
+                    {formatDealerSelection(selection)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
               <input
                 type="checkbox"
                 checked={stickDealer}
@@ -314,6 +388,54 @@ export default function Home() {
               />
               Stick dealer
             </label>
+            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+              Farmer
+              <select
+                className="rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
+                value={farmersHandMode}
+                disabled={state.phase !== "idle"}
+                onChange={(event) => setFarmersHandMode(event.target.value as FarmersHandMode)}
+              >
+                {FARMERS_HAND_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {formatFarmersHandMode(mode)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+              Loner
+              <select
+                className="rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
+                value={lonerMode}
+                disabled={state.phase !== "idle"}
+                onChange={(event) => setLonerMode(event.target.value as LonerMode)}
+              >
+                {LONER_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {formatLonerMode(mode)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+              Seed
+              <input
+                className="w-28 rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
+                value={seedInput}
+                disabled={state.phase !== "idle"}
+                inputMode="numeric"
+                placeholder={lastSeed === null ? "auto" : String(lastSeed)}
+                onChange={(event) => setSeedInput(event.target.value)}
+              />
+            </label>
+            <button
+              className="rounded border border-white/20 px-3 py-2 text-sm font-semibold text-white"
+              onClick={copySeed}
+              type="button"
+            >
+              Copy seed
+            </button>
             <button
               className="rounded bg-brass px-4 py-2 text-sm font-semibold text-[#201602]"
               disabled={isSaving}
@@ -389,9 +511,11 @@ function GameSummary({ state }: { state: GameState }) {
     <section className="grid gap-3 rounded border border-white/10 bg-table p-4 sm:grid-cols-2 lg:grid-cols-4">
       <SummaryItem label="Hand" value={state.handNumber ? String(state.handNumber) : "Not dealt"} />
       <SummaryItem label="Score" value={`Team 0 ${state.scores[0]} - ${state.scores[1]} Team 1`} />
+      <SummaryItem label="Target" value={String(state.config.targetScore)} />
       <SummaryItem label="Phase" value={state.phase} />
       <SummaryItem label="Dealer" value={PLAYER_NAMES[state.dealer]} />
       <SummaryItem label="Bot difficulty" value={formatDifficulty(state.config.botDifficulty)} />
+      <SummaryItem label="Farmer" value={formatFarmersHandMode(state.config.farmersHandMode)} />
       <SummaryItem label="Active" value={PLAYER_NAMES[state.activePlayer]} />
       <SummaryItem label="Upcard" value={state.upcard ? cardLabel(state.upcard) : "None"} />
       <SummaryItem label="Trump" value={state.trump ?? "Not set"} />
@@ -433,6 +557,53 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 
 function formatDifficulty(difficulty: BotDifficulty = "standard"): string {
   return difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+}
+
+function formatDealerSelection(selection: DealerSelection): string {
+  switch (selection) {
+    case "human":
+      return "Human";
+    case "seat0":
+      return "Seat 0";
+    case "seat1":
+      return "Seat 1";
+    case "seat2":
+      return "Seat 2";
+    case "seat3":
+      return "Seat 3";
+    case "default":
+    default:
+      return "Default";
+  }
+}
+
+function formatFarmersHandMode(mode: FarmersHandMode): string {
+  switch (mode) {
+    case "redeal":
+      return "Redeal";
+    case "replaceThree":
+      return "Replace 3";
+    case "off":
+    default:
+      return "Off";
+  }
+}
+
+function formatLonerMode(mode: LonerMode): string {
+  return mode === "withPartnerAllowed" ? "Assisted variant" : "Alone only";
+}
+
+function asTargetScore(score: number): TargetScore {
+  return TARGET_SCORES.includes(score as TargetScore) ? score as TargetScore : 10;
+}
+
+function resolveSeed(input: string): number {
+  const parsed = Number(input.trim());
+  if (Number.isInteger(parsed) && Number.isFinite(parsed)) {
+    return Math.abs(parsed) % 1_000_000;
+  }
+
+  return Date.now() % 1_000_000;
 }
 
 function GameReviewPanel({
@@ -984,6 +1155,51 @@ function BiddingControls({
     return null;
   }
 
+  if (state.phase === "farmersHand") {
+    const legal = legalActionsForPlayer(state, state.activePlayer);
+    const humanTurn = state.activePlayer === 0;
+    const replaceableCards = legal.farmersHandReplaceableCards.slice(0, Math.min(3, Math.max(0, state.kitty.length - 1)));
+
+    return (
+      <section className="flex flex-col gap-3 rounded border border-white/10 bg-white/[0.04] p-4">
+        <div>
+          <p className="text-sm font-semibold text-white">{PLAYER_NAMES[state.activePlayer]} to check Farmer&apos;s Hand</p>
+          <p className="mt-1 text-sm text-white/55">
+            Qualifying hands contain only 9s and 10s. Declining moves bidding to the next player.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="rounded border border-white/20 px-3 py-2 text-sm text-white"
+            disabled={disabled || !humanTurn || !legal.canDeclineFarmersHand}
+            onClick={() => act({ type: "FARMERS_HAND_DECLINE", player: state.activePlayer })}
+          >
+            Decline
+          </button>
+          {state.config.farmersHandMode === "redeal" ? (
+            <button
+              className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
+              disabled={disabled || !humanTurn || !legal.canClaimFarmersHand}
+              onClick={() => act({ type: "FARMERS_HAND_REDEAL", player: state.activePlayer, seed: Date.now() % 1_000_000 })}
+            >
+              Claim redeal
+            </button>
+          ) : null}
+          {state.config.farmersHandMode === "replaceThree" ? (
+            <button
+              className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
+              disabled={disabled || !humanTurn || !legal.canClaimFarmersHand || replaceableCards.length === 0}
+              onClick={() => act({ type: "FARMERS_HAND_REPLACE", player: state.activePlayer, cards: replaceableCards })}
+            >
+              Replace {replaceableCards.length || 3}
+            </button>
+          ) : null}
+          {!humanTurn ? <span className="text-sm text-white/50">Bot checking...</span> : null}
+        </div>
+      </section>
+    );
+  }
+
   if (state.phase === "handComplete") {
     return (
       <section className="rounded border border-white/10 bg-white/[0.04] p-4">
@@ -1177,6 +1393,12 @@ function describeMove(move: MoveEvent): string {
       return `Started hand with seed ${action.seed}`;
     case "NEXT_HAND":
       return `Next hand with seed ${action.seed}`;
+    case "FARMERS_HAND_DECLINE":
+      return `${PLAYER_NAMES[action.player]} declined Farmer's Hand`;
+    case "FARMERS_HAND_REDEAL":
+      return `${PLAYER_NAMES[action.player]} claimed Farmer's Hand redeal with seed ${action.seed}`;
+    case "FARMERS_HAND_REPLACE":
+      return `${PLAYER_NAMES[action.player]} replaced ${action.cards.map(cardLabel).join(", ")} for Farmer's Hand`;
     case "PASS":
       return `${PLAYER_NAMES[action.player]} passed`;
     case "ORDER_UP":

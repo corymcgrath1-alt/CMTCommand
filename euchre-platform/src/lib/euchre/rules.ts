@@ -40,6 +40,14 @@ export function playableCards(hand: Card[], trick: Trick | null, trump: Suit): C
   return hand.filter((card) => canPlayCard(hand, card, trick, trump));
 }
 
+export function isFarmersHandQualifier(hand: Card[]): boolean {
+  return hand.length > 0 && hand.every((card) => card.rank === "9" || card.rank === "10");
+}
+
+export function farmersHandReplaceableCards(hand: Card[]): Card[] {
+  return hand.filter((card) => card.rank === "9" || card.rank === "10");
+}
+
 export function cardTrickPower(card: Card, trump: Suit, ledSuit: Suit): number {
   if (isRightBower(card, trump)) {
     return 200;
@@ -146,8 +154,15 @@ export function legalActionsForPlayer(state: GameState, player: PlayerIndex): Le
   const orderPasses = state.bids.filter((bid) => bid.round === 1 && bid.decision === "pass").length;
   const callPasses = state.bids.filter((bid) => bid.round === 2 && bid.decision === "pass").length;
   const dealerMustStick = state.config.stickDealer && state.phase === "calling" && player === state.dealer && callPasses === 3;
+  const canClaimFarmersHand = active && state.phase === "farmersHand" && state.config.farmersHandMode !== "off" && isFarmersHandQualifier(hand);
 
   return {
+    canClaimFarmersHand,
+    canDeclineFarmersHand: active && state.phase === "farmersHand",
+    farmersHandReplaceableCards:
+      canClaimFarmersHand && state.config.farmersHandMode === "replaceThree"
+        ? farmersHandReplaceableCards(hand)
+        : [],
     canPass: active && (state.phase === "ordering" || state.phase === "calling") && !dealerMustStick,
     canOrderUp: active && state.phase === "ordering" && orderPasses < 4,
     callableSuits:

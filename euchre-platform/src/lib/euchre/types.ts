@@ -7,8 +7,17 @@ export type PlayerIndex = 0 | 1 | 2 | 3;
 export type TeamIndex = 0 | 1;
 export const BOT_DIFFICULTIES = ["easy", "standard", "strong"] as const;
 export type BotDifficulty = (typeof BOT_DIFFICULTIES)[number];
+export const TARGET_SCORES = [5, 10, 15, 21] as const;
+export type TargetScore = (typeof TARGET_SCORES)[number];
+export const DEALER_SELECTIONS = ["default", "human", "seat0", "seat1", "seat2", "seat3"] as const;
+export type DealerSelection = (typeof DEALER_SELECTIONS)[number];
+export const FARMERS_HAND_MODES = ["off", "redeal", "replaceThree"] as const;
+export type FarmersHandMode = (typeof FARMERS_HAND_MODES)[number];
+export const LONER_MODES = ["aloneOnly", "withPartnerAllowed"] as const;
+export type LonerMode = (typeof LONER_MODES)[number];
 export type Phase =
   | "idle"
+  | "farmersHand"
   | "ordering"
   | "discarding"
   | "calling"
@@ -25,6 +34,9 @@ export interface GameConfig {
   stickDealer: boolean;
   targetScore: number;
   botDifficulty: BotDifficulty;
+  dealerSelection: DealerSelection;
+  farmersHandMode: FarmersHandMode;
+  lonerMode: LonerMode;
 }
 
 export interface Play {
@@ -59,6 +71,9 @@ export interface HandResult {
 
 export type GameAction =
   | { type: "START_HAND"; seed: number }
+  | { type: "FARMERS_HAND_DECLINE"; player: PlayerIndex }
+  | { type: "FARMERS_HAND_REDEAL"; player: PlayerIndex; seed: number }
+  | { type: "FARMERS_HAND_REPLACE"; player: PlayerIndex; cards: Card[] }
   | { type: "PASS"; player: PlayerIndex }
   | { type: "ORDER_UP"; player: PlayerIndex; alone?: boolean }
   | { type: "CALL_TRUMP"; player: PlayerIndex; suit: Suit; alone?: boolean }
@@ -91,6 +106,7 @@ export interface GameState {
   maker?: PlayerIndex;
   makerTeam?: TeamIndex;
   lonePlayer?: PlayerIndex;
+  farmersHandDeclines: PlayerIndex[];
   bids: BidDecision[];
   currentTrick: Trick | null;
   completedTricks: Trick[];
@@ -100,6 +116,9 @@ export interface GameState {
 }
 
 export interface LegalActionSummary {
+  canClaimFarmersHand: boolean;
+  canDeclineFarmersHand: boolean;
+  farmersHandReplaceableCards: Card[];
   canPass: boolean;
   canOrderUp: boolean;
   callableSuits: Suit[];

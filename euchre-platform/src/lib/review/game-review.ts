@@ -185,6 +185,10 @@ export function buildGameReview({
       currentHand = createHandReviewFromDeal(state);
     }
 
+    if (event.eventType === "FARMERS_HAND_REDEAL") {
+      currentHand = createHandReviewFromDeal(state);
+    }
+
     if (currentHand && (event.eventType === "PASS" || event.eventType === "ORDER_UP" || event.eventType === "CALL_TRUMP")) {
       addBiddingAction(currentHand, event, before);
     }

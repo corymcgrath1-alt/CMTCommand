@@ -6,6 +6,7 @@ import { LocalEventStore } from "@/lib/persistence/event-store";
 import {
   chooseBotAction,
   chooseDealerDiscard,
+  chooseFarmersHandAction,
   chooseRoundOneBid,
   chooseRoundTwoCall,
   createDefaultBotProfiles,
@@ -201,6 +202,44 @@ describe("deterministic bot dealer discard", () => {
   });
 });
 
+describe("deterministic bot farmer's hand handling", () => {
+  it("claims a qualifying redeal farmer's hand", () => {
+    const state = makeFarmersHandState({
+      player: 1,
+      farmersHandMode: "redeal",
+      hand: [c("9", "clubs"), c("10", "clubs"), c("9", "hearts"), c("10", "spades"), c("9", "diamonds")]
+    });
+
+    const action = chooseFarmersHandAction(state, 1);
+
+    expect(action).toMatchObject({ type: "FARMERS_HAND_REDEAL", player: 1 });
+  });
+
+  it("replaces deterministic low cards for a qualifying replace-three farmer's hand", () => {
+    const state = makeFarmersHandState({
+      player: 1,
+      farmersHandMode: "replaceThree",
+      hand: [c("9", "clubs"), c("10", "clubs"), c("9", "hearts"), c("10", "spades"), c("9", "diamonds")]
+    });
+
+    expect(chooseFarmersHandAction(state, 1)).toEqual({
+      type: "FARMERS_HAND_REPLACE",
+      player: 1,
+      cards: [c("9", "hearts"), c("10", "spades"), c("9", "diamonds")]
+    });
+  });
+
+  it("declines farmer's hand when the bot does not qualify", () => {
+    const state = makeFarmersHandState({
+      player: 1,
+      farmersHandMode: "redeal",
+      hand: [c("A", "clubs"), c("10", "clubs"), c("9", "hearts"), c("10", "spades"), c("9", "diamonds")]
+    });
+
+    expect(chooseFarmersHandAction(state, 1)).toEqual({ type: "FARMERS_HAND_DECLINE", player: 1 });
+  });
+});
+
 describe("deterministic bot card play", () => {
   it("follows suit", () => {
     const state = makePlayingState({
@@ -352,6 +391,36 @@ describe("bot integration", () => {
 
     expect(second).toEqual(first);
   }, 30_000);
+
+  it("can complete a target-score-5 game with default house rules", async () => {
+    const store = await createStore();
+    const game = await store.createGame({ config: { stickDealer: true, targetScore: 5, botDifficulty: "standard" } });
+    await store.appendMove({
+      gameId: game.id,
+      expectedSequence: 0,
+      action: { type: "START_HAND", seed: 97531 }
+    });
+
+    const loaded = await drivePersistedGame(store, game.id, 500);
+
+    expect(loaded.state.phase).toBe("gameComplete");
+    expect(Math.max(...loaded.state.scores)).toBeGreaterThanOrEqual(5);
+  }, 30_000);
+
+  it("can complete a target-score-15 game when configured", async () => {
+    const store = await createStore();
+    const game = await store.createGame({ config: { stickDealer: true, targetScore: 15, botDifficulty: "standard" } });
+    await store.appendMove({
+      gameId: game.id,
+      expectedSequence: 0,
+      action: { type: "START_HAND", seed: 86420 }
+    });
+
+    const loaded = await drivePersistedGame(store, game.id, 1_400);
+
+    expect(loaded.state.phase).toBe("gameComplete");
+    expect(Math.max(...loaded.state.scores)).toBeGreaterThanOrEqual(15);
+  }, 60_000);
 });
 
 function makeOrderingState({
@@ -372,6 +441,33 @@ function makeOrderingState({
     activePlayer: player,
     upcard,
     turnedDownSuit: upcard.suit,
+    hands: {
+      0: [],
+      1: [],
+      2: [],
+      3: [],
+      [player]: hand
+    }
+  };
+}
+
+function makeFarmersHandState({
+  player,
+  farmersHandMode,
+  hand
+}: {
+  player: PlayerIndex;
+  farmersHandMode: "redeal" | "replaceThree";
+  hand: Card[];
+}): GameState {
+  return {
+    ...createInitialGameState({ farmersHandMode }),
+    phase: "farmersHand",
+    handNumber: 1,
+    dealer: 0,
+    activePlayer: player,
+    upcard: c("A", "clubs"),
+    kitty: [c("A", "clubs"), c("Q", "clubs"), c("K", "hearts"), c("A", "spades")],
     hands: {
       0: [],
       1: [],
@@ -464,6 +560,12 @@ function chooseNextAction(state: GameState): GameAction | null {
   }
 
   const legal = legalActionsForPlayer(state, 0);
+  if (state.phase === "farmersHand") {
+    return legal.canClaimFarmersHand && state.config.farmersHandMode === "redeal"
+      ? { type: "FARMERS_HAND_REDEAL", player: 0, seed: 70000 + state.moveLog.length }
+      : { type: "FARMERS_HAND_DECLINE", player: 0 };
+  }
+
   if (state.phase === "ordering") {
     return legal.canOrderUp ? { type: "PASS", player: 0 } : null;
   }

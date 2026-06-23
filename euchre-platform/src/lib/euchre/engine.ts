@@ -1,8 +1,10 @@
 import { compareCardsForSort, removeCard, sameCard } from "./cards";
 import { dealHands, nextPlayer, teamOf } from "./deck";
 import {
+  farmersHandReplaceableCards,
   canPlayCard,
   determineTrickWinner,
+  isFarmersHandQualifier,
   scoreHand,
   validateCardInHand,
   validCallerSuits
@@ -22,7 +24,10 @@ import type {
 const DEFAULT_CONFIG: GameConfig = {
   stickDealer: false,
   targetScore: 10,
-  botDifficulty: "standard"
+  botDifficulty: "standard",
+  dealerSelection: "default",
+  farmersHandMode: "off",
+  lonerMode: "aloneOnly"
 };
 
 export class InvalidGameActionError extends Error {
@@ -33,13 +38,16 @@ export class InvalidGameActionError extends Error {
 }
 
 export function createInitialGameState(config: Partial<GameConfig> = {}): GameState {
+  const normalizedConfig = normalizeGameConfig(config);
+  const initialDealer = initialDealerForConfig(normalizedConfig);
+
   return {
     id: cryptoSafeId(),
-    config: normalizeGameConfig(config),
+    config: normalizedConfig,
     phase: "idle",
     handNumber: 0,
-    dealer: 0,
-    activePlayer: 1,
+    dealer: initialDealer,
+    activePlayer: nextPlayer(initialDealer),
     scores: [0, 0],
     hands: {
       0: [],
@@ -48,6 +56,7 @@ export function createInitialGameState(config: Partial<GameConfig> = {}): GameSt
       3: []
     },
     kitty: [],
+    farmersHandDeclines: [],
     bids: [],
     currentTrick: null,
     completedTricks: [],
@@ -60,7 +69,11 @@ export function normalizeGameConfig(config: Partial<GameConfig> = {}): GameConfi
   return {
     ...DEFAULT_CONFIG,
     ...config,
-    botDifficulty: config.botDifficulty ?? DEFAULT_CONFIG.botDifficulty
+    targetScore: config.targetScore ?? DEFAULT_CONFIG.targetScore,
+    botDifficulty: config.botDifficulty ?? DEFAULT_CONFIG.botDifficulty,
+    dealerSelection: config.dealerSelection ?? DEFAULT_CONFIG.dealerSelection,
+    farmersHandMode: config.farmersHandMode ?? DEFAULT_CONFIG.farmersHandMode,
+    lonerMode: config.lonerMode ?? DEFAULT_CONFIG.lonerMode
   };
 }
 
@@ -99,6 +112,12 @@ export function reduceGameAction(state: GameState, action: GameAction): GameStat
         throw new InvalidGameActionError("A new game hand can only start from idle");
       }
       return startHand(state, state.dealer, action.seed, state.handNumber + 1);
+    case "FARMERS_HAND_DECLINE":
+      return declineFarmersHand(state, action.player);
+    case "FARMERS_HAND_REDEAL":
+      return redealFarmersHand(state, action.player, action.seed);
+    case "FARMERS_HAND_REPLACE":
+      return replaceFarmersHandCards(state, action.player, action.cards);
     case "NEXT_HAND":
       if (state.phase !== "handComplete" && state.phase !== "gameComplete") {
         throw new InvalidGameActionError("The next hand can only start after a hand is complete");
@@ -129,7 +148,7 @@ function startHand(state: GameState, dealer: PlayerIndex, seed: number, handNumb
 
   return {
     ...state,
-    phase: "ordering",
+    phase: state.config.farmersHandMode === "off" ? "ordering" : "farmersHand",
     handNumber,
     dealer,
     activePlayer: nextPlayer(dealer),
@@ -141,11 +160,90 @@ function startHand(state: GameState, dealer: PlayerIndex, seed: number, handNumb
     maker: undefined,
     makerTeam: undefined,
     lonePlayer: undefined,
+    farmersHandDeclines: [],
     bids: [],
     currentTrick: null,
     completedTricks: [],
     tricksWon: [0, 0],
     handResult: undefined
+  };
+}
+
+function declineFarmersHand(state: GameState, player: PlayerIndex): GameState {
+  assertActivePlayer(state, player);
+  assertPhase(state, "farmersHand");
+
+  const farmersHandDeclines = state.farmersHandDeclines.includes(player)
+    ? state.farmersHandDeclines
+    : [...state.farmersHandDeclines, player];
+
+  if (farmersHandDeclines.length >= 4) {
+    return {
+      ...state,
+      phase: "ordering",
+      activePlayer: nextPlayer(state.dealer),
+      farmersHandDeclines
+    };
+  }
+
+  return {
+    ...state,
+    activePlayer: nextPlayer(player),
+    farmersHandDeclines
+  };
+}
+
+function redealFarmersHand(state: GameState, player: PlayerIndex, seed: number): GameState {
+  assertActivePlayer(state, player);
+  assertPhase(state, "farmersHand");
+  if (state.config.farmersHandMode !== "redeal") {
+    throw new InvalidGameActionError("Farmer's hand redeal is not enabled");
+  }
+  if (!isFarmersHandQualifier(state.hands[player])) {
+    throw new InvalidGameActionError("Player does not qualify for farmer's hand");
+  }
+
+  return startHand(state, state.dealer, seed, state.handNumber);
+}
+
+function replaceFarmersHandCards(state: GameState, player: PlayerIndex, cards: Card[]): GameState {
+  assertActivePlayer(state, player);
+  assertPhase(state, "farmersHand");
+  if (state.config.farmersHandMode !== "replaceThree") {
+    throw new InvalidGameActionError("Farmer's hand replacement is not enabled");
+  }
+  if (!isFarmersHandQualifier(state.hands[player])) {
+    throw new InvalidGameActionError("Player does not qualify for farmer's hand");
+  }
+  if (cards.length < 1 || cards.length > 3) {
+    throw new InvalidGameActionError("Farmer's hand replacement must exchange one to three cards");
+  }
+  if (cards.length > Math.max(0, state.kitty.length - 1)) {
+    throw new InvalidGameActionError("Not enough kitty cards for farmer's hand replacement");
+  }
+
+  const replaceableIds = new Set(farmersHandReplaceableCards(state.hands[player]).map(cardKey));
+  for (const card of cards) {
+    validateCardInHand(state.hands[player], card);
+    if (!replaceableIds.has(cardKey(card))) {
+      throw new InvalidGameActionError("Farmer's hand replacement cards must be 9s or 10s");
+    }
+  }
+
+  const replacementCards = state.kitty.slice(1, 1 + cards.length);
+  const remainingKitty = state.kitty.slice(1 + cards.length);
+  const updatedHand = cards.reduce((hand, card) => removeCard(hand, card), state.hands[player]);
+
+  return {
+    ...state,
+    phase: "ordering",
+    activePlayer: nextPlayer(state.dealer),
+    hands: {
+      ...state.hands,
+      [player]: [...updatedHand, ...replacementCards].sort(compareCardsForSort)
+    },
+    kitty: [state.kitty[0], ...cards, ...remainingKitty],
+    farmersHandDeclines: []
   };
 }
 
@@ -404,6 +502,27 @@ function assertPhase(state: GameState, phase: GameState["phase"]): void {
   if (state.phase !== phase) {
     throw new Error(`Expected phase ${phase}; got ${state.phase}`);
   }
+}
+
+function initialDealerForConfig(config: GameConfig): PlayerIndex {
+  switch (config.dealerSelection) {
+    case "human":
+    case "seat0":
+    case "default":
+      return 0;
+    case "seat1":
+      return 1;
+    case "seat2":
+      return 2;
+    case "seat3":
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function cardKey(card: Card): string {
+  return `${card.rank}-${card.suit}`;
 }
 
 function cryptoSafeId(): string {

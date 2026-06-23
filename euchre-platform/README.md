@@ -38,6 +38,39 @@ opponents, run bot-vs-bot calibration reports, or provide coaching explanations 
 Future work can add stronger search/simulation-based bots, difficulty calibration, and AI
 hand-review commentary without changing the replay-safe event log model.
 
+## Single-Player House Rules v1
+
+New persisted games can be configured with target score `5`, `10`, `15`, or `21`;
+bot difficulty `Easy`, `Standard`, or `Strong`; dealer selection `Default`, `Human`,
+or an explicit seat `0` through `3`; stick-the-dealer; Farmer's Hand mode; loner mode;
+and an optional practice seed. These settings are stored in the game config, so replay,
+review, profile aggregation, and old-game loading all reconstruct from the same
+append-only event history. Existing games without newer config fields default to target
+score `10`, Standard bots, Default dealer, Farmer's Hand off, and `aloneOnly` loners.
+
+Farmer's Hand v1 supports three modes:
+
+- `off`: current standard bidding flow; no Farmer's Hand phase.
+- `redeal`: after the deal and before bidding, a qualifying player may claim Farmer's
+  Hand and redeal the same hand number with the same dealer using a persisted seed.
+- `replaceThree`: a qualifying player may exchange one to three qualifying low cards
+  with the non-upcard kitty cards. The exchange is stored as an immutable move event.
+
+The conservative v1 Farmer's Hand qualifier is: the hand contains only 9s and 10s. In
+this 24-card deck that is equivalent to "no ace, king, queen, or jack." Regional variants
+vary widely, so future config can add additional qualifier modes without changing the
+event-sourced structure.
+
+Loner mode currently persists `aloneOnly` and `withPartnerAllowed`. `aloneOnly` preserves
+the existing standard lone-hand behavior and scoring. `withPartnerAllowed` is intentionally
+stored and labeled as an assisted-loner variant setting, but full assisted-loner gameplay
+is deferred until its regional semantics are chosen. The current engine does not change
+lone-hand scoring or partner sit-out behavior for that variant.
+
+Deferred regional rules include Canadian loner, partner's best card, no ace/no face
+variants, Benny/Joker, must-trump-if-void, partner order-up restrictions, and custom
+misdeal rules.
+
 ## Run
 
 ```powershell

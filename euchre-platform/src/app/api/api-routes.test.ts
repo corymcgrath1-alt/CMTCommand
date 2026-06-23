@@ -53,15 +53,18 @@ describe("API route validation", () => {
     expect(body.issues).toHaveLength(2);
   });
 
-  it("persists selected bot difficulty when creating a game", async () => {
+  it("persists selected house-rule config when creating a game", async () => {
     const store = await createStore();
     resetEventStoreForTests(store);
 
     const response = await createGame(jsonRequest({
       config: {
         stickDealer: true,
-        targetScore: 10,
-        botDifficulty: "strong"
+        targetScore: 15,
+        botDifficulty: "strong",
+        dealerSelection: "seat3",
+        farmersHandMode: "redeal",
+        lonerMode: "withPartnerAllowed"
       }
     }));
     const body = await response.json();
@@ -69,8 +72,11 @@ describe("API route validation", () => {
     expect(response.status).toBe(201);
     expect(body.game.config).toMatchObject({
       stickDealer: true,
-      targetScore: 10,
-      botDifficulty: "strong"
+      targetScore: 15,
+      botDifficulty: "strong",
+      dealerSelection: "seat3",
+      farmersHandMode: "redeal",
+      lonerMode: "withPartnerAllowed"
     });
   });
 

@@ -4,6 +4,8 @@ import { createInitialGameState, dispatchAction, replayMoveLog } from "./engine"
 import {
   canPlayCard,
   determineTrickWinner,
+  farmersHandReplaceableCards,
+  isFarmersHandQualifier,
   legalActionsForPlayer,
   playableCards,
   scoreHand
@@ -149,6 +151,24 @@ describe("scoring", () => {
 });
 
 describe("state machine", () => {
+  it("defaults new house-rule config fields for older games", () => {
+    const state = createInitialGameState({ stickDealer: true, targetScore: 15 });
+
+    expect(state.config).toMatchObject({
+      stickDealer: true,
+      targetScore: 15,
+      botDifficulty: "standard",
+      dealerSelection: "default",
+      farmersHandMode: "off",
+      lonerMode: "aloneOnly"
+    });
+  });
+
+  it("uses configured initial dealer selection", () => {
+    expect(createInitialGameState({ dealerSelection: "human" }).dealer).toBe(0);
+    expect(createInitialGameState({ dealerSelection: "seat2" }).dealer).toBe(2);
+  });
+
   it("deals a 24-card Euchre hand with an upcard", () => {
     const state = dispatchAction(createInitialGameState(), { type: "START_HAND", seed: 42 });
 
@@ -233,11 +253,91 @@ describe("state machine", () => {
     expect(finished.handResult?.pointsAwarded).toEqual([2, 0]);
     expect(finished.scores).toEqual([2, 0]);
   });
+
+  it("completes the game at the selected target score", () => {
+    const state = makePlayingState([
+      [c("A", "clubs"), c("K", "clubs"), c("Q", "clubs"), c("10", "clubs"), c("9", "clubs")],
+      [c("9", "diamonds"), c("10", "diamonds"), c("Q", "diamonds"), c("K", "diamonds"), c("A", "diamonds")],
+      [c("9", "hearts"), c("10", "hearts"), c("Q", "hearts"), c("K", "hearts"), c("A", "hearts")],
+      [c("9", "spades"), c("10", "spades"), c("Q", "spades"), c("K", "spades"), c("A", "spades")]
+    ], { targetScore: 2 });
+
+    const finished = playAllCardsInSeatOrder(state);
+
+    expect(finished.phase).toBe("gameComplete");
+    expect(finished.scores).toEqual([2, 0]);
+  });
 });
 
-function makePlayingState(hands: [Card[], Card[], Card[], Card[]]): GameState {
+describe("farmer's hand rules", () => {
+  it("identifies the conservative all-low qualifier", () => {
+    const qualifying = [c("9", "clubs"), c("10", "clubs"), c("9", "hearts"), c("10", "spades"), c("9", "diamonds")];
+    const notQualifying = [c("9", "clubs"), c("10", "clubs"), c("Q", "hearts"), c("10", "spades"), c("9", "diamonds")];
+
+    expect(isFarmersHandQualifier(qualifying)).toBe(true);
+    expect(isFarmersHandQualifier(notQualifying)).toBe(false);
+    expect(farmersHandReplaceableCards(qualifying)).toEqual(qualifying);
+  });
+
+  it("keeps current bidding flow when farmer's hand is off", () => {
+    const state = dispatchAction(createInitialGameState({ farmersHandMode: "off" }), { type: "START_HAND", seed: 42 });
+
+    expect(state.phase).toBe("ordering");
+  });
+
+  it("lets players decline farmer's hand before bidding starts", () => {
+    let state = dispatchAction(createInitialGameState({ farmersHandMode: "redeal" }), { type: "START_HAND", seed: 42 });
+
+    for (const player of [1, 2, 3, 0] as PlayerIndex[]) {
+      expect(state.phase).toBe("farmersHand");
+      state = dispatchAction(state, { type: "FARMERS_HAND_DECLINE", player });
+    }
+
+    expect(state.phase).toBe("ordering");
+    expect(state.activePlayer).toBe(1);
+  });
+
+  it("redeals a qualifying farmer's hand deterministically and replays from events", () => {
+    const seed = findSeedWithFarmersHand("redeal");
+    let state = dispatchAction(createInitialGameState({ farmersHandMode: "redeal" }), { type: "START_HAND", seed });
+    const claimingPlayer = state.activePlayer;
+
+    expect(isFarmersHandQualifier(state.hands[claimingPlayer])).toBe(true);
+    state = dispatchAction(state, { type: "FARMERS_HAND_REDEAL", player: claimingPlayer, seed: seed + 1 });
+
+    const replayed = replayMoveLog(state.moveLog, { farmersHandMode: "redeal" });
+
+    expect(state.handNumber).toBe(1);
+    expect(state.dealer).toBe(0);
+    expect(state.phase).toBe("farmersHand");
+    expect(replayed.hands).toEqual(state.hands);
+    expect(replayed.kitty).toEqual(state.kitty);
+  });
+
+  it("replaces up to three qualifying low cards with kitty cards and replays from events", () => {
+    const seed = findSeedWithFarmersHand("replaceThree");
+    let state = dispatchAction(createInitialGameState({ farmersHandMode: "replaceThree" }), { type: "START_HAND", seed });
+    const claimingPlayer = state.activePlayer;
+    const cards = farmersHandReplaceableCards(state.hands[claimingPlayer]).slice(0, 3);
+
+    state = dispatchAction(state, { type: "FARMERS_HAND_REPLACE", player: claimingPlayer, cards });
+
+    const replayed = replayMoveLog(state.moveLog, { farmersHandMode: "replaceThree" });
+
+    expect(state.phase).toBe("ordering");
+    expect(state.hands[claimingPlayer]).toHaveLength(5);
+    expect(state.kitty.slice(1, 1 + cards.length)).toEqual(cards);
+    expect(replayed.hands).toEqual(state.hands);
+    expect(replayed.kitty).toEqual(state.kitty);
+  });
+});
+
+function makePlayingState(
+  hands: [Card[], Card[], Card[], Card[]],
+  config: Parameters<typeof createInitialGameState>[0] = {}
+): GameState {
   return {
-    ...createInitialGameState(),
+    ...createInitialGameState(config),
     phase: "playing",
     handNumber: 1,
     dealer: 3,
@@ -256,4 +356,30 @@ function makePlayingState(hands: [Card[], Card[], Card[], Card[]]): GameState {
       plays: []
     }
   };
+}
+
+function playAllCardsInSeatOrder(state: GameState): GameState {
+  return [
+    [0, 1, 2, 3],
+    [0, 1, 2, 3],
+    [0, 1, 2, 3],
+    [0, 1, 2, 3],
+    [0, 1, 2, 3]
+  ].reduce((current, trickPlayers) => {
+    return trickPlayers.reduce((inner, player) => {
+      const card = inner.hands[player as PlayerIndex][0];
+      return dispatchAction(inner, { type: "PLAY_CARD", player: player as PlayerIndex, card });
+    }, current);
+  }, state);
+}
+
+function findSeedWithFarmersHand(farmersHandMode: "redeal" | "replaceThree"): number {
+  for (let seed = 1; seed < 200_000; seed += 1) {
+    const state = dispatchAction(createInitialGameState({ farmersHandMode }), { type: "START_HAND", seed });
+    if (isFarmersHandQualifier(state.hands[state.activePlayer])) {
+      return seed;
+    }
+  }
+
+  throw new Error("Unable to find deterministic farmer's hand fixture seed");
 }
