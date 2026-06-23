@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import {
   cardId,
   cardLabel,
@@ -98,6 +98,7 @@ export default function Home() {
     lonerMode
   }));
   const [alone, setAlone] = useState(false);
+  const [selectedReplacementIds, setSelectedReplacementIds] = useState<string[]>([]);
   const [persistedGameId, setPersistedGameId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState("Local state ready");
@@ -221,6 +222,10 @@ export default function Home() {
       cancelled = true;
     };
   }, [loadProfileDetail, loadProfileStats, persistedGameId, selectedProfileSeat, state.phase, state.moveLog.length]);
+
+  useEffect(() => {
+    setSelectedReplacementIds([]);
+  }, [state.handNumber, state.phase, state.activePlayer]);
 
   useEffect(() => {
     if (!persistedGameId || isSaving) {
@@ -507,8 +512,16 @@ export default function Home() {
               act={act}
               disabled={isSaving}
               onStartNewGame={confirmStartNewGame}
+              selectedReplacementIds={selectedReplacementIds}
+              setSelectedReplacementIds={setSelectedReplacementIds}
             />
-            <TableSurface state={state} act={act} disabled={isSaving} />
+            <TableSurface
+              state={state}
+              act={act}
+              disabled={isSaving}
+              selectedReplacementIds={selectedReplacementIds}
+              setSelectedReplacementIds={setSelectedReplacementIds}
+            />
           </section>
 
           <aside className="flex flex-col gap-4">
@@ -1304,7 +1317,9 @@ function BiddingControls({
   setAlone,
   act,
   disabled,
-  onStartNewGame
+  onStartNewGame,
+  selectedReplacementIds,
+  setSelectedReplacementIds
 }: {
   state: GameState;
   alone: boolean;
@@ -1312,13 +1327,9 @@ function BiddingControls({
   act: (action: GameAction) => void | Promise<void>;
   disabled: boolean;
   onStartNewGame: () => void;
+  selectedReplacementIds: string[];
+  setSelectedReplacementIds: Dispatch<SetStateAction<string[]>>;
 }) {
-  const [selectedReplacementIds, setSelectedReplacementIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    setSelectedReplacementIds([]);
-  }, [state.handNumber, state.phase, state.activePlayer]);
-
   if (state.phase === "idle") {
     return null;
   }
@@ -1528,20 +1539,37 @@ function BiddingControls({
 function TableSurface({
   state,
   act,
-  disabled
+  disabled,
+  selectedReplacementIds,
+  setSelectedReplacementIds
 }: {
   state: GameState;
   act: (action: GameAction) => void | Promise<void>;
   disabled: boolean;
+  selectedReplacementIds: string[];
+  setSelectedReplacementIds: Dispatch<SetStateAction<string[]>>;
 }) {
   const seats = buildTableSeatViews(state);
   const seatByPosition = Object.fromEntries(seats.map((seat) => [seat.position, seat])) as Record<TableSeatView["position"], TableSeatView>;
   const status = buildTableStatusView(state);
   const humanHand = buildHumanHandView(state, 0);
   const trick = buildCurrentTrickView(state);
+  const humanLegal = legalActionsForPlayer(state, 0);
+  const farmersSelectionActive = state.phase === "farmersHand"
+    && state.activePlayer === 0
+    && state.config.farmersHandMode === "replaceThree";
 
   function onHumanCard(card: Card, legal: boolean) {
     if (!legal) {
+      return;
+    }
+
+    if (farmersSelectionActive) {
+      setSelectedReplacementIds((current) => toggleFarmersHandReplacementSelection({
+        selectedIds: current,
+        card,
+        eligibleCards: humanLegal.farmersHandReplaceableCards
+      }));
       return;
     }
 
@@ -1574,6 +1602,8 @@ function TableSurface({
           hand={humanHand}
           disabled={disabled}
           onCard={onHumanCard}
+          selectedReplacementIds={selectedReplacementIds}
+          farmersSelectionActive={farmersSelectionActive}
         />
       </div>
       </div>
@@ -1650,12 +1680,16 @@ function HumanSeatPanel({
   seat,
   hand,
   disabled,
-  onCard
+  onCard,
+  selectedReplacementIds,
+  farmersSelectionActive
 }: {
   seat: TableSeatView;
   hand: ReturnType<typeof buildHumanHandView>;
   disabled: boolean;
   onCard: (card: Card, legal: boolean) => void;
+  selectedReplacementIds: string[];
+  farmersSelectionActive: boolean;
 }) {
   return (
     <section className={`relative z-10 rounded-xl border p-4 shadow-lg shadow-black/20 ${seat.isActive ? "border-brass bg-[#0c3d30]/80" : "border-white/10 bg-[#071411]/55"}`}>
@@ -1673,27 +1707,35 @@ function HumanSeatPanel({
         <div className="rounded border border-white/10 bg-[#071411]/35 px-3 py-2 text-sm text-white/65 lg:max-w-md">
           <p className="font-semibold text-white">{hand.actionLabel}</p>
           <p className="mt-1">{hand.helperText}</p>
+          {farmersSelectionActive ? (
+            <p className="mt-1 text-xs font-semibold text-brass">
+              Select 1-3 highlighted low cards here, then press Replace Selected.
+            </p>
+          ) : null}
           {hand.detailText ? <p className="mt-1 text-xs text-white/45">{hand.detailText}</p> : null}
         </div>
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:flex lg:flex-wrap lg:justify-center">
-        {hand.cards.map((card) => (
-          <button
-            key={card.id}
-            data-seat={seat.seat}
-            data-testid={`seat-${seat.seat}-card-${card.id}`}
-            className={`group rounded-xl p-0 transition ${
-              card.legal
-                ? "hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass"
-                : ""
-            } disabled:cursor-not-allowed disabled:hover:translate-y-0`}
-            disabled={disabled || !card.legal}
-            onClick={() => onCard(card.card, card.legal)}
-          >
-            <PlayingCard card={card.card} playable={card.legal} size="hand" />
-          </button>
-        ))}
+        {hand.cards.map((card) => {
+          const selected = selectedReplacementIds.includes(card.id);
+          return (
+            <button
+              key={card.id}
+              data-seat={seat.seat}
+              data-testid={`seat-${seat.seat}-card-${card.id}`}
+              className={`group rounded-xl p-0 transition ${
+                card.legal
+                  ? "hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass"
+                  : ""
+              } ${selected ? "-translate-y-1" : ""} disabled:cursor-not-allowed disabled:hover:translate-y-0`}
+              disabled={disabled || !card.legal}
+              onClick={() => onCard(card.card, card.legal)}
+            >
+              <PlayingCard card={card.card} playable={card.legal} size="hand" selected={selected} />
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -1770,11 +1812,13 @@ function PlayingCard({
   card,
   playable,
   winning = false,
+  selected = false,
   size
 }: {
   card: Card;
   playable: boolean;
   winning?: boolean;
+  selected?: boolean;
   size: "hand" | "trick";
 }) {
   const red = suitColor(card.suit) === "red";
@@ -1786,7 +1830,7 @@ function PlayingCard({
     <span
       className={`playing-card relative inline-flex ${sizeClass} select-none flex-col justify-between overflow-hidden border bg-[#fffaf0] p-2 text-left ${colorClass} ${
         playable ? "border-white" : "border-white/25 grayscale opacity-45"
-      } ${winning ? "ring-2 ring-brass ring-offset-2 ring-offset-[#08271f]" : ""}`}
+      } ${winning || selected ? "ring-2 ring-brass ring-offset-2 ring-offset-[#08271f]" : ""}`}
       aria-label={cardLabel(card)}
     >
       <span className="flex flex-col leading-none">

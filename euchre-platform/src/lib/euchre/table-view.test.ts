@@ -145,6 +145,23 @@ describe("human hand view models", () => {
     expect(view.cards.every((card) => card.legal)).toBe(true);
     expect(view.actionLabel).toBe("Choose a discard");
   });
+
+  it("marks Farmer's Hand replacement cards selectable from the table hand", () => {
+    const state = makeState({
+      phase: "farmersHand",
+      activePlayer: 0,
+      config: { farmersHandMode: "replaceThree" },
+      hands: {
+        0: [c("9", "hearts"), c("10", "clubs"), c("9", "spades"), c("10", "diamonds"), c("9", "clubs")]
+      }
+    });
+
+    const view = buildHumanHandView(state);
+
+    expect(view.actionLabel).toBe("Choose Farmer's Hand replacements");
+    expect(view.cards.every((card) => card.legal)).toBe(true);
+    expect(view.cards.every((card) => card.farmersHandEligible)).toBe(true);
+  });
 });
 
 type StateOverrides = Omit<Partial<GameState>, "config" | "hands"> & {

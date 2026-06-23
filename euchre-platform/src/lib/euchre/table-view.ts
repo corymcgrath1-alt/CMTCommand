@@ -48,6 +48,7 @@ export interface TableCardView {
   id: string;
   label: string;
   legal: boolean;
+  farmersHandEligible: boolean;
 }
 
 export interface HumanHandView {
@@ -126,8 +127,12 @@ export function buildTableStatusView(state: GameState): TableStatusView {
 export function buildHumanHandView(state: GameState, seat: PlayerIndex = 0): HumanHandView {
   const legal = legalActionsForPlayer(state, seat);
   const playable = new Set(legal.playableCards.map(cardId));
+  const farmersHandEligible = new Set(legal.farmersHandReplaceableCards.map(cardId));
   const explanation = buildLegalActionExplanation(state, seat);
   const mustDiscard = legal.mustDiscard;
+  const canSelectFarmersHandReplacement = state.phase === "farmersHand"
+    && state.activePlayer === seat
+    && state.config.farmersHandMode === "replaceThree";
 
   return {
     seat,
@@ -135,9 +140,14 @@ export function buildHumanHandView(state: GameState, seat: PlayerIndex = 0): Hum
       card,
       id: cardId(card),
       label: cardLabel(card),
-      legal: mustDiscard || playable.has(cardId(card))
+      legal: mustDiscard || playable.has(cardId(card)) || (canSelectFarmersHandReplacement && farmersHandEligible.has(cardId(card))),
+      farmersHandEligible: farmersHandEligible.has(cardId(card))
     })),
-    actionLabel: mustDiscard ? "Choose a discard" : "Your hand",
+    actionLabel: mustDiscard
+      ? "Choose a discard"
+      : canSelectFarmersHandReplacement
+        ? "Choose Farmer's Hand replacements"
+        : "Your hand",
     helperText: explanation.primary,
     detailText: explanation.details.length ? explanation.details.join(" ") : undefined,
     mustDiscard
