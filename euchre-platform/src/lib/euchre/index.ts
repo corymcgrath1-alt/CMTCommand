@@ -7,4 +7,5 @@ export * from "./game-ux";
 export * from "./models";
 export * from "./rule-summary";
 export * from "./rules";
+export * from "./table-view";
 export * from "./types";

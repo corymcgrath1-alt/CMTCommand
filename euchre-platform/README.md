@@ -124,8 +124,28 @@ available through profile history and review.
 Recent bot activity is derived from the move log and shown compactly, for example passes,
 trump calls, discards, card plays, and Farmer's Hand actions.
 
-Deferred UX polish includes a full card-table layout, animations, sound/haptics, tutorial
-mode, card-by-card replay animation, an accessibility pass, and a mobile layout pass.
+Deferred UX polish includes animations, sound/haptics, tutorial mode, card-by-card replay
+animation, an accessibility pass, and a mobile layout pass.
+
+## Single-Player Table Readability v1
+
+The active game now uses a table-first layout for single-player play. South, West, North,
+and East are positioned around a central trick panel with a compact table status bar for
+score, hand, phase, dealer, turn, trump, upcard, and trick count. Bot seats show card
+counts, role badges, and recent move-log-derived actions instead of exposing bot hands.
+
+The South hand is larger and action-oriented. Legal cards remain driven by the existing
+rules engine and display helpers; illegal cards are dimmed during follow-suit situations,
+and discard mode still marks every human card selectable when the dealer must discard.
+Farmer's Hand replacement controls remain in the existing bidding/control panel, with
+the same event-validated replacement flow as before.
+
+Current trick readability is also state-derived. The center panel shows the leader, led
+suit, trump suit, cards played in order, unplayed seats, current winning seat/card when
+derivable, and the latest completed trick winner. These are pure view models over
+`GameState` and the append-only move log, so this milestone does not change rules,
+scoring, persistence, bot strategy, replay reconstruction, profile aggregation, or review
+payloads.
 
 ## Run
 

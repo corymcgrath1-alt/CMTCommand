@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   cardId,
   cardLabel,
@@ -18,7 +18,11 @@ import {
   formatFarmersHandMode,
   formatLonerMode,
   buildHandResultExplanation,
+  buildCurrentTrickView,
+  buildHumanHandView,
   buildLegalActionExplanation,
+  buildTableSeatViews,
+  buildTableStatusView,
   buildTurnPrompt,
   getAvailableGameControls,
   getRecentBotActions,
@@ -26,6 +30,7 @@ import {
   parsePracticeSeed,
   replacementSelectionLabel,
   selectedFarmersHandReplacementCards,
+  TABLE_PLAYER_NAMES,
   toggleFarmersHandReplacementSelection,
   type BotDifficulty,
   type Card,
@@ -37,6 +42,7 @@ import {
   type MoveEvent,
   type PlayerIndex,
   type RuleSummary,
+  type TableSeatView,
   type TargetScore
 } from "@/lib/euchre";
 import type { LoadedGame } from "@/lib/persistence/event-store";
@@ -501,12 +507,7 @@ export default function Home() {
               disabled={isSaving}
               onStartNewGame={confirmStartNewGame}
             />
-            <div className="grid gap-3 md:grid-cols-2">
-              {([0, 1, 2, 3] as PlayerIndex[]).map((player) => (
-                <PlayerPanel key={player} player={player} state={state} act={act} disabled={isSaving} />
-              ))}
-            </div>
-            <TrickTable state={state} />
+            <TableSurface state={state} act={act} disabled={isSaving} />
           </section>
 
           <aside className="flex flex-col gap-4">
@@ -1523,68 +1524,251 @@ function BiddingControls({
   );
 }
 
-function PlayerPanel({
-  player,
+function TableSurface({
   state,
   act,
   disabled
 }: {
-  player: PlayerIndex;
   state: GameState;
   act: (action: GameAction) => void | Promise<void>;
   disabled: boolean;
 }) {
-  const legal = legalActionsForPlayer(state, player);
-  const playable = new Set(legal.playableCards.map(cardId));
-  const isActive = state.activePlayer === player;
-  const humanSeat = player === 0;
-  const cardExplanation = humanSeat && isActive ? buildLegalActionExplanation(state, player) : null;
+  const seats = buildTableSeatViews(state);
+  const seatByPosition = Object.fromEntries(seats.map((seat) => [seat.position, seat])) as Record<TableSeatView["position"], TableSeatView>;
+  const status = buildTableStatusView(state);
+  const humanHand = buildHumanHandView(state, 0);
+  const trick = buildCurrentTrickView(state);
 
-  function onCard(card: Card) {
-    if (legal.mustDiscard) {
-      act({ type: "DISCARD", player, card });
+  function onHumanCard(card: Card, legal: boolean) {
+    if (!legal) {
       return;
     }
 
-    if (playable.has(cardId(card))) {
-      act({ type: "PLAY_CARD", player, card });
+    if (humanHand.mustDiscard) {
+      act({ type: "DISCARD", player: 0, card });
+      return;
     }
+
+    act({ type: "PLAY_CARD", player: 0, card });
   }
 
   return (
-    <section className={`rounded border p-4 ${isActive ? "border-brass bg-felt" : "border-white/10 bg-white/[0.04]"}`}>
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="font-semibold text-white">{PLAYER_NAMES[player]}</h2>
-          <p className="text-xs uppercase tracking-[0.12em] text-white/45">Team {player % 2}</p>
+    <section className="rounded border border-white/10 bg-table p-4 shadow-xl shadow-black/20">
+      <TableStatusBar status={status} />
+
+      <div className="mt-4 grid gap-3">
+        <div className="mx-auto w-full max-w-sm">
+          <SeatCard seat={seatByPosition.north} />
         </div>
-        {isActive ? <span className="rounded bg-brass px-2 py-1 text-xs font-semibold text-[#201602]">Active</span> : null}
+
+        <div className="grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)_190px] lg:items-stretch">
+          <SeatCard seat={seatByPosition.west} />
+          <CurrentTrickPanel trick={trick} />
+          <SeatCard seat={seatByPosition.east} />
+        </div>
+
+        <HumanSeatPanel
+          seat={seatByPosition.south}
+          hand={humanHand}
+          disabled={disabled}
+          onCard={onHumanCard}
+        />
+      </div>
+    </section>
+  );
+}
+
+function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatusView> }) {
+  const items = [
+    ["Score", status.scoreLabel],
+    ["Hand", status.handLabel],
+    ["Phase", status.phaseLabel],
+    ["Dealer", status.dealerLabel],
+    ["Turn", status.activePlayerLabel],
+    ["Trump", status.trumpLabel],
+    ["Upcard", status.upcardLabel],
+    ["Tricks", status.trickScoreLabel]
+  ];
+
+  return (
+    <div className="rounded border border-white/10 bg-[#071411]/55 px-3 py-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brass">Table status</p>
+          <p className="mt-1 text-sm text-white/60">{status.targetLabel} | Makers: {status.makersLabel}</p>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {items.map(([label, value]) => (
+          <div key={label} className="rounded border border-white/10 bg-white/[0.035] px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40">{label}</p>
+            <p className="mt-1 text-sm font-semibold text-white">{value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SeatCard({ seat }: { seat: TableSeatView }) {
+  return (
+    <section className={`flex min-h-32 flex-col justify-between rounded border p-3 ${
+      seat.isActive ? "border-brass bg-brass/10" : "border-white/10 bg-white/[0.045]"
+    }`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-base font-semibold text-white">{seat.name}</h2>
+          <p className="text-xs uppercase tracking-[0.12em] text-white/45">
+            Team {seat.team} | {seat.isHuman ? "Human" : "Bot"}
+          </p>
+        </div>
+        {seat.isActive ? <Badge tone="brass">Turn</Badge> : null}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {seat.isDealer ? <Badge>Dealer</Badge> : null}
+        {seat.isCaller ? <Badge>Caller</Badge> : null}
+        {!seat.isCaller && seat.isPartnerOfCaller ? <Badge>Caller partner</Badge> : null}
+        {seat.isMaker ? <Badge>Maker team</Badge> : null}
+      </div>
+
+      <div className="mt-4 rounded border border-white/10 bg-[#071411]/35 px-3 py-2">
+        <p className="text-xs uppercase tracking-[0.12em] text-white/40">Cards</p>
+        <p className="mt-1 text-lg font-semibold text-white">{seat.cardCount}</p>
+      </div>
+
+      {!seat.isHuman ? (
+        <p className="mt-3 min-h-8 text-xs text-white/55">{seat.recentAction ?? "No bot action yet."}</p>
+      ) : null}
+    </section>
+  );
+}
+
+function HumanSeatPanel({
+  seat,
+  hand,
+  disabled,
+  onCard
+}: {
+  seat: TableSeatView;
+  hand: ReturnType<typeof buildHumanHandView>;
+  disabled: boolean;
+  onCard: (card: Card, legal: boolean) => void;
+}) {
+  return (
+    <section className={`rounded border p-4 ${seat.isActive ? "border-brass bg-felt" : "border-white/10 bg-white/[0.04]"}`}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold text-white">{seat.name}</h2>
+            {seat.isActive ? <Badge tone="brass">Turn</Badge> : null}
+            {seat.isDealer ? <Badge>Dealer</Badge> : null}
+            {seat.isCaller ? <Badge>Caller</Badge> : null}
+            {seat.isMaker ? <Badge>Maker team</Badge> : null}
+          </div>
+          <p className="mt-1 text-xs uppercase tracking-[0.12em] text-white/45">Team {seat.team} | Human</p>
+        </div>
+        <div className="rounded border border-white/10 bg-[#071411]/35 px-3 py-2 text-sm text-white/65 lg:max-w-md">
+          <p className="font-semibold text-white">{hand.actionLabel}</p>
+          <p className="mt-1">{hand.helperText}</p>
+          {hand.detailText ? <p className="mt-1 text-xs text-white/45">{hand.detailText}</p> : null}
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
-        {state.hands[player].map((card) => {
-          const enabled = humanSeat && (legal.mustDiscard || playable.has(cardId(card)));
-          return (
-            <button
-              key={cardId(card)}
-              data-seat={player}
-              data-testid={`seat-${player}-card-${cardId(card)}`}
-              className="h-16 rounded border border-white/15 bg-white px-2 text-lg font-bold text-[#071411] shadow-sm disabled:bg-white/30"
-              disabled={disabled || !enabled}
-              onClick={() => onCard(card)}
-            >
-              {cardLabel(card)}
-            </button>
-          );
-        })}
+        {hand.cards.map((card) => (
+          <button
+            key={card.id}
+            data-seat={seat.seat}
+            data-testid={`seat-${seat.seat}-card-${card.id}`}
+            className={`min-h-20 rounded border px-2 text-xl font-bold shadow-sm transition ${
+              card.legal
+                ? "border-brass/50 bg-white text-[#071411] hover:-translate-y-0.5 hover:border-brass"
+                : "border-white/10 bg-white/20 text-white/35"
+            } disabled:cursor-not-allowed disabled:hover:translate-y-0`}
+            disabled={disabled || !card.legal}
+            onClick={() => onCard(card.card, card.legal)}
+          >
+            {card.label}
+          </button>
+        ))}
       </div>
-      {cardExplanation && (state.phase === "playing" || state.phase === "discarding") ? (
-        <div className="mt-3 rounded border border-white/10 bg-[#071411]/35 px-3 py-2 text-xs text-white/55">
-          <p className="font-semibold text-white">{cardExplanation.primary}</p>
-          {cardExplanation.details.length ? <p className="mt-1">{cardExplanation.details.join(" ")}</p> : null}
-        </div>
-      ) : null}
     </section>
+  );
+}
+
+function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTrickView> }) {
+  return (
+    <section className="min-h-72 rounded border border-brass/25 bg-[#10251e] p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brass">Current trick</p>
+          <h2 className="mt-1 text-xl font-semibold text-white">Trick {trick.trickNumber}</h2>
+        </div>
+        <div className="grid gap-1 text-sm text-white/65 sm:text-right">
+          <span>Leader: <strong className="text-white">{trick.leaderLabel}</strong></span>
+          <span>Led suit: <strong className="text-brass">{trick.ledSuitLabel}</strong></span>
+          <span>Trump: <strong className="text-brass">{trick.trumpLabel}</strong></span>
+        </div>
+      </div>
+
+      <div className="mt-4 grid min-h-32 gap-2 sm:grid-cols-4">
+        {trick.plays.length ? trick.plays.map((play, index) => (
+          <div
+            key={`${play.seat}-${play.cardId}`}
+            className={`rounded border px-3 py-3 ${
+              play.isWinningCard ? "border-brass bg-brass/15" : "border-white/10 bg-white/[0.045]"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-white/45">#{index + 1} {play.playerName}</p>
+              {play.isLeader ? <Badge>Leader</Badge> : null}
+            </div>
+            <p className="mt-2 text-2xl font-semibold text-white">{play.cardLabel}</p>
+            <p className="mt-1 text-xs text-white/45">
+              {play.effectiveSuit ? `Effective ${play.effectiveSuit}` : "Suit pending"}
+              {play.isTrump ? " | Trump" : ""}
+            </p>
+            {play.isWinningCard ? <p className="mt-2 text-xs font-semibold text-brass">Winning card</p> : null}
+          </div>
+        )) : (
+          <div className="rounded border border-dashed border-white/15 px-3 py-8 text-center text-sm text-white/45 sm:col-span-4">
+            No cards have been played to this trick.
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 grid gap-2 text-sm text-white/60 sm:grid-cols-2">
+        <div className="rounded border border-white/10 bg-[#071411]/35 px-3 py-2">
+          <p className="text-xs uppercase tracking-[0.12em] text-white/40">Current winner</p>
+          <p className="mt-1 font-semibold text-white">
+            {trick.currentWinnerLabel && trick.winningCardLabel
+              ? `${trick.currentWinnerLabel} with ${trick.winningCardLabel}`
+              : "No winner yet"}
+          </p>
+        </div>
+        <div className="rounded border border-white/10 bg-[#071411]/35 px-3 py-2">
+          <p className="text-xs uppercase tracking-[0.12em] text-white/40">Waiting on</p>
+          <p className="mt-1 font-semibold text-white">
+            {trick.unplayedSeats.length
+              ? trick.unplayedSeats.map((seat) => TABLE_PLAYER_NAMES[seat]).join(", ")
+              : trick.latestCompletedWinnerLabel
+                ? `Trick complete: ${trick.latestCompletedWinnerLabel}`
+                : "Everyone has played"}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "brass" }) {
+  return (
+    <span className={`rounded border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] ${
+      tone === "brass" ? "border-brass/50 bg-brass text-[#201602]" : "border-white/15 text-white/55"
+    }`}>
+      {children}
+    </span>
   );
 }
 
@@ -1596,34 +1780,6 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   }
 
   return payload as T;
-}
-
-function TrickTable({ state }: { state: GameState }) {
-  return (
-    <section className="rounded border border-white/10 bg-white/[0.04] p-4">
-      <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Current trick</h2>
-      <div className="mt-3 grid min-h-20 gap-2 sm:grid-cols-4">
-        {state.currentTrick?.plays.length
-          ? state.currentTrick.plays.map((play) => (
-              <div key={`${play.player}-${cardId(play.card)}`} className="rounded border border-white/10 px-3 py-2">
-                <p className="text-xs text-white/45">{PLAYER_NAMES[play.player]}</p>
-                <p className="text-lg font-semibold">{cardLabel(play.card)}</p>
-              </div>
-            ))
-          : <p className="text-sm text-white/50">No cards in the current trick.</p>}
-      </div>
-
-      <h2 className="mt-5 text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Completed tricks</h2>
-      <div className="mt-3 space-y-2">
-        {state.completedTricks.map((trick, index) => (
-          <div key={index} className="rounded border border-white/10 px-3 py-2 text-sm text-white/70">
-            Trick {index + 1}: {trick.plays.map((play) => `${PLAYER_NAMES[play.player]} ${cardLabel(play.card)}`).join(", ")}
-            {trick.winner !== undefined ? ` | Winner: ${PLAYER_NAMES[trick.winner]}` : ""}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
 }
 
 function MoveHistory({ moves }: { moves: MoveEvent[] }) {
