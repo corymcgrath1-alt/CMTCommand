@@ -34,6 +34,7 @@ export interface TableStatusView {
   handLabel: string;
   scoreLabel: string;
   targetLabel: string;
+  scores: [number, number];
   phaseLabel: string;
   dealerLabel: string;
   activePlayerLabel: string;
@@ -49,6 +50,18 @@ export interface TableCardView {
   label: string;
   legal: boolean;
   farmersHandEligible: boolean;
+}
+
+export interface EuchreScoreCardView {
+  cardNumber: 1 | 2;
+  pointsVisible: number;
+}
+
+export interface EuchreTeamScoreView {
+  team: TeamIndex;
+  score: number;
+  label: string;
+  cards: [EuchreScoreCardView, EuchreScoreCardView];
 }
 
 export interface HumanHandView {
@@ -114,6 +127,7 @@ export function buildTableStatusView(state: GameState): TableStatusView {
     handLabel: state.handNumber ? `Hand ${state.handNumber}` : "No hand dealt",
     scoreLabel: `Team 0 ${state.scores[0]} - ${state.scores[1]} Team 1`,
     targetLabel: `First to ${state.config.targetScore}`,
+    scores: [...state.scores],
     phaseLabel: formatPhase(state.phase),
     dealerLabel: TABLE_PLAYER_NAMES[state.dealer],
     activePlayerLabel: state.phase === "idle" ? "None" : TABLE_PLAYER_NAMES[state.activePlayer],
@@ -122,6 +136,25 @@ export function buildTableStatusView(state: GameState): TableStatusView {
     makersLabel: state.makerTeam === undefined ? "None" : `Team ${state.makerTeam}`,
     trickScoreLabel: `${state.tricksWon[0]} - ${state.tricksWon[1]}`
   };
+}
+
+export function buildEuchreScoreCardViews(scores: [number, number]): [EuchreTeamScoreView, EuchreTeamScoreView] {
+  return [0, 1].map((team) => {
+    const score = scores[team];
+    const clampedScore = Math.max(0, Math.min(score, 10));
+    const firstCard = Math.min(clampedScore, 5);
+    const secondCard = Math.max(0, clampedScore - 5);
+
+    return {
+      team,
+      score,
+      label: `Team ${team}`,
+      cards: [
+        { cardNumber: 1, pointsVisible: firstCard },
+        { cardNumber: 2, pointsVisible: secondCard }
+      ]
+    };
+  }) as [EuchreTeamScoreView, EuchreTeamScoreView];
 }
 
 export function buildHumanHandView(state: GameState, seat: PlayerIndex = 0): HumanHandView {

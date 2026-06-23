@@ -19,6 +19,7 @@ import {
   formatLonerMode,
   buildHandResultExplanation,
   buildCurrentTrickView,
+  buildEuchreScoreCardViews,
   buildHumanHandView,
   buildLegalActionExplanation,
   buildTableSeatViews,
@@ -1653,6 +1654,7 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
           <p className="mt-1 text-sm text-white/60">{status.targetLabel} | Makers: {status.makersLabel}</p>
         </div>
       </div>
+      <AuthenticScoreKeeper scores={status.scores} />
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {items.map(([label, value]) => (
           <div
@@ -1666,6 +1668,63 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function AuthenticScoreKeeper({ scores }: { scores: [number, number] }) {
+  const teams = buildEuchreScoreCardViews(scores);
+
+  return (
+    <section className="mt-3 rounded-xl border border-brass/25 bg-[#0b211b]/70 px-3 py-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass">Score cards</p>
+        <p className="text-xs text-white/45">Traditional Euchre scoring with two 5 cards per team</p>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        {teams.map((team) => (
+          <div key={team.team} className="rounded-lg border border-white/10 bg-[#071411]/55 px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-white">{team.label}</p>
+                <p className="text-xs text-white/45">{team.score} point{team.score === 1 ? "" : "s"}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {team.cards.map((card) => (
+                  <ScoreFiveCard key={card.cardNumber} visiblePips={card.pointsVisible} />
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ScoreFiveCard({ visiblePips }: { visiblePips: number }) {
+  const pipPositions = [
+    "left-2 top-2",
+    "right-2 top-2",
+    "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+    "left-2 bottom-2",
+    "right-2 bottom-2"
+  ];
+
+  return (
+    <div className="playing-card relative w-14 border border-white/70 bg-[#fffaf0] p-1 text-[#111827] shadow-md shadow-black/25">
+      <span className="absolute left-1 top-1 text-xs font-black leading-none">5</span>
+      <span className="absolute right-1 bottom-1 rotate-180 text-xs font-black leading-none">5</span>
+      {pipPositions.map((position, index) => (
+        <span
+          key={position}
+          className={`absolute ${position} text-base leading-none ${
+            index < visiblePips ? "opacity-100" : "opacity-10"
+          }`}
+        >
+          ♠
+        </span>
+      ))}
     </div>
   );
 }

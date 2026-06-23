@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createInitialGameState, createMoveEvent } from "./engine";
 import {
   buildCurrentTrickView,
+  buildEuchreScoreCardViews,
   buildHumanHandView,
   buildTableSeatViews,
   buildTableStatusView
@@ -56,6 +57,7 @@ describe("table status view models", () => {
     expect(buildTableStatusView(state)).toMatchObject({
       handLabel: "Hand 2",
       scoreLabel: "Team 0 4 - 3 Team 1",
+      scores: [4, 3],
       phaseLabel: "Ordering",
       dealerLabel: "West",
       activePlayerLabel: "North",
@@ -64,6 +66,38 @@ describe("table status view models", () => {
       makersLabel: "Team 0",
       trickScoreLabel: "2 - 1"
     });
+  });
+});
+
+describe("euchre score card view models", () => {
+  it("maps scores onto two five-card score cards per team", () => {
+    expect(buildEuchreScoreCardViews([0, 7])).toEqual([
+      {
+        team: 0,
+        score: 0,
+        label: "Team 0",
+        cards: [
+          { cardNumber: 1, pointsVisible: 0 },
+          { cardNumber: 2, pointsVisible: 0 }
+        ]
+      },
+      {
+        team: 1,
+        score: 7,
+        label: "Team 1",
+        cards: [
+          { cardNumber: 1, pointsVisible: 5 },
+          { cardNumber: 2, pointsVisible: 2 }
+        ]
+      }
+    ]);
+  });
+
+  it("caps the authentic score-card display at ten points", () => {
+    expect(buildEuchreScoreCardViews([12, 10]).map((team) => team.cards.map((card) => card.pointsVisible))).toEqual([
+      [5, 5],
+      [5, 5]
+    ]);
   });
 });
 
