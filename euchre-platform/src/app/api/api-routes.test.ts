@@ -10,6 +10,7 @@ import { GET as loadGame } from "./games/[gameId]/route";
 import { POST as appendEvent } from "./games/[gameId]/events/route";
 import { GET as reviewGame } from "./games/[gameId]/review/route";
 import { GET as profileAggregates } from "./profiles/route";
+import { GET as profileDetail } from "./profiles/[seat]/route";
 
 const testDirs: string[] = [];
 
@@ -161,6 +162,70 @@ describe("API route validation", () => {
     });
   }, 15_000);
 
+  it("returns an empty profile detail for a valid seat with no completed games", async () => {
+    const store = await createStore();
+    resetEventStoreForTests(store);
+
+    const response = await profileDetail(
+      new Request("http://localhost/api/profiles/0"),
+      profileRouteContext("0")
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.profile).toMatchObject({
+      name: "South / Human",
+      seat: 0,
+      team: 0
+    });
+    expect(body.profile.career.gamesPlayed).toBe(0);
+    expect(body.profile.gameHistory).toEqual([]);
+    expect(body.profile.trends.currentStreak).toEqual({ result: "none", count: 0 });
+  });
+
+  it("returns profile detail for a valid seat from completed game history", async () => {
+    const store = await createStore();
+    resetEventStoreForTests(store);
+    const game = await store.createGame({ config: { stickDealer: false, targetScore: 2 } });
+    await store.appendMove({ gameId: game.id, expectedSequence: 0, action: { type: "START_HAND", seed: 123 } });
+    await completeOneHand(store, game.id);
+
+    const response = await profileDetail(
+      new Request("http://localhost/api/profiles/0"),
+      profileRouteContext("0")
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.profile.career.gamesPlayed).toBe(1);
+    expect(body.profile.career.wins).toBe(1);
+    expect(body.profile.gameHistory[0]).toMatchObject({
+      gameId: game.id,
+      result: "win",
+      reviewHref: `/api/games/${game.id}/review`
+    });
+    expect(body.profile.trends.last5GamesRecord).toMatchObject({
+      games: 1,
+      wins: 1,
+      losses: 0,
+      winPercentage: 100
+    });
+  }, 15_000);
+
+  it("returns 400 for invalid profile seats", async () => {
+    const store = await createStore();
+    resetEventStoreForTests(store);
+
+    const response = await profileDetail(
+      new Request("http://localhost/api/profiles/invalid"),
+      profileRouteContext("invalid")
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({ error: "Invalid profile seat" });
+  });
+
 });
 
 function jsonRequest(body: unknown): Request {
@@ -176,6 +241,12 @@ function jsonRequest(body: unknown): Request {
 function routeContext(gameId: string) {
   return {
     params: Promise.resolve({ gameId })
+  };
+}
+
+function profileRouteContext(seat: string) {
+  return {
+    params: Promise.resolve({ seat })
   };
 }
 

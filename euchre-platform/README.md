@@ -66,6 +66,12 @@ hands played, dealer/caller counts, call success, lone attempts and successful l
 tricks won, cards played, team final scores, average team points, maker success, euchres
 earned, and euchres suffered.
 
+`GET /api/profiles/[seat]` returns a per-player detail view for local seats `0` through
+`3`. Detail views include career summary, completed-game history rows, last-5 and last-10
+records, recent win/call/trick trends, current streak, best win streak, and worst losing
+streak. The UI lets a player select a local placeholder profile from the sidebar and shows
+the same detail data without creating a second client-side stats source.
+
 Deferred intentionally: real accounts, ranked/profile ratings, partner/opponent splits,
 opponent-adjusted stats, mistake detection, expected value, skill scoring, advanced bot or
 human decision quality, AI coaching, shareable hand links, spectator mode, realtime

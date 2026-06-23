@@ -31,6 +31,7 @@ import {
   type ReplaySelection
 } from "@/lib/review/replay-viewer";
 import type { ProfileAggregateSummary } from "@/lib/profiles/profile-aggregates";
+import type { PlayerProfileDetail, ProfileTrendStats, TrendRecord } from "@/lib/profiles/profile-detail";
 
 const STORAGE_KEY = "euchre-platform-active-game-id";
 const PLAYER_NAMES: Record<PlayerIndex, string> = {
@@ -49,6 +50,8 @@ export default function Home() {
   const [status, setStatus] = useState("Local state ready");
   const [review, setReview] = useState<GameReviewSummary | null>(null);
   const [profileStats, setProfileStats] = useState<ProfileAggregateSummary | null>(null);
+  const [selectedProfileSeat, setSelectedProfileSeat] = useState<PlayerIndex>(0);
+  const [profileDetail, setProfileDetail] = useState<PlayerProfileDetail | null>(null);
   const bots = useMemo(() => createDefaultBotProfiles(), []);
   const lastBotActionKey = useRef<string | null>(null);
 
@@ -58,6 +61,15 @@ export default function Home() {
       setProfileStats(result.profiles);
     } catch {
       setProfileStats(null);
+    }
+  }, []);
+
+  const loadProfileDetail = useCallback(async (seat: PlayerIndex) => {
+    try {
+      const result = await fetchJson<{ profile: PlayerProfileDetail }>(`/api/profiles/${seat}`);
+      setProfileDetail(result.profile);
+    } catch {
+      setProfileDetail(null);
     }
   }, []);
 
@@ -71,6 +83,10 @@ export default function Home() {
 
     void loadPersistedGame(savedGameId);
   }, [loadProfileStats]);
+
+  useEffect(() => {
+    void loadProfileDetail(selectedProfileSeat);
+  }, [loadProfileDetail, selectedProfileSeat]);
 
   async function loadPersistedGame(gameId: string) {
     setIsSaving(true);
@@ -130,6 +146,7 @@ export default function Home() {
         if (!cancelled) {
           setReview(result.review);
           void loadProfileStats();
+          void loadProfileDetail(selectedProfileSeat);
         }
       })
       .catch((error) => {
@@ -141,7 +158,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [loadProfileStats, persistedGameId, state.phase, state.moveLog.length]);
+  }, [loadProfileDetail, loadProfileStats, persistedGameId, selectedProfileSeat, state.phase, state.moveLog.length]);
 
   useEffect(() => {
     if (!persistedGameId || isSaving) {
@@ -278,7 +295,12 @@ export default function Home() {
               </div>
             </section>
 
-            <ProfileStatsPanel profiles={profileStats} />
+            <ProfileStatsPanel
+              profiles={profileStats}
+              selectedSeat={selectedProfileSeat}
+              detail={profileDetail}
+              onSelectSeat={setSelectedProfileSeat}
+            />
 
             <MoveHistory moves={state.moveLog} />
           </aside>
@@ -396,7 +418,17 @@ function GameReviewPanel({ review }: { review: GameReviewSummary }) {
   );
 }
 
-function ProfileStatsPanel({ profiles }: { profiles: ProfileAggregateSummary | null }) {
+function ProfileStatsPanel({
+  profiles,
+  selectedSeat,
+  detail,
+  onSelectSeat
+}: {
+  profiles: ProfileAggregateSummary | null;
+  selectedSeat: PlayerIndex;
+  detail: PlayerProfileDetail | null;
+  onSelectSeat: (seat: PlayerIndex) => void;
+}) {
   return (
     <section className="rounded border border-white/10 bg-white/[0.04] p-4">
       <div className="flex items-start justify-between gap-3">
@@ -424,8 +456,15 @@ function ProfileStatsPanel({ profiles }: { profiles: ProfileAggregateSummary | n
               </thead>
               <tbody className="text-white/70">
                 {profiles.players.map((player) => (
-                  <tr key={player.profileId}>
-                    <td className="border-b border-white/10 py-2 pr-2 font-semibold text-white">{player.name}</td>
+                  <tr key={player.profileId} className={selectedSeat === player.seat ? "bg-brass/10" : undefined}>
+                    <td className="border-b border-white/10 py-2 pr-2 font-semibold text-white">
+                      <button
+                        className="text-left underline decoration-white/20 underline-offset-4 hover:text-brass"
+                        onClick={() => onSelectSeat(player.seat)}
+                      >
+                        {player.name}
+                      </button>
+                    </td>
                     <td className="border-b border-white/10 px-2 py-2">{player.wins}-{player.losses}</td>
                     <td className="border-b border-white/10 px-2 py-2">{formatRate(player.winPercentage)}</td>
                     <td className="border-b border-white/10 px-2 py-2">{player.successfulCalls}-{player.failedCalls}</td>
@@ -447,11 +486,89 @@ function ProfileStatsPanel({ profiles }: { profiles: ProfileAggregateSummary | n
               </div>
             ))}
           </div>
+
+          <ProfileDetailPanel detail={detail} />
         </>
       ) : (
         <p className="mt-3 text-sm text-white/45">Complete a persisted game to populate local profile stats.</p>
       )}
     </section>
+  );
+}
+
+function ProfileDetailPanel({ detail }: { detail: PlayerProfileDetail | null }) {
+  if (!detail) {
+    return <p className="mt-3 text-sm text-white/45">Select a profile to load detail.</p>;
+  }
+
+  return (
+    <div className="mt-4 rounded border border-white/10 bg-[#071411]/40 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-white">{detail.name}</h3>
+          <p className="mt-1 text-xs uppercase tracking-[0.12em] text-white/45">{detail.teamLabel}</p>
+        </div>
+        <span className="rounded border border-brass/35 px-2 py-1 text-xs text-brass">
+          {detail.career.wins}-{detail.career.losses}
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <ProfileMiniMetric label="Win %" value={formatRate(detail.career.winPercentage)} />
+        <ProfileMiniMetric label="Points" value={`${detail.career.pointsScored}-${detail.career.pointsAllowed}`} />
+        <ProfileMiniMetric label="Avg pts" value={`${detail.career.averagePointsScoredPerGame}/${detail.career.averagePointsAllowedPerGame}`} />
+        <ProfileMiniMetric label="Tricks" value={`${detail.career.tricksWon} (${detail.career.averageTricksPerGame}/g)`} />
+        <ProfileMiniMetric label="Calls" value={`${detail.career.successfulCalls}-${detail.career.failedCalls}`} />
+        <ProfileMiniMetric label="Call %" value={formatRate(detail.career.callSuccessPercentage)} />
+        <ProfileMiniMetric label="Dealer" value={String(detail.career.timesDealer)} />
+        <ProfileMiniMetric label="Cards" value={String(detail.career.cardsPlayed)} />
+        <ProfileMiniMetric label="Loners" value={`${detail.career.successfulLoners}/${detail.career.loneAttempts}`} />
+        <ProfileMiniMetric
+          label="Lone %"
+          value={detail.career.loneSuccessPercentage === null ? "N/A" : formatRate(detail.career.loneSuccessPercentage)}
+        />
+      </div>
+
+      <div className="mt-3 rounded border border-white/10 px-3 py-2 text-xs text-white/65">
+        <p className="font-semibold text-white">Trends</p>
+        <p className="mt-1">Last 5: {recordLabel(detail.trends.last5GamesRecord)} | Last 10: {recordLabel(detail.trends.last10GamesRecord)}</p>
+        <p className="mt-1">
+          Recent: {formatRate(detail.trends.recentWinPercentage)} wins, {formatRate(detail.trends.recentCallSuccessPercentage)} calls, {detail.trends.recentAverageTricksPerGame} tricks/game
+        </p>
+        <p className="mt-1">
+          Streak: {streakLabel(detail.trends.currentStreak)} | Best W {detail.trends.bestWinStreak} | Worst L {detail.trends.worstLosingStreak}
+        </p>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Game history</p>
+        <div className="mt-2 max-h-72 space-y-2 overflow-auto">
+          {detail.gameHistory.length ? detail.gameHistory.map((game) => (
+            <div key={game.gameId} className="rounded border border-white/10 px-3 py-2 text-xs text-white/65">
+              <div className="flex items-center justify-between gap-2">
+                <span className={game.result === "win" ? "font-semibold text-brass" : "font-semibold text-white"}>
+                  {game.result.toUpperCase()} {game.pointsScored}-{game.pointsAllowed}
+                </span>
+                <span className="text-white/40">Hands {game.handsPlayed}</span>
+              </div>
+              <p className="mt-1 break-all text-white/40">{game.gameId}</p>
+              <p className="mt-1">
+                Calls {game.successfulCalls}-{game.failedCalls} | Tricks {game.tricksWon} | Loners {game.successfulLoners}/{game.loneAttempts}
+              </p>
+            </div>
+          )) : <p className="text-sm text-white/45">No completed games for this profile yet.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileMiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="uppercase tracking-[0.12em] text-white/40">{label}</p>
+      <p className="mt-1 font-semibold text-white">{value}</p>
+    </div>
   );
 }
 
@@ -689,6 +806,18 @@ function formatScoringResult(hand: HandReview): string {
 
 function formatRate(value: number): string {
   return `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
+}
+
+function recordLabel(record: TrendRecord): string {
+  return `${record.wins}-${record.losses} (${formatRate(record.winPercentage)})`;
+}
+
+function streakLabel(streak: ProfileTrendStats["currentStreak"]): string {
+  if (streak.result === "none") {
+    return "none";
+  }
+
+  return `${streak.result === "win" ? "W" : "L"}${streak.count}`;
 }
 
 function BiddingControls({
