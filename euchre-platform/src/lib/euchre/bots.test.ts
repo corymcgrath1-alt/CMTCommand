@@ -229,14 +229,14 @@ describe("deterministic bot farmer's hand handling", () => {
     });
   });
 
-  it("declines farmer's hand when the bot does not qualify", () => {
+  it("does not act on farmer's hand when the bot does not qualify", () => {
     const state = makeFarmersHandState({
       player: 1,
       farmersHandMode: "redeal",
       hand: [c("A", "clubs"), c("10", "clubs"), c("9", "hearts"), c("10", "spades"), c("9", "diamonds")]
     });
 
-    expect(chooseFarmersHandAction(state, 1)).toEqual({ type: "FARMERS_HAND_DECLINE", player: 1 });
+    expect(chooseFarmersHandAction(state, 1)).toBeNull();
   });
 });
 

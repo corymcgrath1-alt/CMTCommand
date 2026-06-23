@@ -145,13 +145,16 @@ function startHand(state: GameState, dealer: PlayerIndex, seed: number, handNumb
   const dealt = dealHands(seed);
   const sortedHands = sortHands(dealt.hands);
   const upcard = dealt.kitty[0];
+  const farmersHandPlayer = state.config.farmersHandMode === "off"
+    ? undefined
+    : nextQualifyingFarmersHandPlayer(sortedHands, nextPlayer(dealer), []);
 
   return {
     ...state,
-    phase: state.config.farmersHandMode === "off" ? "ordering" : "farmersHand",
+    phase: farmersHandPlayer === undefined ? "ordering" : "farmersHand",
     handNumber,
     dealer,
-    activePlayer: nextPlayer(dealer),
+    activePlayer: farmersHandPlayer ?? nextPlayer(dealer),
     hands: sortedHands,
     kitty: dealt.kitty,
     upcard,
@@ -172,12 +175,16 @@ function startHand(state: GameState, dealer: PlayerIndex, seed: number, handNumb
 function declineFarmersHand(state: GameState, player: PlayerIndex): GameState {
   assertActivePlayer(state, player);
   assertPhase(state, "farmersHand");
+  if (!isFarmersHandQualifier(state.hands[player])) {
+    throw new InvalidGameActionError("Player does not qualify for farmer's hand");
+  }
 
   const farmersHandDeclines = state.farmersHandDeclines.includes(player)
     ? state.farmersHandDeclines
     : [...state.farmersHandDeclines, player];
+  const nextQualifier = nextQualifyingFarmersHandPlayer(state.hands, nextPlayer(player), farmersHandDeclines);
 
-  if (farmersHandDeclines.length >= 4) {
+  if (nextQualifier === undefined) {
     return {
       ...state,
       phase: "ordering",
@@ -188,7 +195,7 @@ function declineFarmersHand(state: GameState, player: PlayerIndex): GameState {
 
   return {
     ...state,
-    activePlayer: nextPlayer(player),
+    activePlayer: nextQualifier,
     farmersHandDeclines
   };
 }
@@ -525,6 +532,24 @@ function initialDealerForConfig(config: GameConfig): PlayerIndex {
     default:
       return 0;
   }
+}
+
+function nextQualifyingFarmersHandPlayer(
+  hands: Record<PlayerIndex, Card[]>,
+  start: PlayerIndex,
+  skipped: PlayerIndex[]
+): PlayerIndex | undefined {
+  const skippedSeats = new Set(skipped);
+  let player = start;
+
+  for (let index = 0; index < 4; index += 1) {
+    if (!skippedSeats.has(player) && isFarmersHandQualifier(hands[player])) {
+      return player;
+    }
+    player = nextPlayer(player);
+  }
+
+  return undefined;
 }
 
 function cardKey(card: Card): string {

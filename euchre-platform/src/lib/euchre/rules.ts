@@ -158,7 +158,7 @@ export function legalActionsForPlayer(state: GameState, player: PlayerIndex): Le
 
   return {
     canClaimFarmersHand,
-    canDeclineFarmersHand: active && state.phase === "farmersHand",
+    canDeclineFarmersHand: canClaimFarmersHand,
     farmersHandReplaceableCards:
       canClaimFarmersHand && state.config.farmersHandMode === "replaceThree"
         ? farmersHandReplaceableCards(hand)
