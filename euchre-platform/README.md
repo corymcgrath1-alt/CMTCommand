@@ -9,11 +9,26 @@ Phase 1 foundation for a production-minded online/mobile Euchre platform.
 - Legal move validation
 - Move log and replay helpers
 - Local multiplayer UI
-- Bot placeholders only
+- Deterministic beginner/intermediate bot heuristics
 - Supabase/Postgres-ready model types
 - Vitest unit tests for rules logic
 
 Not included yet: tournaments, leagues, cosmetics, chat, clubs, spectator mode, ranked matchmaking, or AI coaching.
+
+## Bot Strategy v1
+
+West, North, and East now use deterministic beginner/intermediate Euchre heuristics
+instead of placeholder "first legal move" behavior. Bot decisions score trump strength
+with Euchre-aware features such as bowers, trump aces, trump count, off-suit aces, dealer
+context, next-suit logic, conservative lone-hand thresholds, pickup/discard value, and
+current trick control. Card play always starts from the engine's legal move list, including
+left-bower effective suit handling, then chooses deterministic leads, lowest winning cards,
+partner-safe low cards, or weakest discards.
+
+The strategy is intentionally below expert level. It does not run simulations, model
+opponents, vary difficulty, or provide coaching explanations yet. Future work can add
+difficulty levels, stronger search/simulation-based bots, and AI hand-review commentary
+without changing the replay-safe event log model.
 
 ## Run
 

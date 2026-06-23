@@ -1,11 +1,39 @@
-import { legalActionsForPlayer } from "./rules";
-import type { GameAction, GameState, PlayerIndex } from "./types";
+import {
+  cardId,
+  compareCardsForSort,
+  effectiveSuit,
+  isLeftBower,
+  isRightBower,
+  isTrump,
+  rankPower,
+  sameColorSuit
+} from "./cards";
+import { partnerOf, teamOf } from "./deck";
+import {
+  cardTrickPower,
+  getLedSuit,
+  legalActionsForPlayer
+} from "./rules";
+import type { Card, GameAction, GameState, PlayerIndex, Suit, Trick } from "./types";
 
 export interface BotProfile {
   id: string;
   name: string;
   seat: PlayerIndex;
   enabled: boolean;
+}
+
+export interface TrumpStrength {
+  suit: Suit;
+  score: number;
+  trumpCount: number;
+  highTrumpCount: number;
+  offSuitAces: number;
+  hasRight: boolean;
+  hasLeft: boolean;
+  hasTrumpAce: boolean;
+  voidCount: number;
+  singletonCount: number;
 }
 
 export function createDefaultBotProfiles(): BotProfile[] {
@@ -21,28 +49,387 @@ export function chooseBotAction(state: GameState, bot: BotProfile): GameAction |
     return null;
   }
 
-  const legal = legalActionsForPlayer(state, bot.seat);
-
-  if (state.phase === "ordering" && legal.canPass) {
-    return { type: "PASS", player: bot.seat };
+  if (state.phase === "ordering") {
+    return chooseRoundOneBid(state, bot.seat);
   }
 
   if (state.phase === "calling") {
-    const suit = legal.callableSuits[0];
-    if (suit) {
-      return { type: "CALL_TRUMP", player: bot.seat, suit };
-    }
+    return chooseRoundTwoCall(state, bot.seat);
   }
 
-  if (state.phase === "discarding" && legal.mustDiscard) {
-    const card = state.hands[bot.seat][0];
-    return card ? { type: "DISCARD", player: bot.seat, card } : null;
+  if (state.phase === "discarding") {
+    const legal = legalActionsForPlayer(state, bot.seat);
+    if (!legal.mustDiscard || bot.seat !== state.dealer || !state.trump) {
+      return null;
+    }
+
+    return {
+      type: "DISCARD",
+      player: bot.seat,
+      card: chooseDealerDiscard(state.hands[bot.seat], state.trump)
+    };
   }
 
   if (state.phase === "playing") {
-    const card = legal.playableCards[0];
+    const legal = legalActionsForPlayer(state, bot.seat);
+    const card = state.currentTrick?.plays.length
+      ? chooseFollowCard(state, bot.seat, legal.playableCards)
+      : chooseLeadCard(state, bot.seat, legal.playableCards);
+
     return card ? { type: "PLAY_CARD", player: bot.seat, card } : null;
   }
 
   return null;
+}
+
+export function evaluateTrumpStrength(hand: Card[], trump: Suit): TrumpStrength {
+  const trumpCards = hand.filter((card) => isTrump(card, trump));
+  const highTrumpCards = trumpCards.filter((card) => trumpCardPower(card, trump) >= trumpCardPower({ rank: "K", suit: trump }, trump));
+  const offSuitAces = hand.filter((card) => card.rank === "A" && !isTrump(card, trump)).length;
+  const suitCounts = new Map<Suit, number>();
+
+  for (const card of hand) {
+    const suit = effectiveSuit(card, trump);
+    suitCounts.set(suit, (suitCounts.get(suit) ?? 0) + 1);
+  }
+
+  const nonTrumpSuits = (["clubs", "diamonds", "hearts", "spades"] as Suit[]).filter((suit) => suit !== trump);
+  const voidCount = nonTrumpSuits.filter((suit) => !suitCounts.get(suit)).length;
+  const singletonCount = nonTrumpSuits.filter((suit) => suitCounts.get(suit) === 1).length;
+  const hasRight = hand.some((card) => isRightBower(card, trump));
+  const hasLeft = hand.some((card) => isLeftBower(card, trump));
+  const hasTrumpAce = hand.some((card) => card.rank === "A" && card.suit === trump);
+
+  let score = 0;
+  if (hasRight) {
+    score += 3.2;
+  }
+  if (hasLeft) {
+    score += 2.4;
+  }
+  if (hasTrumpAce) {
+    score += 1.8;
+  }
+
+  score += trumpCards.length * 0.9;
+  score += highTrumpCards.length * 0.7;
+  score += offSuitAces * 0.8;
+  score += voidCount * 0.25;
+  score += singletonCount * 0.15;
+
+  return {
+    suit: trump,
+    score,
+    trumpCount: trumpCards.length,
+    highTrumpCount: highTrumpCards.length,
+    offSuitAces,
+    hasRight,
+    hasLeft,
+    hasTrumpAce,
+    voidCount,
+    singletonCount
+  };
+}
+
+export function evaluateCallStrength({
+  hand,
+  trump,
+  player,
+  dealer,
+  upcard,
+  round,
+  turnedDownSuit
+}: {
+  hand: Card[];
+  trump: Suit;
+  player: PlayerIndex;
+  dealer: PlayerIndex;
+  upcard?: Card;
+  round: 1 | 2;
+  turnedDownSuit?: Suit;
+}): TrumpStrength {
+  const evaluatedHand = player === dealer && upcard && upcard.suit === trump
+    ? [...hand, upcard]
+    : hand;
+  const strength = evaluateTrumpStrength(evaluatedHand, trump);
+  let contextScore = strength.score;
+
+  if (player === dealer) {
+    contextScore += round === 1 ? 1.0 : 0.45;
+  }
+
+  if (partnerOf(player) === dealer) {
+    contextScore += round === 1 ? 1.2 : 0.35;
+  }
+
+  if (teamOf(player) !== teamOf(dealer)) {
+    contextScore -= round === 1 ? 0.8 : 0.2;
+  }
+
+  if (round === 2 && turnedDownSuit && trump === sameColorSuit(turnedDownSuit)) {
+    contextScore += 0.65;
+  }
+
+  if (round === 2 && turnedDownSuit && trump !== sameColorSuit(turnedDownSuit)) {
+    contextScore -= 0.35;
+  }
+
+  return {
+    ...strength,
+    score: contextScore
+  };
+}
+
+export function chooseRoundOneBid(state: GameState, player: PlayerIndex): GameAction | null {
+  const legal = legalActionsForPlayer(state, player);
+  if (!legal.canOrderUp || !state.upcard) {
+    return legal.canPass ? { type: "PASS", player } : null;
+  }
+
+  const trump = state.upcard.suit;
+  const strength = evaluateCallStrength({
+    hand: state.hands[player],
+    trump,
+    player,
+    dealer: state.dealer,
+    upcard: state.upcard,
+    round: 1
+  });
+  const threshold = roundOneThreshold(player, state.dealer);
+
+  if (strength.score >= threshold) {
+    return {
+      type: "ORDER_UP",
+      player,
+      alone: shouldGoAlone(state.hands[player], trump, state.upcard, player === state.dealer)
+    };
+  }
+
+  return legal.canPass ? { type: "PASS", player } : null;
+}
+
+export function chooseRoundTwoCall(state: GameState, player: PlayerIndex): GameAction | null {
+  const legal = legalActionsForPlayer(state, player);
+  if (!legal.callableSuits.length) {
+    return legal.canPass ? { type: "PASS", player } : null;
+  }
+
+  const ranked = legal.callableSuits
+    .map((suit) => evaluateCallStrength({
+      hand: state.hands[player],
+      trump: suit,
+      player,
+      dealer: state.dealer,
+      round: 2,
+      turnedDownSuit: state.turnedDownSuit
+    }))
+    .sort(compareStrengthForCall);
+  const best = ranked[0];
+  const forced = !legal.canPass;
+  const nextSuit = state.turnedDownSuit ? sameColorSuit(state.turnedDownSuit) : undefined;
+  const threshold = best.suit === nextSuit ? 5.15 : 5.85;
+
+  if (forced || best.score >= threshold) {
+    return {
+      type: "CALL_TRUMP",
+      player,
+      suit: best.suit,
+      alone: shouldGoAlone(state.hands[player], best.suit)
+    };
+  }
+
+  return { type: "PASS", player };
+}
+
+export function shouldGoAlone(hand: Card[], trump: Suit, upcard?: Card, includeUpcard = false): boolean {
+  const evaluatedHand = includeUpcard && upcard && upcard.suit === trump ? [...hand, upcard] : hand;
+  const strength = evaluateTrumpStrength(evaluatedHand, trump);
+  const hasAceOrKingTrump = evaluatedHand.some((card) => isTrump(card, trump) && (card.rank === "A" || card.rank === "K"));
+
+  if (strength.hasRight && strength.hasLeft && hasAceOrKingTrump) {
+    return true;
+  }
+
+  if (strength.trumpCount >= 3 && strength.highTrumpCount >= 2 && strength.offSuitAces >= 1 && strength.score >= 8.6) {
+    return true;
+  }
+
+  return strength.trumpCount >= 4 && strength.highTrumpCount >= 3 && strength.score >= 10.2;
+}
+
+export function chooseDealerDiscard(hand: Card[], trump: Suit): Card {
+  return [...hand].sort((a, b) => compareDiscardValue(a, b, trump))[0];
+}
+
+export function chooseWeakestDiscard(cards: Card[], trump: Suit): Card | null {
+  return [...cards].sort((a, b) => compareDiscardValue(a, b, trump))[0] ?? null;
+}
+
+export function chooseLeadCard(state: GameState, player: PlayerIndex, legalCards = legalActionsForPlayer(state, player).playableCards): Card | null {
+  if (!state.trump || !legalCards.length) {
+    return null;
+  }
+
+  const trump = state.trump;
+  const trumpCards = legalCards.filter((card) => isTrump(card, trump));
+  const strength = evaluateTrumpStrength(state.hands[player], trump);
+
+  if (strength.trumpCount >= 3 && strength.highTrumpCount >= 2 && trumpCards.length) {
+    return strongestCard(trumpCards, trump);
+  }
+
+  const offSuitAce = [...legalCards]
+    .filter((card) => card.rank === "A" && !isTrump(card, trump))
+    .sort((a, b) => compareCardValueForBot(b, a, trump))[0];
+
+  if (offSuitAce) {
+    return offSuitAce;
+  }
+
+  if (strength.hasRight && strength.hasLeft && trumpCards.length) {
+    return strongestCard(trumpCards, trump);
+  }
+
+  return chooseWeakestDiscard(legalCards, trump);
+}
+
+export function chooseFollowCard(state: GameState, player: PlayerIndex, legalCards = legalActionsForPlayer(state, player).playableCards): Card | null {
+  if (!state.trump || !state.currentTrick || !legalCards.length) {
+    return null;
+  }
+
+  const currentWinner = currentTrickWinner(state.currentTrick, state.trump);
+  if (currentWinner !== undefined && teamOf(currentWinner) === teamOf(player)) {
+    return chooseWeakestDiscard(legalCards, state.trump);
+  }
+
+  const winningCard = chooseLowestWinningCard(legalCards, state.currentTrick, state.trump);
+  if (winningCard) {
+    return winningCard;
+  }
+
+  return chooseWeakestDiscard(legalCards, state.trump);
+}
+
+export function chooseLowestWinningCard(cards: Card[], trick: Trick, trump: Suit): Card | null {
+  const ledSuit = getLedSuit(trick, trump);
+  const currentWinner = currentWinningPlay(trick, trump);
+
+  if (!ledSuit || !currentWinner) {
+    return null;
+  }
+
+  return cards
+    .filter((card) => cardTrickPower(card, trump, ledSuit) > cardTrickPower(currentWinner.card, trump, ledSuit))
+    .sort((a, b) => compareCardValueForBot(a, b, trump, ledSuit))[0] ?? null;
+}
+
+export function compareCardValueForBot(a: Card, b: Card, trump: Suit, ledSuit?: Suit): number {
+  const suit = ledSuit ?? effectiveSuit(a, trump);
+  const powerComparison = botCardPower(a, trump, suit) - botCardPower(b, trump, suit);
+  return powerComparison || compareCardsForSort(a, b) || cardId(a).localeCompare(cardId(b));
+}
+
+function roundOneThreshold(player: PlayerIndex, dealer: PlayerIndex): number {
+  if (player === dealer) {
+    return 5.4;
+  }
+
+  if (partnerOf(player) === dealer) {
+    return 5.15;
+  }
+
+  return 6.35;
+}
+
+function compareStrengthForCall(a: TrumpStrength, b: TrumpStrength): number {
+  return (
+    b.score - a.score ||
+    b.trumpCount - a.trumpCount ||
+    b.highTrumpCount - a.highTrumpCount ||
+    suitOrder(a.suit) - suitOrder(b.suit)
+  );
+}
+
+function strongestCard(cards: Card[], trump: Suit): Card {
+  return [...cards].sort((a, b) => compareCardValueForBot(b, a, trump))[0];
+}
+
+function compareDiscardValue(a: Card, b: Card, trump: Suit): number {
+  const comparison = discardValue(a, trump) - discardValue(b, trump);
+  return comparison || compareCardsForSort(a, b) || cardId(a).localeCompare(cardId(b));
+}
+
+function discardValue(card: Card, trump: Suit): number {
+  if (isRightBower(card, trump)) {
+    return 200;
+  }
+
+  if (isLeftBower(card, trump)) {
+    return 190;
+  }
+
+  if (isTrump(card, trump)) {
+    return 120 + rankPower(card.rank);
+  }
+
+  if (card.rank === "A") {
+    return 90;
+  }
+
+  return rankPower(card.rank);
+}
+
+function botCardPower(card: Card, trump: Suit, ledSuit: Suit): number {
+  if (isTrump(card, trump)) {
+    return trumpCardPower(card, trump);
+  }
+
+  if (effectiveSuit(card, trump) === ledSuit) {
+    return 40 + rankPower(card.rank);
+  }
+
+  if (card.rank === "A") {
+    return 30;
+  }
+
+  return rankPower(card.rank);
+}
+
+function trumpCardPower(card: Card, trump: Suit): number {
+  if (isRightBower(card, trump)) {
+    return 100;
+  }
+
+  if (isLeftBower(card, trump)) {
+    return 95;
+  }
+
+  return 70 + rankPower(card.rank);
+}
+
+function currentTrickWinner(trick: Trick, trump: Suit): PlayerIndex | undefined {
+  return currentWinningPlay(trick, trump)?.player;
+}
+
+function currentWinningPlay(trick: Trick, trump: Suit) {
+  const ledSuit = getLedSuit(trick, trump);
+  if (!ledSuit) {
+    return undefined;
+  }
+
+  return trick.plays.reduce((best, play) => {
+    const bestPower = cardTrickPower(best.card, trump, ledSuit);
+    const candidatePower = cardTrickPower(play.card, trump, ledSuit);
+    return candidatePower > bestPower ? play : best;
+  });
+}
+
+function suitOrder(suit: Suit): number {
+  return {
+    clubs: 0,
+    diamonds: 1,
+    hearts: 2,
+    spades: 3
+  }[suit];
 }
