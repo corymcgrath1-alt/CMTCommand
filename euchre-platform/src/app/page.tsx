@@ -520,6 +520,8 @@ export default function Home() {
           <section className="flex flex-col gap-4">
             <TableSurface
               state={state}
+              alone={alone}
+              setAlone={setAlone}
               act={act}
               disabled={isSaving}
               selectedReplacementIds={selectedReplacementIds}
@@ -528,13 +530,9 @@ export default function Home() {
             <TurnPromptPanel state={state} />
             <BiddingControls
               state={state}
-              alone={alone}
-              setAlone={setAlone}
               act={act}
               disabled={isSaving}
               onStartNewGame={confirmStartNewGame}
-              selectedReplacementIds={selectedReplacementIds}
-              setSelectedReplacementIds={setSelectedReplacementIds}
             />
             <GameSummary state={state} />
             {activeReviewSource ? (
@@ -1335,124 +1333,21 @@ function streakLabel(streak: ProfileTrendStats["currentStreak"]): string {
 
 function BiddingControls({
   state,
-  alone,
-  setAlone,
   act,
   disabled,
-  onStartNewGame,
-  selectedReplacementIds,
-  setSelectedReplacementIds
+  onStartNewGame
 }: {
   state: GameState;
-  alone: boolean;
-  setAlone: (value: boolean) => void;
   act: (action: GameAction) => void | Promise<void>;
   disabled: boolean;
   onStartNewGame: () => void;
-  selectedReplacementIds: string[];
-  setSelectedReplacementIds: Dispatch<SetStateAction<string[]>>;
 }) {
   if (state.phase === "idle") {
     return null;
   }
 
-  if (state.phase === "farmersHand") {
-    const legal = legalActionsForPlayer(state, state.activePlayer);
-    const explanation = buildLegalActionExplanation(state, 0);
-    const humanTurn = state.activePlayer === 0;
-    const eligibleIds = new Set(legal.farmersHandReplaceableCards.map(cardId));
-    const selectedCards = selectedFarmersHandReplacementCards(state.hands[state.activePlayer], selectedReplacementIds);
-    const selectedCount = selectedCards.length;
-
-    function toggleReplacementCard(card: Card) {
-      const id = cardId(card);
-      if (!eligibleIds.has(id)) {
-        return;
-      }
-
-      setSelectedReplacementIds((current) => toggleFarmersHandReplacementSelection({
-        selectedIds: current,
-        card,
-        eligibleCards: legal.farmersHandReplaceableCards
-      }));
-    }
-
-    return (
-      <section className="flex flex-col gap-3 rounded border border-white/10 bg-white/[0.04] p-4">
-        <div>
-          <p className="text-sm font-semibold text-white">{PLAYER_NAMES[state.activePlayer]} to check Farmer&apos;s Hand</p>
-          <p className="mt-1 text-sm text-white/55">
-            Qualifying hands contain only 9s and 10s. Declining moves bidding to the next player.
-          </p>
-          {humanTurn ? <p className="mt-1 text-xs text-white/45">{explanation.details.join(" ")}</p> : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="rounded border border-white/20 px-3 py-2 text-sm text-white"
-            disabled={disabled || !humanTurn || !legal.canDeclineFarmersHand}
-            onClick={() => act({ type: "FARMERS_HAND_DECLINE", player: state.activePlayer })}
-          >
-            Decline
-          </button>
-          {state.config.farmersHandMode === "redeal" ? (
-            <button
-              className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
-              disabled={disabled || !humanTurn || !legal.canClaimFarmersHand}
-              onClick={() => act({ type: "FARMERS_HAND_REDEAL", player: state.activePlayer, seed: Date.now() % 1_000_000 })}
-            >
-              Claim redeal
-            </button>
-          ) : null}
-          {state.config.farmersHandMode === "replaceThree" ? (
-            <button
-              className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
-              disabled={disabled || !humanTurn || !legal.canClaimFarmersHand || selectedCount === 0}
-              onClick={() => act({ type: "FARMERS_HAND_REPLACE", player: state.activePlayer, cards: selectedCards })}
-            >
-              Replace Selected
-            </button>
-          ) : null}
-          {!humanTurn ? <span className="text-sm text-white/50">Bot checking...</span> : null}
-        </div>
-        {state.config.farmersHandMode === "replaceThree" && humanTurn ? (
-          <div className="rounded border border-white/10 bg-[#071411]/40 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-white">Choose eligible low cards</p>
-              <span className="text-sm text-brass">{selectedCount}/3 selected</span>
-            </div>
-            <p className="mt-1 text-xs text-white/45">{replacementSelectionLabel(selectedCards)}</p>
-            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
-              {state.hands[state.activePlayer].map((card) => {
-                const id = cardId(card);
-                const eligible = eligibleIds.has(id);
-                const selected = selectedReplacementIds.includes(id);
-                const selectionBlocked = !selected && selectedCount >= 3;
-
-                return (
-                  <button
-                    key={id}
-                    className={`h-16 rounded border px-2 text-lg font-bold shadow-sm ${
-                      selected
-                        ? "border-brass bg-brass text-[#201602]"
-                        : eligible
-                          ? "border-white/30 bg-white text-[#071411]"
-                          : "border-white/10 bg-white/20 text-white/35"
-                    }`}
-                    disabled={disabled || !eligible || selectionBlocked}
-                    onClick={() => toggleReplacementCard(card)}
-                  >
-                    {cardLabel(card)}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-2 text-xs text-white/45">
-              Eligible cards are 9s and 10s only. Non-eligible cards and a fourth selection are disabled.
-            </p>
-          </div>
-        ) : null}
-      </section>
-    );
+  if (state.phase === "farmersHand" || state.phase === "ordering" || state.phase === "calling") {
+    return null;
   }
 
   if (state.phase === "handComplete") {
@@ -1499,74 +1394,21 @@ function BiddingControls({
     );
   }
 
-  if (state.phase !== "ordering" && state.phase !== "calling") {
-    return null;
-  }
-
-  const legal = legalActionsForPlayer(state, state.activePlayer);
-  const explanation = buildLegalActionExplanation(state, 0);
-  const humanTurn = state.activePlayer === 0;
-
-  return (
-    <section className="flex flex-col gap-3 rounded border border-white/10 bg-white/[0.04] p-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm font-semibold text-white">{PLAYER_NAMES[state.activePlayer]} to bid</span>
-        {humanTurn ? (
-          <label className="flex items-center gap-2 text-sm text-white/70">
-            <input type="checkbox" checked={alone} onChange={(event) => setAlone(event.target.checked)} />
-            Alone
-          </label>
-        ) : <span className="text-sm text-white/50">Bot thinking...</span>}
-      </div>
-      {humanTurn ? (
-        <div className="rounded border border-white/10 bg-[#071411]/40 px-3 py-2 text-sm text-white/60">
-          <p className="font-semibold text-white">{explanation.primary}</p>
-          <p className="mt-1">{explanation.details.join(" ")}</p>
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          className="rounded border border-white/20 px-3 py-2 text-sm text-white"
-          disabled={disabled || !humanTurn || !legal.canPass}
-          onClick={() => act({ type: "PASS", player: state.activePlayer })}
-        >
-          Pass
-        </button>
-        {state.phase === "ordering" ? (
-          <button
-            className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
-            disabled={disabled || !humanTurn || !legal.canOrderUp}
-            onClick={() => act({ type: "ORDER_UP", player: state.activePlayer, alone })}
-          >
-            Order up {state.upcard ? state.upcard.suit : ""}
-          </button>
-        ) : null}
-        {state.phase === "calling"
-          ? legal.callableSuits.map((suit) => (
-              <button
-                key={suit}
-                className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
-                disabled={disabled || !humanTurn}
-                onClick={() => act({ type: "CALL_TRUMP", player: state.activePlayer, suit, alone })}
-              >
-                Call {suit}
-              </button>
-            ))
-          : null}
-      </div>
-    </section>
-  );
+  return null;
 }
 
 function TableSurface({
   state,
+  alone,
+  setAlone,
   act,
   disabled,
   selectedReplacementIds,
   setSelectedReplacementIds
 }: {
   state: GameState;
+  alone: boolean;
+  setAlone: (value: boolean) => void;
   act: (action: GameAction) => void | Promise<void>;
   disabled: boolean;
   selectedReplacementIds: string[];
@@ -1609,22 +1451,25 @@ function TableSurface({
       <div className="euchre-table-rail rounded-[2rem] p-3 shadow-xl shadow-black/20">
         <div className="euchre-felt rounded-[1.55rem] p-4">
           <div className="grid gap-3">
-            <div className="mx-auto w-full max-w-md">
-              <SeatCard seat={seatByPosition.north} />
-            </div>
+            <NorthSeatScoreRow seat={seatByPosition.north} scores={status.scores} />
 
             <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_220px] lg:items-stretch">
               <SeatCard seat={seatByPosition.west} />
-              <CurrentTrickPanel trick={trick} scores={status.scores} />
+              <CurrentTrickPanel trick={trick} />
               <SeatCard seat={seatByPosition.east} />
             </div>
 
             <HumanSeatPanel
+              state={state}
               seat={seatByPosition.south}
               hand={humanHand}
+              alone={alone}
+              setAlone={setAlone}
+              act={act}
               disabled={disabled}
               onCard={onHumanCard}
               selectedReplacementIds={selectedReplacementIds}
+              setSelectedReplacementIds={setSelectedReplacementIds}
               farmersSelectionActive={farmersSelectionActive}
             />
           </div>
@@ -1676,28 +1521,38 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
   );
 }
 
-function BoardScoreKeeper({ scores }: { scores: [number, number] }) {
+function NorthSeatScoreRow({ seat, scores }: { seat: TableSeatView; scores: [number, number] }) {
   const teams = buildEuchreScoreCardViews(scores);
 
   return (
-    <section className="rounded-2xl border border-brass/25 bg-[#071411]/50 px-3 py-2 shadow-inner shadow-black/30">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brass">Score cards</p>
-        <p className="text-[11px] text-white/45">two 5s to 10</p>
+    <div className="grid items-center gap-3 lg:grid-cols-[minmax(8rem,1fr)_minmax(16rem,28rem)_minmax(8rem,1fr)]">
+      <TeamScoreStack team={teams[0]} align="right" />
+      <div className="mx-auto w-full max-w-md">
+        <SeatCard seat={seat} />
       </div>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        {teams.map((team) => (
-          <div key={team.team} className="rounded-xl border border-white/10 bg-[#0b211b]/70 px-3 py-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-white/70">{team.label}</p>
-                <p className="mt-1 text-lg font-black leading-none text-white">{Math.max(0, Math.min(team.score, 10))}</p>
-              </div>
-              <StackedScoreCards score={team.score} />
-            </div>
-          </div>
-        ))}
+      <TeamScoreStack team={teams[1]} align="left" />
+    </div>
+  );
+}
+
+function TeamScoreStack({
+  team,
+  align
+}: {
+  team: ReturnType<typeof buildEuchreScoreCardViews>[number];
+  align: "left" | "right";
+}) {
+  return (
+    <section className={`hidden rounded-2xl border border-brass/25 bg-[#071411]/50 px-3 py-2 shadow-inner shadow-black/30 sm:flex sm:items-center sm:gap-3 ${
+      align === "right" ? "sm:justify-end" : "sm:justify-start"
+    }`}>
+      {align === "left" ? <StackedScoreCards score={team.score} /> : null}
+      <div className={align === "right" ? "text-right" : "text-left"}>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brass">{team.label}</p>
+        <p className="mt-1 text-lg font-black leading-none text-white">{Math.max(0, Math.min(team.score, 10))}</p>
+        <p className="mt-1 text-[11px] text-white/45">score cards</p>
       </div>
+      {align === "right" ? <StackedScoreCards score={team.score} /> : null}
     </section>
   );
 }
@@ -1814,18 +1669,28 @@ function SeatCard({ seat }: { seat: TableSeatView }) {
 }
 
 function HumanSeatPanel({
+  state,
   seat,
   hand,
+  alone,
+  setAlone,
+  act,
   disabled,
   onCard,
   selectedReplacementIds,
+  setSelectedReplacementIds,
   farmersSelectionActive
 }: {
+  state: GameState;
   seat: TableSeatView;
   hand: ReturnType<typeof buildHumanHandView>;
+  alone: boolean;
+  setAlone: (value: boolean) => void;
+  act: (action: GameAction) => void | Promise<void>;
   disabled: boolean;
   onCard: (card: Card, legal: boolean) => void;
   selectedReplacementIds: string[];
+  setSelectedReplacementIds: Dispatch<SetStateAction<string[]>>;
   farmersSelectionActive: boolean;
 }) {
   return (
@@ -1853,6 +1718,16 @@ function HumanSeatPanel({
         </div>
       </div>
 
+      <HumanHandActionControls
+        state={state}
+        alone={alone}
+        setAlone={setAlone}
+        act={act}
+        disabled={disabled}
+        selectedReplacementIds={selectedReplacementIds}
+        setSelectedReplacementIds={setSelectedReplacementIds}
+      />
+
       <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:flex lg:flex-wrap lg:justify-center">
         {hand.cards.map((card) => {
           const selected = selectedReplacementIds.includes(card.id);
@@ -1878,13 +1753,178 @@ function HumanSeatPanel({
   );
 }
 
-function CurrentTrickPanel({
-  trick,
-  scores
+function HumanHandActionControls({
+  state,
+  alone,
+  setAlone,
+  act,
+  disabled,
+  selectedReplacementIds,
+  setSelectedReplacementIds
 }: {
-  trick: ReturnType<typeof buildCurrentTrickView>;
-  scores: [number, number];
+  state: GameState;
+  alone: boolean;
+  setAlone: (value: boolean) => void;
+  act: (action: GameAction) => void | Promise<void>;
+  disabled: boolean;
+  selectedReplacementIds: string[];
+  setSelectedReplacementIds: Dispatch<SetStateAction<string[]>>;
 }) {
+  if (state.phase !== "farmersHand" && state.phase !== "ordering" && state.phase !== "calling") {
+    return null;
+  }
+
+  const humanTurn = state.activePlayer === 0;
+  const legal = legalActionsForPlayer(state, state.activePlayer);
+  const explanation = buildLegalActionExplanation(state, 0);
+
+  if (state.phase === "farmersHand") {
+    const eligibleIds = new Set(legal.farmersHandReplaceableCards.map(cardId));
+    const selectedCards = selectedFarmersHandReplacementCards(state.hands[state.activePlayer], selectedReplacementIds);
+    const selectedCount = selectedCards.length;
+
+    function toggleReplacementCard(card: Card) {
+      const id = cardId(card);
+      if (!eligibleIds.has(id)) {
+        return;
+      }
+
+      setSelectedReplacementIds((current) => toggleFarmersHandReplacementSelection({
+        selectedIds: current,
+        card,
+        eligibleCards: legal.farmersHandReplaceableCards
+      }));
+    }
+
+    return (
+      <section className="mt-3 rounded-xl border border-brass/30 bg-[#071411]/55 px-3 py-3">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-white">{PLAYER_NAMES[state.activePlayer]} to check Farmer&apos;s Hand</p>
+            <p className="mt-1 text-xs text-white/50">
+              {humanTurn ? explanation.details.join(" ") : "Bot checking..."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="rounded border border-white/20 px-3 py-2 text-sm text-white"
+              disabled={disabled || !humanTurn || !legal.canDeclineFarmersHand}
+              onClick={() => act({ type: "FARMERS_HAND_DECLINE", player: state.activePlayer })}
+            >
+              Decline
+            </button>
+            {state.config.farmersHandMode === "redeal" ? (
+              <button
+                className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
+                disabled={disabled || !humanTurn || !legal.canClaimFarmersHand}
+                onClick={() => act({ type: "FARMERS_HAND_REDEAL", player: state.activePlayer, seed: Date.now() % 1_000_000 })}
+              >
+                Claim redeal
+              </button>
+            ) : null}
+            {state.config.farmersHandMode === "replaceThree" ? (
+              <button
+                className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
+                disabled={disabled || !humanTurn || !legal.canClaimFarmersHand || selectedCount === 0}
+                onClick={() => act({ type: "FARMERS_HAND_REPLACE", player: state.activePlayer, cards: selectedCards })}
+              >
+                Replace Selected
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {state.config.farmersHandMode === "replaceThree" && humanTurn ? (
+          <div className="mt-2 rounded border border-white/10 bg-[#071411]/35 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Eligible low cards</p>
+              <span className="text-sm font-semibold text-brass">{selectedCount}/3 selected</span>
+            </div>
+            <p className="mt-1 text-xs text-white/45">{replacementSelectionLabel(selectedCards)}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {state.hands[state.activePlayer].map((card) => {
+                const id = cardId(card);
+                const eligible = eligibleIds.has(id);
+                const selected = selectedReplacementIds.includes(id);
+                const selectionBlocked = !selected && selectedCount >= 3;
+
+                return (
+                  <button
+                    key={id}
+                    className={`rounded border px-3 py-2 text-sm font-bold shadow-sm ${
+                      selected
+                        ? "border-brass bg-brass text-[#201602]"
+                        : eligible
+                          ? "border-white/30 bg-white text-[#071411]"
+                          : "border-white/10 bg-white/10 text-white/30"
+                    }`}
+                    disabled={disabled || !eligible || selectionBlocked}
+                    onClick={() => toggleReplacementCard(card)}
+                  >
+                    {cardLabel(card)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-3 rounded-xl border border-brass/30 bg-[#071411]/55 px-3 py-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-white">{PLAYER_NAMES[state.activePlayer]} to bid</p>
+          <p className="mt-1 text-xs text-white/50">
+            {humanTurn ? explanation.primary : "Bot thinking..."}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {humanTurn ? (
+            <label className="flex items-center gap-2 rounded border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70">
+              <input type="checkbox" checked={alone} onChange={(event) => setAlone(event.target.checked)} />
+              Alone
+            </label>
+          ) : null}
+          <button
+            className="rounded border border-white/20 px-3 py-2 text-sm font-semibold text-white"
+            disabled={disabled || !humanTurn || !legal.canPass}
+            onClick={() => act({ type: "PASS", player: state.activePlayer })}
+          >
+            Pass
+          </button>
+          {state.phase === "ordering" ? (
+            <button
+              className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
+              disabled={disabled || !humanTurn || !legal.canOrderUp}
+              onClick={() => act({ type: "ORDER_UP", player: state.activePlayer, alone })}
+            >
+              Order up {state.upcard ? state.upcard.suit : ""}
+            </button>
+          ) : null}
+          {state.phase === "calling"
+            ? legal.callableSuits.map((suit) => (
+                <button
+                  key={suit}
+                  className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
+                  disabled={disabled || !humanTurn}
+                  onClick={() => act({ type: "CALL_TRUMP", player: state.activePlayer, suit, alone })}
+                >
+                  Call {suit}
+                </button>
+              ))
+            : null}
+        </div>
+      </div>
+      {humanTurn && explanation.details.length ? (
+        <p className="mt-2 text-xs text-white/45">{explanation.details.join(" ")}</p>
+      ) : null}
+    </section>
+  );
+}
+
+function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTrickView> }) {
   const playBySeat = new Map(trick.plays.map((play, index) => [play.seat, { play, index }]));
 
   return (
@@ -1899,10 +1939,6 @@ function CurrentTrickPanel({
           <span>Led suit: <strong className="text-brass">{trick.ledSuitLabel}</strong></span>
           <span>Trump: <strong className="text-brass">{trick.trumpLabel}</strong></span>
         </div>
-      </div>
-
-      <div className="mt-3">
-        <BoardScoreKeeper scores={scores} />
       </div>
 
       <div className="mt-3 grid min-h-56 grid-cols-[minmax(5rem,1fr)_minmax(7rem,1.1fr)_minmax(5rem,1fr)] grid-rows-[auto_auto_auto] items-center gap-3">
