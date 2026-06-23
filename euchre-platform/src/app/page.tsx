@@ -516,7 +516,7 @@ export default function Home() {
           {persistedGameId ? `Game ${persistedGameId}` : "No persisted game selected"} | {status}
         </section>
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="flex flex-col gap-4">
           <section className="flex flex-col gap-4">
             <TableSurface
               state={state}
@@ -546,7 +546,7 @@ export default function Home() {
             ) : null}
           </section>
 
-          <aside className="flex flex-col gap-4">
+          <aside className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_280px_320px]">
             <section className="rounded border border-white/10 bg-white/[0.04] p-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Bots</h2>
@@ -1610,11 +1610,11 @@ function TableSurface({
       <TableStatusBar status={status} />
 
       <div className="mt-4 grid gap-3">
-        <div className="mx-auto w-full max-w-sm">
+        <div className="mx-auto w-full max-w-md">
           <SeatCard seat={seatByPosition.north} />
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)_190px] lg:items-stretch">
+        <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_220px] lg:items-stretch">
           <SeatCard seat={seatByPosition.west} />
           <CurrentTrickPanel trick={trick} />
           <SeatCard seat={seatByPosition.east} />
@@ -1648,25 +1648,29 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
 
   return (
     <div className="rounded border border-white/10 bg-[#071411]/55 px-3 py-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="grid gap-3 xl:grid-cols-[minmax(20rem,0.95fr)_minmax(0,1.4fr)] xl:items-start">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brass">Table status</p>
-          <p className="mt-1 text-sm text-white/60">{status.targetLabel} | Makers: {status.makersLabel}</p>
-        </div>
-      </div>
-      <AuthenticScoreKeeper scores={status.scores} />
-      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {items.map(([label, value]) => (
-          <div
-            key={label}
-            className={`rounded border px-3 py-2 ${
-              label === "Dealer" ? "border-brass/50 bg-brass/15" : "border-white/10 bg-white/[0.035]"
-            }`}
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40">{label}</p>
-            <p className="mt-1 text-sm font-semibold text-white">{value}</p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brass">Table status</p>
+              <p className="mt-1 text-sm text-white/60">{status.targetLabel} | Makers: {status.makersLabel}</p>
+            </div>
           </div>
-        ))}
+          <AuthenticScoreKeeper scores={status.scores} />
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {items.map(([label, value]) => (
+            <div
+              key={label}
+              className={`rounded border px-3 py-2 ${
+                label === "Dealer" ? "border-brass/50 bg-brass/15" : "border-white/10 bg-white/[0.035]"
+              }`}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40">{label}</p>
+              <p className="mt-1 text-sm font-semibold text-white">{value}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1676,14 +1680,14 @@ function AuthenticScoreKeeper({ scores }: { scores: [number, number] }) {
   const teams = buildEuchreScoreCardViews(scores);
 
   return (
-    <section className="mt-3 rounded-xl border border-brass/25 bg-[#0b211b]/70 px-3 py-3">
+    <section className="mt-3 rounded-xl border border-brass/25 bg-[#0b211b]/70 px-3 py-2">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass">Score cards</p>
         <p className="text-xs text-white/45">Traditional Euchre scoring with two 5 cards per team</p>
       </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
         {teams.map((team) => (
-          <div key={team.team} className="rounded-lg border border-white/10 bg-[#071411]/55 px-3 py-3">
+          <div key={team.team} className="rounded-lg border border-white/10 bg-[#071411]/55 px-3 py-2">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-white">{team.label}</p>
@@ -2024,7 +2028,7 @@ function MoveHistory({ moves }: { moves: MoveEvent[] }) {
   return (
     <section className="rounded border border-white/10 bg-white/[0.04] p-4">
       <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Move log</h2>
-      <ol className="mt-3 max-h-[520px] space-y-2 overflow-auto text-sm">
+      <ol className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">
         {moves.length ? moves.map((move) => (
           <li key={move.id} className="rounded border border-white/10 px-3 py-2 text-white/70">
             <span className="text-white/40">#{move.sequence}</span> {describeMove(move)}
