@@ -1605,31 +1605,32 @@ function TableSurface({
   }
 
   return (
-    <section className="euchre-table-rail rounded-[2rem] p-3 shadow-xl shadow-black/20">
-      <div className="euchre-felt rounded-[1.55rem] p-4">
+    <section className="flex flex-col gap-3">
+      <div className="euchre-table-rail rounded-[2rem] p-3 shadow-xl shadow-black/20">
+        <div className="euchre-felt rounded-[1.55rem] p-4">
+          <div className="grid gap-3">
+            <div className="mx-auto w-full max-w-md">
+              <SeatCard seat={seatByPosition.north} />
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_220px] lg:items-stretch">
+              <SeatCard seat={seatByPosition.west} />
+              <CurrentTrickPanel trick={trick} scores={status.scores} />
+              <SeatCard seat={seatByPosition.east} />
+            </div>
+
+            <HumanSeatPanel
+              seat={seatByPosition.south}
+              hand={humanHand}
+              disabled={disabled}
+              onCard={onHumanCard}
+              selectedReplacementIds={selectedReplacementIds}
+              farmersSelectionActive={farmersSelectionActive}
+            />
+          </div>
+        </div>
+      </div>
       <TableStatusBar status={status} />
-
-      <div className="mt-4 grid gap-3">
-        <div className="mx-auto w-full max-w-md">
-          <SeatCard seat={seatByPosition.north} />
-        </div>
-
-        <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_220px] lg:items-stretch">
-          <SeatCard seat={seatByPosition.west} />
-          <CurrentTrickPanel trick={trick} />
-          <SeatCard seat={seatByPosition.east} />
-        </div>
-
-        <HumanSeatPanel
-          seat={seatByPosition.south}
-          hand={humanHand}
-          disabled={disabled}
-          onCard={onHumanCard}
-          selectedReplacementIds={selectedReplacementIds}
-          farmersSelectionActive={farmersSelectionActive}
-        />
-      </div>
-      </div>
     </section>
   );
 }
@@ -1648,7 +1649,7 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
 
   return (
     <div className="rounded border border-white/10 bg-[#071411]/55 px-3 py-3">
-      <div className="grid gap-3 xl:grid-cols-[minmax(20rem,0.95fr)_minmax(0,1.4fr)] xl:items-start">
+      <div className="grid gap-3 xl:grid-cols-[minmax(14rem,0.4fr)_minmax(0,1.6fr)] xl:items-start">
         <div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1656,7 +1657,6 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
               <p className="mt-1 text-sm text-white/60">{status.targetLabel} | Makers: {status.makersLabel}</p>
             </div>
           </div>
-          <AuthenticScoreKeeper scores={status.scores} />
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {items.map(([label, value]) => (
@@ -1676,28 +1676,24 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
   );
 }
 
-function AuthenticScoreKeeper({ scores }: { scores: [number, number] }) {
+function BoardScoreKeeper({ scores }: { scores: [number, number] }) {
   const teams = buildEuchreScoreCardViews(scores);
 
   return (
-    <section className="mt-3 rounded-xl border border-brass/25 bg-[#0b211b]/70 px-3 py-2">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass">Score cards</p>
-        <p className="text-xs text-white/45">Traditional Euchre scoring with two 5 cards per team</p>
+    <section className="rounded-2xl border border-brass/25 bg-[#071411]/50 px-3 py-2 shadow-inner shadow-black/30">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brass">Score cards</p>
+        <p className="text-[11px] text-white/45">two 5s to 10</p>
       </div>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
         {teams.map((team) => (
-          <div key={team.team} className="rounded-lg border border-white/10 bg-[#071411]/55 px-3 py-2">
+          <div key={team.team} className="rounded-xl border border-white/10 bg-[#0b211b]/70 px-3 py-2">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-white">{team.label}</p>
-                <p className="text-xs text-white/45">{team.score} point{team.score === 1 ? "" : "s"}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-white/70">{team.label}</p>
+                <p className="mt-1 text-lg font-black leading-none text-white">{Math.max(0, Math.min(team.score, 10))}</p>
               </div>
-              <div className="flex items-center gap-2">
-                {team.cards.map((card) => (
-                  <ScoreFiveCard key={card.cardNumber} visiblePips={card.pointsVisible} />
-                ))}
-              </div>
+              <StackedScoreCards score={team.score} />
             </div>
           </div>
         ))}
@@ -1706,7 +1702,53 @@ function AuthenticScoreKeeper({ scores }: { scores: [number, number] }) {
   );
 }
 
-function ScoreFiveCard({ visiblePips }: { visiblePips: number }) {
+function StackedScoreCards({ score }: { score: number }) {
+  const clampedScore = Math.max(0, Math.min(score, 10));
+  const bonusPips = clampedScore <= 5 ? clampedScore : clampedScore - 5;
+  const topPips = clampedScore >= 5 ? 5 : 0;
+  const topOffset = clampedScore === 10 ? "translate-x-3 translate-y-2" : scoreCardOffset(bonusPips);
+
+  return (
+    <div className="relative h-24 w-24">
+      <ScoreFiveCard
+        visiblePips={bonusPips}
+        className="absolute left-1 top-1 z-10 rotate-2"
+        muted={bonusPips === 0}
+      />
+      <ScoreFiveCard
+        visiblePips={topPips}
+        className={`absolute left-0 top-0 ${topOffset} z-20 -rotate-3`}
+        muted={topPips === 0}
+      />
+    </div>
+  );
+}
+
+function scoreCardOffset(visiblePips: number) {
+  if (visiblePips >= 5) {
+    return "";
+  }
+
+  const offsets = [
+    "",
+    "translate-y-5 translate-x-1",
+    "translate-y-5 translate-x-3",
+    "translate-y-4 translate-x-5",
+    "translate-y-3 translate-x-7"
+  ];
+
+  return offsets[Math.max(0, visiblePips)] ?? "";
+}
+
+function ScoreFiveCard({
+  visiblePips,
+  className = "",
+  muted = false
+}: {
+  visiblePips: number;
+  className?: string;
+  muted?: boolean;
+}) {
   const pipPositions = [
     "left-2 top-2",
     "right-2 top-2",
@@ -1716,14 +1758,14 @@ function ScoreFiveCard({ visiblePips }: { visiblePips: number }) {
   ];
 
   return (
-    <div className="playing-card relative w-14 border border-white/70 bg-[#fffaf0] p-1 text-[#111827] shadow-md shadow-black/25">
+    <div className={`playing-card relative w-16 border border-white/70 bg-[#fffaf0] p-1 text-[#111827] shadow-md shadow-black/25 transition-transform ${className}`}>
       <span className="absolute left-1 top-1 text-xs font-black leading-none">5</span>
       <span className="absolute right-1 bottom-1 rotate-180 text-xs font-black leading-none">5</span>
       {pipPositions.map((position, index) => (
         <span
           key={position}
           className={`absolute ${position} text-base leading-none ${
-            index < visiblePips ? "opacity-100" : "opacity-10"
+            index < visiblePips ? "opacity-100" : muted ? "opacity-0" : "opacity-10"
           }`}
         >
           ♠
@@ -1836,7 +1878,13 @@ function HumanSeatPanel({
   );
 }
 
-function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTrickView> }) {
+function CurrentTrickPanel({
+  trick,
+  scores
+}: {
+  trick: ReturnType<typeof buildCurrentTrickView>;
+  scores: [number, number];
+}) {
   const playBySeat = new Map(trick.plays.map((play, index) => [play.seat, { play, index }]));
 
   return (
@@ -1853,7 +1901,11 @@ function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTri
         </div>
       </div>
 
-      <div className="mt-4 grid min-h-64 grid-cols-[minmax(5rem,1fr)_minmax(7rem,1.1fr)_minmax(5rem,1fr)] grid-rows-[auto_auto_auto] items-center gap-3">
+      <div className="mt-3">
+        <BoardScoreKeeper scores={scores} />
+      </div>
+
+      <div className="mt-3 grid min-h-56 grid-cols-[minmax(5rem,1fr)_minmax(7rem,1.1fr)_minmax(5rem,1fr)] grid-rows-[auto_auto_auto] items-center gap-3">
         <div className="col-start-2 row-start-1">
           <TrickSeatCard seat={2} entry={playBySeat.get(2)} />
         </div>
