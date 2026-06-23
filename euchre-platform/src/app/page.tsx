@@ -20,6 +20,7 @@ import {
   buildHandResultExplanation,
   buildCurrentTrickView,
   buildEuchreScoreCardViews,
+  buildFiveCardScoreView,
   buildHumanHandView,
   buildLegalActionExplanation,
   buildTableSeatViews,
@@ -1585,88 +1586,71 @@ function TeamScoreStack({
   team: ReturnType<typeof buildEuchreScoreCardViews>[number];
   align: "left" | "right";
 }) {
+  const teamColor = team.team === 0 ? "red" : "black";
+  const label = team.team === 0 ? "You / Partner" : "Opponents";
+
   return (
-    <section className={`hidden rounded-2xl border border-brass/25 bg-[#071411]/50 px-3 py-2 shadow-inner shadow-black/30 sm:flex sm:items-center sm:gap-3 ${
+    <section
+      className={`hidden rounded-2xl border border-brass/25 bg-[#071411]/50 px-3 py-2 shadow-inner shadow-black/30 sm:flex sm:items-center sm:gap-3 ${
       align === "right" ? "sm:justify-end" : "sm:justify-start"
-    }`}>
-      {align === "left" ? <StackedScoreCards score={team.score} /> : null}
+    }`}
+      aria-label={`${teamColor === "red" ? "Red" : "Black"} team score ${Math.max(0, Math.min(team.score, 10))} of 10`}
+    >
+      {align === "left" ? <StackedScoreCards score={team.score} teamColor={teamColor} /> : null}
       <div className={align === "right" ? "text-right" : "text-left"}>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brass">{team.label}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brass">{label}</p>
         <p className="mt-1 text-lg font-black leading-none text-white">{Math.max(0, Math.min(team.score, 10))}</p>
-        <p className="mt-1 text-[11px] text-white/45">score cards</p>
+        <p className="mt-1 text-[11px] text-white/45">{teamColor} 5s</p>
       </div>
-      {align === "right" ? <StackedScoreCards score={team.score} /> : null}
+      {align === "right" ? <StackedScoreCards score={team.score} teamColor={teamColor} /> : null}
     </section>
   );
 }
 
-function StackedScoreCards({ score }: { score: number }) {
-  const clampedScore = Math.max(0, Math.min(score, 10));
-  const bonusPips = clampedScore <= 5 ? clampedScore : clampedScore - 5;
-  const topPips = clampedScore >= 5 ? 5 : 0;
-  const topOffset = clampedScore === 10 ? "translate-x-3 translate-y-2" : scoreCardOffset(bonusPips);
+function StackedScoreCards({ score, teamColor }: { score: number; teamColor: "red" | "black" }) {
+  const scoreView = buildFiveCardScoreView(score, teamColor);
 
   return (
-    <div className="relative h-24 w-24">
-      <ScoreFiveCard
-        visiblePips={bonusPips}
-        className="absolute left-1 top-1 z-10 rotate-2"
-        muted={bonusPips === 0}
-      />
-      <ScoreFiveCard
-        visiblePips={topPips}
-        className={`absolute left-0 top-0 ${topOffset} z-20 -rotate-3`}
-        muted={topPips === 0}
-      />
+    <div className="relative h-24 w-28" aria-hidden="true">
+      <MiniFiveCard card={scoreView.cards[0]} className="absolute left-0 top-1 z-20 -rotate-3" />
+      <MiniFiveCard card={scoreView.cards[1]} className="absolute left-10 top-0 z-10 rotate-3" />
     </div>
   );
 }
 
-function scoreCardOffset(visiblePips: number) {
-  if (visiblePips >= 5) {
-    return "";
-  }
-
-  const offsets = [
-    "",
-    "translate-y-5 translate-x-1",
-    "translate-y-5 translate-x-3",
-    "translate-y-4 translate-x-5",
-    "translate-y-3 translate-x-7"
-  ];
-
-  return offsets[Math.max(0, visiblePips)] ?? "";
-}
-
-function ScoreFiveCard({
-  visiblePips,
+function MiniFiveCard({
+  card,
   className = "",
-  muted = false
 }: {
-  visiblePips: number;
+  card: ReturnType<typeof buildFiveCardScoreView>["cards"][number];
   className?: string;
-  muted?: boolean;
 }) {
   const pipPositions = [
-    "left-2 top-2",
-    "right-2 top-2",
+    "left-3 top-6",
+    "right-3 top-6",
     "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
-    "left-2 bottom-2",
-    "right-2 bottom-2"
+    "left-3 bottom-6",
+    "right-3 bottom-6"
   ];
+  const suit = displaySuitSymbol(card.suit);
+  const colorClass = card.color === "red" ? "text-[#b42318]" : "text-[#111827]";
 
   return (
-    <div className={`playing-card relative w-16 border border-white/70 bg-[#fffaf0] p-1 text-[#111827] shadow-md shadow-black/25 transition-transform ${className}`}>
-      <span className="absolute left-1 top-1 text-xs font-black leading-none">5</span>
-      <span className="absolute right-1 bottom-1 rotate-180 text-xs font-black leading-none">5</span>
+    <div className={`playing-card relative w-16 border border-slate-300 bg-[#fffdf6] shadow-lg shadow-black/30 ${colorClass} ${className}`}>
+      <div className="absolute left-1 top-1 flex flex-col items-center text-xs font-black leading-none">
+        <span>5</span>
+        <span className="text-sm">{suit}</span>
+      </div>
+      <div className="absolute bottom-1 right-1 flex rotate-180 flex-col items-center text-xs font-black leading-none">
+        <span>5</span>
+        <span className="text-sm">{suit}</span>
+      </div>
       {pipPositions.map((position, index) => (
         <span
           key={position}
-          className={`absolute ${position} text-base leading-none ${
-            index < visiblePips ? "opacity-100" : muted ? "opacity-0" : "opacity-10"
-          }`}
+          className={`absolute ${position} text-lg leading-none ${index < card.visiblePips ? "opacity-100" : "opacity-0"}`}
         >
-          ♠
+          {suit}
         </span>
       ))}
     </div>

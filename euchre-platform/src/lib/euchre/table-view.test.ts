@@ -3,6 +3,7 @@ import { createInitialGameState, createMoveEvent } from "./engine";
 import {
   buildCurrentTrickView,
   buildEuchreScoreCardViews,
+  buildFiveCardScoreView,
   buildHumanHandView,
   buildTableSeatViews,
   buildTableStatusView
@@ -98,6 +99,46 @@ describe("euchre score card view models", () => {
       [5, 5],
       [5, 5]
     ]);
+  });
+});
+
+describe("five-card score view models", () => {
+  it.each([
+    [0, [0, 0]],
+    [1, [1, 0]],
+    [5, [5, 0]],
+    [6, [5, 1]],
+    [10, [5, 5]]
+  ] as const)("maps score %i onto two five cards", (score, visiblePips) => {
+    expect(buildFiveCardScoreView(score, "red").cards.map((card) => card.visiblePips)).toEqual(visiblePips);
+  });
+
+  it("keeps red score cards as hearts and diamonds", () => {
+    expect(buildFiveCardScoreView(7, "red")).toMatchObject({
+      teamColor: "red",
+      score: 7,
+      cards: [
+        { suit: "hearts", color: "red", visiblePips: 5, isBaseFive: true },
+        { suit: "diamonds", color: "red", visiblePips: 2, isBaseFive: false }
+      ]
+    });
+  });
+
+  it("keeps black score cards as spades and clubs", () => {
+    expect(buildFiveCardScoreView(4, "black")).toMatchObject({
+      teamColor: "black",
+      score: 4,
+      cards: [
+        { suit: "spades", color: "black", visiblePips: 4, isBaseFive: false },
+        { suit: "clubs", color: "black", visiblePips: 0, isBaseFive: false }
+      ]
+    });
+  });
+
+  it("clamps visible pips while preserving the source score", () => {
+    expect(buildFiveCardScoreView(-2, "black").cards.map((card) => card.visiblePips)).toEqual([0, 0]);
+    expect(buildFiveCardScoreView(12, "red").cards.map((card) => card.visiblePips)).toEqual([5, 5]);
+    expect(buildFiveCardScoreView(12, "red").score).toBe(12);
   });
 });
 

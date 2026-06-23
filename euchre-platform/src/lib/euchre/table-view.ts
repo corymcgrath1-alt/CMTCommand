@@ -64,6 +64,19 @@ export interface EuchreTeamScoreView {
   cards: [EuchreScoreCardView, EuchreScoreCardView];
 }
 
+export interface ScoreFiveCard {
+  suit: "hearts" | "diamonds" | "spades" | "clubs";
+  color: "red" | "black";
+  visiblePips: number;
+  isBaseFive: boolean;
+}
+
+export interface FiveCardScoreView {
+  teamColor: "red" | "black";
+  cards: [ScoreFiveCard, ScoreFiveCard];
+  score: number;
+}
+
 export interface HumanHandView {
   seat: PlayerIndex;
   cards: TableCardView[];
@@ -155,6 +168,34 @@ export function buildEuchreScoreCardViews(scores: [number, number]): [EuchreTeam
       ]
     };
   }) as [EuchreTeamScoreView, EuchreTeamScoreView];
+}
+
+export function buildFiveCardScoreView(score: number, teamColor: "red" | "black"): FiveCardScoreView {
+  const clampedScore = Math.max(0, Math.min(score, 10));
+  const firstCardVisible = Math.min(clampedScore, 5);
+  const secondCardVisible = Math.max(0, clampedScore - 5);
+  const suits: [ScoreFiveCard["suit"], ScoreFiveCard["suit"]] = teamColor === "red"
+    ? ["hearts", "diamonds"]
+    : ["spades", "clubs"];
+
+  return {
+    teamColor,
+    score,
+    cards: [
+      {
+        suit: suits[0],
+        color: teamColor,
+        visiblePips: firstCardVisible,
+        isBaseFive: firstCardVisible === 5
+      },
+      {
+        suit: suits[1],
+        color: teamColor,
+        visiblePips: secondCardVisible,
+        isBaseFive: false
+      }
+    ]
+  };
 }
 
 export function buildHumanHandView(state: GameState, seat: PlayerIndex = 0): HumanHandView {
