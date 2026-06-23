@@ -46,6 +46,13 @@ trump, caller, bidding rounds, pickup/discard, scoring result, score after hand,
 leaders, cards played in order, trick winners, led suit, trump usage, and each trick
 winner's relationship to the caller.
 
+Completed games also show a lightweight hand replay viewer in the review panel. The
+viewer lets a player select hands, step through tricks, and inspect leader, led suit,
+trump, winning card, winning seat, and every card played in order. Replay data is derived
+from the event history through the review payload, so future analysis features can build
+on the same deterministic reconstruction path instead of a separate UI-only replay model.
+
 Deferred intentionally: ranked/profile aggregates, opponent-adjusted stats, mistake
 detection, expected value, skill scoring, advanced bot or human decision quality, AI
-coaching, realtime cross-device review sharing, and tournament/league reporting.
+coaching, shareable hand links, spectator mode, realtime cross-device review sharing, and
+tournament/league reporting.

@@ -16,6 +16,20 @@ import {
 } from "@/lib/euchre";
 import type { LoadedGame } from "@/lib/persistence/event-store";
 import type { GameReviewSummary, HandReview, SeatReviewStats, TrickReview } from "@/lib/review/game-review";
+import {
+  createInitialReplaySelection,
+  formatReplayHandLabel,
+  formatReplayTrickLabel,
+  getSelectedReplay,
+  nextReplayHand,
+  nextReplayTrick,
+  previousReplayHand,
+  previousReplayTrick,
+  resetReplaySelection,
+  selectReplayHand,
+  selectReplayTrick,
+  type ReplaySelection
+} from "@/lib/review/replay-viewer";
 
 const STORAGE_KEY = "euchre-platform-active-game-id";
 const PLAYER_NAMES: Record<PlayerIndex, string> = {
@@ -307,6 +321,12 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 }
 
 function GameReviewPanel({ review }: { review: GameReviewSummary }) {
+  const [replaySelection, setReplaySelection] = useState<ReplaySelection>(() => createInitialReplaySelection(review));
+
+  useEffect(() => {
+    setReplaySelection(createInitialReplaySelection(review));
+  }, [review]);
+
   return (
     <section className="rounded border border-brass/35 bg-brass/10 p-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -348,12 +368,151 @@ function GameReviewPanel({ review }: { review: GameReviewSummary }) {
         </table>
       </div>
 
+      <HandReplayViewer review={review} selection={replaySelection} onSelectionChange={setReplaySelection} />
+
       <div className="mt-5 space-y-3">
         <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Hand by hand</h3>
         {review.hands.map((hand) => (
           <HandReviewCard key={hand.handNumber} hand={hand} />
         ))}
       </div>
+    </section>
+  );
+}
+
+function HandReplayViewer({
+  review,
+  selection,
+  onSelectionChange
+}: {
+  review: GameReviewSummary;
+  selection: ReplaySelection;
+  onSelectionChange: (selection: ReplaySelection) => void;
+}) {
+  const selected = getSelectedReplay(review, selection);
+  const hand = selected.hand;
+  const trick = selected.trick;
+  const winningPlay = selected.winningPlay;
+
+  return (
+    <section className="mt-5 rounded border border-white/10 bg-[#071411]/45 p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Hand replay</h3>
+          <p className="mt-1 text-base font-semibold text-white">
+            {formatReplayHandLabel(hand)} | {formatReplayTrickLabel(trick)}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="rounded border border-white/15 bg-[#071411] px-3 py-2 text-sm text-white"
+            value={selected.selection.handIndex}
+            onChange={(event) => onSelectionChange(selectReplayHand(review, Number(event.target.value)))}
+          >
+            {review.hands.map((reviewHand, index) => (
+              <option key={reviewHand.handNumber} value={index}>
+                Hand {reviewHand.handNumber}
+              </option>
+            ))}
+          </select>
+          <button className="rounded border border-white/20 px-3 py-2 text-sm text-white" onClick={() => onSelectionChange(previousReplayHand(review, selected.selection))}>
+            Previous hand
+          </button>
+          <button className="rounded border border-white/20 px-3 py-2 text-sm text-white" onClick={() => onSelectionChange(nextReplayHand(review, selected.selection))}>
+            Next hand
+          </button>
+          <button className="rounded bg-white px-3 py-2 text-sm font-semibold text-[#071411]" onClick={() => onSelectionChange(resetReplaySelection(review))}>
+            Reset
+          </button>
+        </div>
+      </div>
+
+      {hand ? (
+        <div className="mt-4 grid gap-3 text-sm text-white/70 sm:grid-cols-2 lg:grid-cols-4">
+          <ReviewDetail label="Dealer" value={PLAYER_NAMES[hand.dealer]} />
+          <ReviewDetail label="Upcard" value={hand.upcard ? cardLabel(hand.upcard) : "None"} />
+          <ReviewDetail label="Trump" value={hand.trumpSuit ?? "None"} />
+          <ReviewDetail label="Caller" value={hand.maker !== undefined ? PLAYER_NAMES[hand.maker] : "None"} />
+          <ReviewDetail label="Maker team" value={hand.makerTeam !== undefined ? `Team ${hand.makerTeam}` : "None"} />
+          <ReviewDetail label="Defending team" value={hand.defendingTeam !== undefined ? `Team ${hand.defendingTeam}` : "None"} />
+          <ReviewDetail label="Alone" value={hand.aloneDeclared ? "Yes" : "No"} />
+          <ReviewDetail label="Result" value={formatScoringResult(hand)} />
+          <ReviewDetail label="Points" value={`${hand.pointsAwarded[0]} - ${hand.pointsAwarded[1]}`} />
+          <ReviewDetail label="Score after" value={`${hand.teamScoreAfterHand[0]} - ${hand.teamScoreAfterHand[1]}`} />
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-white/60">No completed hands are available to replay.</p>
+      )}
+
+      {hand ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button className="rounded border border-white/20 px-3 py-2 text-sm text-white" onClick={() => onSelectionChange(previousReplayTrick(review, selected.selection))}>
+            Previous trick
+          </button>
+          {hand.tricks.map((handTrick, index) => (
+            <button
+              key={handTrick.trickNumber}
+              className={`rounded border px-3 py-2 text-sm ${
+                selected.selection.trickIndex === index
+                  ? "border-brass bg-brass text-[#201602]"
+                  : "border-white/20 text-white"
+              }`}
+              onClick={() => onSelectionChange(selectReplayTrick(review, selected.selection, index))}
+            >
+              Trick {handTrick.trickNumber}
+            </button>
+          ))}
+          <button className="rounded border border-white/20 px-3 py-2 text-sm text-white" onClick={() => onSelectionChange(nextReplayTrick(review, selected.selection))}>
+            Next trick
+          </button>
+        </div>
+      ) : null}
+
+      {trick ? (
+        <div className="mt-4 rounded border border-white/10 bg-[#071411]/50 p-3 text-sm">
+          <div className="grid gap-3 text-white/70 sm:grid-cols-2 lg:grid-cols-4">
+            <HighlightedReviewDetail label="Leader" value={PLAYER_NAMES[trick.leader]} />
+            <HighlightedReviewDetail label="Led suit" value={trick.ledSuit} />
+            <HighlightedReviewDetail label="Trump suit" value={trick.trumpSuit ?? "None"} />
+            <HighlightedReviewDetail label="Winning seat" value={PLAYER_NAMES[trick.winningSeat]} />
+            <HighlightedReviewDetail label="Winning card" value={winningPlay ? cardLabel(winningPlay.card) : "Unknown"} />
+            <ReviewDetail label="Winning team" value={`Team ${trick.winningTeam}`} />
+            <ReviewDetail label="Trump played" value={trick.trumpPlayed ? "Yes" : "No"} />
+            <ReviewDetail label="Winner used trump" value={trick.winnerUsedTrump ? "Yes" : "No"} />
+            <ReviewDetail label="Caller relation" value={trick.winnerRelationToCaller} />
+          </div>
+
+          <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {trick.cardsPlayed.map((play) => {
+              const isLeader = play.player === trick.leader;
+              const isWinner = play.player === trick.winningSeat && winningPlay && cardId(play.card) === cardId(winningPlay.card);
+
+              return (
+                <div
+                  key={`${play.sequenceNumber}-${play.order}`}
+                  className={`rounded border px-3 py-2 ${
+                    isWinner
+                      ? "border-brass bg-brass/15 text-white"
+                      : isLeader
+                        ? "border-white/30 bg-white/10 text-white"
+                        : "border-white/10 text-white/70"
+                  }`}
+                >
+                  <p className="text-xs uppercase tracking-[0.12em] text-white/45">Play {play.order}</p>
+                  <p className="mt-1 font-semibold">
+                    {PLAYER_NAMES[play.player]} {cardLabel(play.card)}
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
+                    {isLeader ? "Leader" : "Follower"} | {play.effectiveSuit}
+                    {play.playedTrump ? " | trump" : ""}
+                    {isWinner ? " | winning card" : ""}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -413,6 +572,15 @@ function ReviewDetail({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-xs uppercase tracking-[0.12em] text-white/40">{label}</p>
+      <p className="font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function HighlightedReviewDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-brass/35 bg-brass/10 px-3 py-2">
+      <p className="text-xs uppercase tracking-[0.12em] text-brass">{label}</p>
       <p className="font-semibold text-white">{value}</p>
     </div>
   );
