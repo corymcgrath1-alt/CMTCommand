@@ -1476,10 +1476,14 @@ function TableSurface({
           <div className="grid gap-3">
             <NorthSeatScoreRow seat={seatByPosition.north} scores={status.scores} />
 
-            <div className="grid gap-3 lg:grid-cols-[260px_minmax(34rem,1fr)_260px] xl:grid-cols-[300px_minmax(42rem,1fr)_300px] lg:items-stretch">
-              <SeatCard seat={seatByPosition.west} />
+            <div className="grid gap-3 lg:grid-cols-[minmax(16rem,28rem)_minmax(34rem,1fr)_minmax(16rem,28rem)] xl:grid-cols-[minmax(18rem,28rem)_minmax(42rem,1fr)_minmax(18rem,28rem)] lg:items-center">
+              <div className="w-full max-w-md lg:justify-self-end">
+                <SeatCard seat={seatByPosition.west} />
+              </div>
               <CurrentTrickPanel trick={trick} />
-              <SeatCard seat={seatByPosition.east} />
+              <div className="w-full max-w-md lg:justify-self-start">
+                <SeatCard seat={seatByPosition.east} />
+              </div>
             </div>
 
             <HumanSeatPanel
