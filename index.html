@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CMTCommand</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=ui-mode-v2">
 </head>
 <body>
   <div class="app-shell">
@@ -38,13 +38,27 @@
       <header class="topbar">
         <div>
           <p class="eyebrow" id="roleEyebrow">Executive view</p>
-          <h1 id="pageTitle">Command Center</h1>
+          <h1 id="pageTitle">Tomorrow Readiness</h1>
         </div>
         <div class="topbar-actions">
           <div class="search-wrap">
-            <span aria-hidden="true">/</span>
-            <input id="globalSearch" type="search" placeholder="Search projects, work orders, technicians...">
+            <span class="search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="M16.5 16.5 21 21"></path>
+              </svg>
+            </span>
+            <input id="globalSearch" type="search" placeholder="Search CMTCommand">
+            <kbd aria-label="Keyboard shortcut">/</kbd>
           </div>
+          <label class="ui-mode-switcher">
+            <span>Appearance</span>
+            <select id="uiModeSelect" aria-label="Appearance mode">
+              <option value="standard">Standard</option>
+              <option value="command">Command Center</option>
+            </select>
+          </label>
+          <button class="icon-button" id="themeToggle" type="button" title="Switch to dark mode" aria-pressed="false">Dark</button>
           <button class="icon-button" id="refreshButton" type="button" title="Refresh dashboard">Refresh</button>
         </div>
       </header>
@@ -54,6 +68,12 @@
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script src="demoShared.js?v=demo-shared-v1"></script>
+  <script src="operationalCompression.js?v=ops-compression-v1"></script>
+  <script src="operationalImpact.js?v=ops-impact-v1"></script>
+  <script src="demoWalkthrough.js?v=demo-walkthrough-v1"></script>
+  <script src="pilotReadinessPack.js?v=pilot-pack-v1"></script>
+  <script src="demoControlCenter.js?v=demo-control-v1"></script>
+  <script src="app.js?v=demo-walkthrough-v1"></script>
 </body>
 </html>
