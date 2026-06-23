@@ -101,6 +101,32 @@ Assisted-loner mode remains deferred. The app can persist and summarize
 `withPartnerAllowed` for future regional-rule support, but current gameplay and scoring
 continue to use standard lone-hand behavior.
 
+## Single-Player Game UX Polish v1
+
+Single-player gameplay now includes state-derived turn prompts, legal-action
+explanations, post-hand scoring text, safer game controls, and recent bot activity. These
+helpers are display-only: they read existing game state, move events, normalized config,
+and review data, and they do not change rules, scoring, persistence, bot strategy, replay
+reconstruction, or profile aggregation.
+
+The table explains the current phase, including Farmer's Hand checks, ordering up,
+round-two trump calls, dealer discard, trick play, hand completion, and game completion.
+Human turns include short action explanations such as dealer/upcard context during
+bidding, follow-suit or void-in-suit messaging during card play, and eligible-card counts
+during Farmer's Hand replacement.
+
+After a hand completes, the UI summarizes who made trump, the trump suit, maker and
+defender tricks, scoring reason, points awarded, and score after hand. Game-complete
+controls distinguish Review Game from Start New Game. Starting a new active table clears
+only the local active table selection; completed games and historical move events remain
+available through profile history and review.
+
+Recent bot activity is derived from the move log and shown compactly, for example passes,
+trump calls, discards, card plays, and Farmer's Hand actions.
+
+Deferred UX polish includes a full card-table layout, animations, sound/haptics, tutorial
+mode, card-by-card replay animation, an accessibility pass, and a mobile layout pass.
+
 ## Run
 
 ```powershell

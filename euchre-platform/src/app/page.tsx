@@ -17,6 +17,11 @@ import {
   formatDealerSelection,
   formatFarmersHandMode,
   formatLonerMode,
+  buildHandResultExplanation,
+  buildLegalActionExplanation,
+  buildTurnPrompt,
+  getAvailableGameControls,
+  getRecentBotActions,
   legalActionsForPlayer,
   parsePracticeSeed,
   replacementSelectionLabel,
@@ -286,6 +291,16 @@ export default function Home() {
     setStatus("Local state reset; persisted events were left immutable");
   }
 
+  function confirmStartNewGame() {
+    const message = state.phase === "gameComplete"
+      ? "Start a new active table? This clears only the current table view. Completed games and move history remain available in profiles and review."
+      : "Clear the active table view? Persisted events are not deleted.";
+
+    if (window.confirm(message)) {
+      resetGame();
+    }
+  }
+
   function updateBotDifficulty(nextDifficulty: BotDifficulty) {
     setBotDifficulty(nextDifficulty);
     if (state.phase === "idle") {
@@ -449,9 +464,9 @@ export default function Home() {
             <button
               className="rounded bg-brass px-4 py-2 text-sm font-semibold text-[#201602]"
               disabled={isSaving}
-              onClick={state.phase === "idle" ? startNewGame : resetGame}
+              onClick={state.phase === "idle" ? startNewGame : confirmStartNewGame}
             >
-              {state.phase === "idle" ? "Start hand" : "Reset"}
+              {state.phase === "idle" ? "Start hand" : "Start New Game"}
             </button>
           </div>
         </header>
@@ -477,7 +492,15 @@ export default function Home() {
                 onClearHistoricalReview={activeReviewSource.kind === "historical" ? clearHistoricalReview : undefined}
               />
             ) : null}
-            <BiddingControls state={state} alone={alone} setAlone={setAlone} act={act} disabled={isSaving} />
+            <TurnPromptPanel state={state} />
+            <BiddingControls
+              state={state}
+              alone={alone}
+              setAlone={setAlone}
+              act={act}
+              disabled={isSaving}
+              onStartNewGame={confirmStartNewGame}
+            />
             <div className="grid gap-3 md:grid-cols-2">
               {([0, 1, 2, 3] as PlayerIndex[]).map((player) => (
                 <PlayerPanel key={player} player={player} state={state} act={act} disabled={isSaving} />
@@ -511,6 +534,8 @@ export default function Home() {
               onSelectSeat={setSelectedProfileSeat}
               onOpenReview={openHistoricalReview}
             />
+
+            <RecentBotActivity moves={state.moveLog} />
 
             <MoveHistory moves={state.moveLog} />
           </aside>
@@ -656,6 +681,38 @@ function RuleSummaryPanel({ summary, tone = "dark" }: { summary: RuleSummary; to
   );
 }
 
+function TurnPromptPanel({ state }: { state: GameState }) {
+  const prompt = buildTurnPrompt(state, 0);
+  const explanation = buildLegalActionExplanation(state, 0);
+
+  if (state.phase === "idle") {
+    return null;
+  }
+
+  return (
+    <section className="rounded border border-brass/30 bg-brass/10 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass">Current turn</p>
+          <h2 className="mt-1 text-lg font-semibold text-white">{prompt.title}</h2>
+          <p className="mt-1 text-sm text-white/70">{prompt.body}</p>
+        </div>
+        <span className={`rounded border px-2 py-1 text-xs font-semibold ${
+          prompt.humanTurn ? "border-brass/40 text-brass" : "border-white/15 text-white/50"
+        }`}>
+          {prompt.humanTurn ? "Human turn" : "Bot / table state"}
+        </span>
+      </div>
+      {explanation.details.length ? (
+        <div className="mt-3 rounded border border-white/10 bg-[#071411]/35 px-3 py-2 text-sm text-white/60">
+          <p className="font-semibold text-white">{explanation.primary}</p>
+          <p className="mt-1">{explanation.details.join(" ")}</p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function asTargetScore(score: number): TargetScore {
   return TARGET_SCORES.includes(score as TargetScore) ? score as TargetScore : 10;
 }
@@ -684,7 +741,7 @@ function GameReviewPanel({
   }, [review]);
 
   return (
-    <section className="rounded border border-brass/35 bg-brass/10 p-4">
+    <section id="game-review-panel" className="rounded border border-brass/35 bg-brass/10 p-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-brass">Game review</h2>
@@ -958,6 +1015,23 @@ function ProfileMiniMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function RecentBotActivity({ moves }: { moves: MoveEvent[] }) {
+  const recent = getRecentBotActions(moves, 5);
+
+  return (
+    <section className="rounded border border-white/10 bg-white/[0.04] p-4">
+      <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Recent bot activity</h2>
+      <div className="mt-3 space-y-2 text-sm">
+        {recent.length ? recent.map((line, index) => (
+          <p key={`${line}-${index}`} className="rounded border border-white/10 px-3 py-2 text-white/70">
+            {line}
+          </p>
+        )) : <p className="text-white/45">Bot actions will appear here as the game advances.</p>}
+      </div>
+    </section>
+  );
+}
+
 function HandReplayViewer({
   review,
   selection,
@@ -1137,6 +1211,22 @@ function HandReviewCard({ hand }: { hand: HandReview }) {
           {hand.dealerDiscard ? ` and discarded ${cardLabel(hand.dealerDiscard.card)}` : ""}
         </p>
       ) : null}
+      <p className="mt-2 rounded border border-white/10 bg-white/[0.04] px-3 py-2 text-white/65">
+        {buildHandResultExplanation({
+          maker: hand.maker,
+          makerTeam: hand.makerTeam,
+          defendingTeam: hand.defendingTeam,
+          trumpSuit: hand.trumpSuit,
+          makerTricks: hand.makerTricks,
+          defenderTricks: hand.defenderTricks,
+          pointsAwarded: hand.pointsAwarded,
+          teamScoreAfterHand: hand.teamScoreAfterHand,
+          lone: hand.lone,
+          loneSucceeded: hand.loneSucceeded,
+          euchred: hand.euchred,
+          passed: hand.passed
+        })}
+      </p>
       <div className="mt-3 space-y-2">
         {hand.tricks.map((trick) => (
           <TrickReviewLine key={trick.trickNumber} trick={trick} />
@@ -1211,13 +1301,15 @@ function BiddingControls({
   alone,
   setAlone,
   act,
-  disabled
+  disabled,
+  onStartNewGame
 }: {
   state: GameState;
   alone: boolean;
   setAlone: (value: boolean) => void;
   act: (action: GameAction) => void | Promise<void>;
   disabled: boolean;
+  onStartNewGame: () => void;
 }) {
   const [selectedReplacementIds, setSelectedReplacementIds] = useState<string[]>([]);
 
@@ -1231,6 +1323,7 @@ function BiddingControls({
 
   if (state.phase === "farmersHand") {
     const legal = legalActionsForPlayer(state, state.activePlayer);
+    const explanation = buildLegalActionExplanation(state, 0);
     const humanTurn = state.activePlayer === 0;
     const eligibleIds = new Set(legal.farmersHandReplaceableCards.map(cardId));
     const selectedCards = selectedFarmersHandReplacementCards(state.hands[state.activePlayer], selectedReplacementIds);
@@ -1256,6 +1349,7 @@ function BiddingControls({
           <p className="mt-1 text-sm text-white/55">
             Qualifying hands contain only 9s and 10s. Declining moves bidding to the next player.
           </p>
+          {humanTurn ? <p className="mt-1 text-xs text-white/45">{explanation.details.join(" ")}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1327,23 +1421,44 @@ function BiddingControls({
   }
 
   if (state.phase === "handComplete") {
+    const controls = getAvailableGameControls(state);
     return (
       <section className="rounded border border-white/10 bg-white/[0.04] p-4">
+        <p className="text-sm text-white/70">{buildHandResultExplanation(state)}</p>
+        {controls.warning ? <p className="mt-2 text-xs text-white/45">{controls.warning}</p> : null}
         <button
-          className="rounded bg-white px-4 py-2 text-sm font-semibold text-[#071411]"
-          disabled={disabled}
+          className="mt-3 rounded bg-white px-4 py-2 text-sm font-semibold text-[#071411]"
+          disabled={disabled || !controls.canStartNextHand}
           onClick={() => act({ type: "NEXT_HAND", seed: Date.now() % 1_000_000 })}
         >
-          Deal next hand
+          Start Next Hand
         </button>
       </section>
     );
   }
 
   if (state.phase === "gameComplete") {
+    const controls = getAvailableGameControls(state);
     return (
-      <section className="rounded border border-brass/40 bg-brass/10 p-4 text-brass">
-        Game complete. Reset to start a new local game.
+      <section className="rounded border border-brass/40 bg-brass/10 p-4">
+        <p className="font-semibold text-brass">Game complete.</p>
+        <p className="mt-1 text-sm text-white/70">{controls.warning}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            className="rounded border border-brass/40 px-4 py-2 text-sm font-semibold text-brass"
+            disabled={disabled || !controls.canReviewGame}
+            onClick={() => document.getElementById("game-review-panel")?.scrollIntoView({ behavior: "smooth" })}
+          >
+            Review Game
+          </button>
+          <button
+            className="rounded bg-white px-4 py-2 text-sm font-semibold text-[#071411]"
+            disabled={disabled || !controls.canStartNewGame}
+            onClick={onStartNewGame}
+          >
+            Start New Game
+          </button>
+        </div>
       </section>
     );
   }
@@ -1353,6 +1468,7 @@ function BiddingControls({
   }
 
   const legal = legalActionsForPlayer(state, state.activePlayer);
+  const explanation = buildLegalActionExplanation(state, 0);
   const humanTurn = state.activePlayer === 0;
 
   return (
@@ -1366,6 +1482,12 @@ function BiddingControls({
           </label>
         ) : <span className="text-sm text-white/50">Bot thinking...</span>}
       </div>
+      {humanTurn ? (
+        <div className="rounded border border-white/10 bg-[#071411]/40 px-3 py-2 text-sm text-white/60">
+          <p className="font-semibold text-white">{explanation.primary}</p>
+          <p className="mt-1">{explanation.details.join(" ")}</p>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <button
@@ -1416,6 +1538,7 @@ function PlayerPanel({
   const playable = new Set(legal.playableCards.map(cardId));
   const isActive = state.activePlayer === player;
   const humanSeat = player === 0;
+  const cardExplanation = humanSeat && isActive ? buildLegalActionExplanation(state, player) : null;
 
   function onCard(card: Card) {
     if (legal.mustDiscard) {
@@ -1455,6 +1578,12 @@ function PlayerPanel({
           );
         })}
       </div>
+      {cardExplanation && (state.phase === "playing" || state.phase === "discarding") ? (
+        <div className="mt-3 rounded border border-white/10 bg-[#071411]/35 px-3 py-2 text-xs text-white/55">
+          <p className="font-semibold text-white">{cardExplanation.primary}</p>
+          {cardExplanation.details.length ? <p className="mt-1">{cardExplanation.details.join(" ")}</p> : null}
+        </div>
+      ) : null}
     </section>
   );
 }
