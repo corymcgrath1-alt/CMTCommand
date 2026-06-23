@@ -53,6 +53,27 @@ describe("API route validation", () => {
     expect(body.issues).toHaveLength(2);
   });
 
+  it("persists selected bot difficulty when creating a game", async () => {
+    const store = await createStore();
+    resetEventStoreForTests(store);
+
+    const response = await createGame(jsonRequest({
+      config: {
+        stickDealer: true,
+        targetScore: 10,
+        botDifficulty: "strong"
+      }
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.game.config).toMatchObject({
+      stickDealer: true,
+      targetScore: 10,
+      botDifficulty: "strong"
+    });
+  });
+
   it("keeps duplicate move sequences at 409", async () => {
     const store = await createStore();
     resetEventStoreForTests(store);

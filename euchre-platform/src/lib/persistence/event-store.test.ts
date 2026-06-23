@@ -115,6 +115,31 @@ describe("append-only local event store", () => {
     expect(loaded.state.phase).toBe("ordering");
   });
 
+  it("defaults missing bot difficulty to standard for older game configs", async () => {
+    const store = await createStore();
+    const game = await store.createGame({ config: { stickDealer: false, targetScore: 10 } });
+    await store.appendMove({ gameId: game.id, expectedSequence: 0, action: { type: "START_HAND", seed: 123 } });
+
+    const loaded = await store.loadGame(game.id);
+
+    expect(loaded.game.config.botDifficulty).toBe("standard");
+    expect(loaded.state.config.botDifficulty).toBe("standard");
+  });
+
+  it("persists selected bot difficulty and reconstructs replay with it", async () => {
+    const store = await createStore();
+    const game = await store.createGame({ config: { stickDealer: true, targetScore: 10, botDifficulty: "strong" } });
+    await store.appendMove({ gameId: game.id, expectedSequence: 0, action: { type: "START_HAND", seed: 456 } });
+
+    const loaded = await store.loadGame(game.id);
+    const reconstructed = reconstructGameState(loaded.events, loaded.game.config, loaded.game.id);
+
+    expect(loaded.game.config.botDifficulty).toBe("strong");
+    expect(loaded.state.config.botDifficulty).toBe("strong");
+    expect(reconstructed.config.botDifficulty).toBe("strong");
+    expect(reconstructed).toEqual(loaded.state);
+  });
+
   it("uses local fallback when Supabase env vars are missing", async () => {
     const originalUrl = process.env.SUPABASE_URL;
     const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

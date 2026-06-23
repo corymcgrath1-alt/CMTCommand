@@ -21,7 +21,8 @@ import type {
 
 const DEFAULT_CONFIG: GameConfig = {
   stickDealer: false,
-  targetScore: 10
+  targetScore: 10,
+  botDifficulty: "standard"
 };
 
 export class InvalidGameActionError extends Error {
@@ -34,7 +35,7 @@ export class InvalidGameActionError extends Error {
 export function createInitialGameState(config: Partial<GameConfig> = {}): GameState {
   return {
     id: cryptoSafeId(),
-    config: { ...DEFAULT_CONFIG, ...config },
+    config: normalizeGameConfig(config),
     phase: "idle",
     handNumber: 0,
     dealer: 0,
@@ -52,6 +53,14 @@ export function createInitialGameState(config: Partial<GameConfig> = {}): GameSt
     completedTricks: [],
     tricksWon: [0, 0],
     moveLog: []
+  };
+}
+
+export function normalizeGameConfig(config: Partial<GameConfig> = {}): GameConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    ...config,
+    botDifficulty: config.botDifficulty ?? DEFAULT_CONFIG.botDifficulty
   };
 }
 

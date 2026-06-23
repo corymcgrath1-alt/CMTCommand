@@ -44,7 +44,7 @@ export interface PersistedMoveEventRecord {
 }
 
 export interface CreateGameInput {
-  config: GameConfig;
+  config: Partial<GameConfig>;
   metadata?: JsonValue;
 }
 

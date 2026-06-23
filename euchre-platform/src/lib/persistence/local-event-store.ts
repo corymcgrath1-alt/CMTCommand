@@ -1,6 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { reduceGameAction, type GameState, type PlayerIndex } from "@/lib/euchre";
+import { normalizeGameConfig, reduceGameAction, type GameState, type PlayerIndex } from "@/lib/euchre";
 import {
   DuplicateSequenceError,
   GameNotFoundError,
@@ -33,11 +33,12 @@ export class LocalEventStore implements EventStore {
   async createGame(input: CreateGameInput): Promise<PersistedGameRecord> {
     const data = await this.readData();
     const now = new Date().toISOString();
+    const config = normalizeGameConfig(input.config);
     const game: PersistedGameRecord = {
       id: randomId("game"),
       status: "active",
-      config: input.config,
-      targetScore: input.config.targetScore,
+      config,
+      targetScore: config.targetScore,
       teamZeroScore: 0,
       teamOneScore: 0,
       metadata: input.metadata ?? {},
@@ -134,7 +135,12 @@ export class LocalEventStore implements EventStore {
   private async readData(): Promise<LocalEventStoreData> {
     try {
       const raw = await readFile(this.filePath, "utf-8");
-      return JSON.parse(raw) as LocalEventStoreData;
+      const parsed = JSON.parse(raw) as LocalEventStoreData;
+      return {
+        games: (parsed.games ?? []).map(normalizePersistedGame),
+        hands: parsed.hands ?? [],
+        events: parsed.events ?? []
+      };
     } catch {
       return { ...DEFAULT_DATA, games: [], hands: [], events: [] };
     }
@@ -144,6 +150,15 @@ export class LocalEventStore implements EventStore {
     await mkdir(path.dirname(this.filePath), { recursive: true });
     await writeFile(this.filePath, JSON.stringify(data, null, 2), "utf-8");
   }
+}
+
+function normalizePersistedGame(game: PersistedGameRecord): PersistedGameRecord {
+  const config = normalizeGameConfig(game.config);
+  return {
+    ...game,
+    config,
+    targetScore: game.targetScore ?? config.targetScore
+  };
 }
 
 function getOrCreateHand(

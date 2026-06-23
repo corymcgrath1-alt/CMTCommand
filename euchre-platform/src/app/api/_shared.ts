@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { InvalidGameActionError } from "@/lib/euchre";
+import { BOT_DIFFICULTIES, InvalidGameActionError } from "@/lib/euchre";
 import { GameReviewUnavailableError } from "@/lib/review/game-review";
 import {
   DuplicateSequenceError,
@@ -15,7 +15,8 @@ const cardSchema = z.object({
 
 export const gameConfigSchema = z.object({
   stickDealer: z.boolean(),
-  targetScore: z.number().int().positive()
+  targetScore: z.number().int().positive(),
+  botDifficulty: z.enum(BOT_DIFFICULTIES).default("standard")
 });
 
 export const gameActionSchema = z.discriminatedUnion("type", [

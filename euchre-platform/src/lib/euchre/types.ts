@@ -5,6 +5,8 @@ export type Suit = (typeof SUITS)[number];
 export type Rank = (typeof RANKS)[number];
 export type PlayerIndex = 0 | 1 | 2 | 3;
 export type TeamIndex = 0 | 1;
+export const BOT_DIFFICULTIES = ["easy", "standard", "strong"] as const;
+export type BotDifficulty = (typeof BOT_DIFFICULTIES)[number];
 export type Phase =
   | "idle"
   | "ordering"
@@ -22,6 +24,7 @@ export interface Card {
 export interface GameConfig {
   stickDealer: boolean;
   targetScore: number;
+  botDifficulty: BotDifficulty;
 }
 
 export interface Play {

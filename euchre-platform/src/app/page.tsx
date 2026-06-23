@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   cardId,
   cardLabel,
+  BOT_DIFFICULTIES,
   chooseBotAction,
   createDefaultBotProfiles,
   createInitialGameState,
   legalActionsForPlayer,
+  type BotDifficulty,
   type Card,
   type GameAction,
   type GameState,
@@ -50,7 +52,8 @@ const PLAYER_NAMES: Record<PlayerIndex, string> = {
 
 export default function Home() {
   const [stickDealer, setStickDealer] = useState(false);
-  const [state, setState] = useState<GameState>(() => createInitialGameState({ stickDealer }));
+  const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>("standard");
+  const [state, setState] = useState<GameState>(() => createInitialGameState({ stickDealer, botDifficulty }));
   const [alone, setAlone] = useState(false);
   const [persistedGameId, setPersistedGameId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -106,6 +109,7 @@ export default function Home() {
       const loaded = await fetchJson<LoadedGame>(`/api/games/${gameId}`);
       setPersistedGameId(loaded.game.id);
       setStickDealer(loaded.game.config.stickDealer);
+      setBotDifficulty(loaded.game.config.botDifficulty ?? "standard");
       setState(loaded.state);
       setReview(null);
       setStatus(`Restored ${loaded.events.length} persisted event${loaded.events.length === 1 ? "" : "s"}`);
@@ -207,7 +211,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          config: { stickDealer, targetScore: 10 },
+          config: { stickDealer, targetScore: 10, botDifficulty },
           metadata: { source: "local-phase-1-ui" }
         })
       });
@@ -235,7 +239,7 @@ export default function Home() {
   }
 
   function resetGame() {
-    const next = createInitialGameState({ stickDealer, targetScore: 10 });
+    const next = createInitialGameState({ stickDealer, targetScore: 10, botDifficulty });
     setState(next);
     setPersistedGameId(null);
     lastBotActionKey.current = null;
@@ -243,6 +247,13 @@ export default function Home() {
     setAlone(false);
     window.localStorage.removeItem(STORAGE_KEY);
     setStatus("Local state reset; persisted events were left immutable");
+  }
+
+  function updateBotDifficulty(nextDifficulty: BotDifficulty) {
+    setBotDifficulty(nextDifficulty);
+    if (state.phase === "idle") {
+      setState(createInitialGameState({ stickDealer, targetScore: 10, botDifficulty: nextDifficulty }));
+    }
   }
 
   async function openHistoricalReview(gameId: string) {
@@ -275,10 +286,25 @@ export default function Home() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">Phase 1 foundation</p>
             <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Euchre Platform</h1>
-            <p className="mt-1 text-sm text-white/55">You are South. West, North, and East are placeholder bots.</p>
+            <p className="mt-1 text-sm text-white/55">You are South. West, North, and East are deterministic bots.</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+              Bot difficulty
+              <select
+                className="rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
+                value={botDifficulty}
+                disabled={state.phase !== "idle"}
+                onChange={(event) => updateBotDifficulty(event.target.value as BotDifficulty)}
+              >
+                {BOT_DIFFICULTIES.map((difficulty) => (
+                  <option key={difficulty} value={difficulty}>
+                    {formatDifficulty(difficulty)}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
               <input
                 type="checkbox"
@@ -324,7 +350,10 @@ export default function Home() {
 
           <aside className="flex flex-col gap-4">
             <section className="rounded border border-white/10 bg-white/[0.04] p-4">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Bot placeholders</h2>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Bots</h2>
+                <span className="text-xs font-semibold text-brass">{formatDifficulty(state.config.botDifficulty)}</span>
+              </div>
               <div className="mt-3 space-y-2">
                 {bots.map((bot) => (
                   <div key={bot.id} className="flex items-center justify-between rounded border border-white/10 px-3 py-2 text-sm">
@@ -362,6 +391,7 @@ function GameSummary({ state }: { state: GameState }) {
       <SummaryItem label="Score" value={`Team 0 ${state.scores[0]} - ${state.scores[1]} Team 1`} />
       <SummaryItem label="Phase" value={state.phase} />
       <SummaryItem label="Dealer" value={PLAYER_NAMES[state.dealer]} />
+      <SummaryItem label="Bot difficulty" value={formatDifficulty(state.config.botDifficulty)} />
       <SummaryItem label="Active" value={PLAYER_NAMES[state.activePlayer]} />
       <SummaryItem label="Upcard" value={state.upcard ? cardLabel(state.upcard) : "None"} />
       <SummaryItem label="Trump" value={state.trump ?? "Not set"} />
@@ -399,6 +429,10 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-base font-semibold text-white">{value}</p>
     </div>
   );
+}
+
+function formatDifficulty(difficulty: BotDifficulty = "standard"): string {
+  return difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
 }
 
 function GameReviewPanel({

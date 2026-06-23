@@ -55,6 +55,19 @@ describe("deterministic bot bidding", () => {
     expect(chooseRoundOneBid(opponentDealer, 1)).toEqual({ type: "PASS", player: 1 });
   });
 
+  it("easy passes a marginal hand that standard and strong call", () => {
+    const state = makeOrderingState({
+      player: 1,
+      dealer: 3,
+      upcard: c("9", "hearts"),
+      hand: [c("A", "hearts"), c("K", "hearts"), c("9", "clubs"), c("10", "spades"), c("Q", "diamonds")]
+    });
+
+    expect(chooseRoundOneBid(state, 1, "easy")).toEqual({ type: "PASS", player: 1 });
+    expect(chooseRoundOneBid(state, 1, "standard")).toEqual({ type: "ORDER_UP", player: 1, alone: false });
+    expect(chooseRoundOneBid(state, 1, "strong")).toEqual({ type: "ORDER_UP", player: 1, alone: false });
+  });
+
   it("calls next in round 2 with reasonable next-suit strength", () => {
     const state = makeCallingState({
       player: 1,
@@ -81,6 +94,24 @@ describe("deterministic bot bidding", () => {
     expect(action?.type === "CALL_TRUMP" ? action.suit : "clubs").not.toBe("clubs");
   });
 
+  it("strong calls strong hands and avoids weak calls", () => {
+    const strongState = makeCallingState({
+      player: 1,
+      dealer: 0,
+      turnedDownSuit: "clubs",
+      hand: [c("J", "spades"), c("A", "spades"), c("K", "spades"), c("9", "hearts"), c("A", "diamonds")]
+    });
+    const weakState = makeCallingState({
+      player: 1,
+      dealer: 0,
+      turnedDownSuit: "clubs",
+      hand: [c("9", "hearts"), c("10", "diamonds"), c("Q", "clubs"), c("K", "hearts"), c("A", "diamonds")]
+    });
+
+    expect(chooseRoundTwoCall(strongState, 1, "strong")).toEqual({ type: "CALL_TRUMP", player: 1, suit: "spades", alone: true });
+    expect(chooseRoundTwoCall(weakState, 1, "strong")).toEqual({ type: "PASS", player: 1 });
+  });
+
   it("only goes alone with very strong hands", () => {
     expect(shouldGoAlone([
       c("J", "hearts"),
@@ -97,6 +128,14 @@ describe("deterministic bot bidding", () => {
       c("10", "spades"),
       c("Q", "diamonds")
     ], "hearts")).toBe(false);
+
+    expect(shouldGoAlone([
+      c("J", "hearts"),
+      c("J", "diamonds"),
+      c("A", "hearts"),
+      c("K", "hearts"),
+      c("A", "spades")
+    ], "hearts", undefined, false, "easy")).toBe(true);
   });
 });
 
@@ -145,6 +184,20 @@ describe("deterministic bot dealer discard", () => {
       c("A", "hearts"),
       c("J", "diamonds")
     ], "hearts")).toEqual(c("9", "hearts"));
+  });
+
+  it("easy discard is legal but can be less optimal than standard", () => {
+    const hand = [
+      c("J", "hearts"),
+      c("A", "clubs"),
+      c("9", "clubs"),
+      c("10", "spades"),
+      c("Q", "diamonds"),
+      c("K", "hearts")
+    ];
+
+    expect(chooseDealerDiscard(hand, "hearts", "standard")).toEqual(c("9", "clubs"));
+    expect(chooseDealerDiscard(hand, "hearts", "easy")).toEqual(c("A", "clubs"));
   });
 });
 
@@ -258,21 +311,36 @@ describe("deterministic bot card play", () => {
 
     expect(chooseBotAction(state, bots[0])).toEqual({ type: "PLAY_CARD", player: 1, card: c("J", "hearts") });
   });
+
+  it("easy makes a legal weaker lead instead of attacking with an off-suit ace", () => {
+    const state = makePlayingState({
+      activePlayer: 1,
+      trump: "spades",
+      hands: {
+        1: [c("A", "hearts"), c("9", "clubs"), c("10", "diamonds"), c("Q", "clubs"), c("9", "spades")]
+      },
+      trick: { leader: 1, plays: [] },
+      botDifficulty: "easy"
+    });
+
+    expect(chooseBotAction(state, bots[0])).toEqual({ type: "PLAY_CARD", player: 1, card: c("9", "clubs") });
+  });
 });
 
 describe("bot integration", () => {
-  it("can drive a persisted game through gameComplete", async () => {
+  it.each(["easy", "standard", "strong"] as const)("can drive a persisted %s game through gameComplete", async (botDifficulty) => {
     const store = await createStore();
-    const game = await store.createGame({ config: { stickDealer: true, targetScore: 10 } });
+    const game = await store.createGame({ config: { stickDealer: true, targetScore: 4, botDifficulty } });
     await store.appendMove({
       gameId: game.id,
       expectedSequence: 0,
       action: { type: "START_HAND", seed: 24680 }
     });
 
-    const loaded = await drivePersistedGame(store, game.id, 700);
+    const loaded = await drivePersistedGame(store, game.id, 400);
 
     expect(loaded.state.phase).toBe("gameComplete");
+    expect(loaded.state.config.botDifficulty).toBe(botDifficulty);
     expect(loaded.events.map((event) => event.sequenceNumber)).toEqual(
       loaded.events.map((_, index) => index)
     );
@@ -361,15 +429,17 @@ function makePlayingState({
   activePlayer,
   trump,
   hands,
-  trick
+  trick,
+  botDifficulty = "standard"
 }: {
   activePlayer: PlayerIndex;
   trump: Suit;
   hands: Partial<Record<PlayerIndex, Card[]>>;
   trick: Trick;
+  botDifficulty?: GameState["config"]["botDifficulty"];
 }): GameState {
   return {
-    ...createInitialGameState(),
+    ...createInitialGameState({ botDifficulty }),
     phase: "playing",
     handNumber: 1,
     dealer: 0,

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { reduceGameAction } from "@/lib/euchre";
+import { normalizeGameConfig, reduceGameAction } from "@/lib/euchre";
 import {
   DuplicateSequenceError,
   GameNotFoundError,
@@ -56,11 +56,12 @@ export class SupabaseEventStore implements EventStore {
   }
 
   async createGame(input: CreateGameInput): Promise<PersistedGameRecord> {
+    const config = normalizeGameConfig(input.config);
     const { data, error } = await this.client
       .from("euchre_games")
       .insert({
-        config: input.config,
-        target_score: input.config.targetScore,
+        config,
+        target_score: config.targetScore,
         metadata: input.metadata ?? {}
       })
       .select("*")
@@ -230,10 +231,11 @@ export class SupabaseEventStore implements EventStore {
 }
 
 function mapGame(row: DbGame): PersistedGameRecord {
+  const config = normalizeGameConfig(row.config);
   return {
     id: row.id,
     status: row.status,
-    config: row.config,
+    config,
     targetScore: row.target_score,
     teamZeroScore: row.team_zero_score,
     teamOneScore: row.team_one_score,

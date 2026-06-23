@@ -25,10 +25,18 @@ current trick control. Card play always starts from the engine's legal move list
 left-bower effective suit handling, then chooses deterministic leads, lowest winning cards,
 partner-safe low cards, or weakest discards.
 
+Single-player games can be created with Easy, Standard, or Strong bot difficulty. The
+selected difficulty is persisted in the game config, so replay, review, and profile stats
+can reconstruct games from the same event history without relying on UI-only state.
+Existing games without a difficulty field default to Standard for backward compatibility.
+Easy bots make legal but more conservative and less polished decisions. Standard is the
+default beginner/intermediate strategy. Strong tightens bidding, next-suit recognition,
+discarding, and trick-play conservation while remaining deterministic.
+
 The strategy is intentionally below expert level. It does not run simulations, model
-opponents, vary difficulty, or provide coaching explanations yet. Future work can add
-difficulty levels, stronger search/simulation-based bots, and AI hand-review commentary
-without changing the replay-safe event log model.
+opponents, run bot-vs-bot calibration reports, or provide coaching explanations yet.
+Future work can add stronger search/simulation-based bots, difficulty calibration, and AI
+hand-review commentary without changing the replay-safe event log model.
 
 ## Run
 
