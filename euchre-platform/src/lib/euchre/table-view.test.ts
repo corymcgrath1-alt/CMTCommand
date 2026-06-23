@@ -123,10 +123,29 @@ describe("human hand view models", () => {
 
     expect(view.helperText).toContain("must follow hearts");
     expect(view.cards.map((card) => [card.label, card.legal])).toEqual([
+      ["JC", false],
       ["9H", true],
-      ["AC", false],
-      ["JC", false]
+      ["AC", false]
     ]);
+  });
+
+  it("sorts the visible human hand by effective suit and strongest cards first", () => {
+    const state = makeState({
+      phase: "playing",
+      activePlayer: 0,
+      trump: "spades",
+      hands: {
+        0: [c("9", "hearts"), c("A", "clubs"), c("J", "clubs"), c("A", "spades"), c("10", "hearts")]
+      },
+      currentTrick: {
+        leader: 0,
+        plays: []
+      }
+    });
+
+    const view = buildHumanHandView(state);
+
+    expect(view.cards.map((card) => card.label)).toEqual(["JC", "AS", "10H", "9H", "AC"]);
   });
 
   it("marks every card as selectable when the human must discard", () => {

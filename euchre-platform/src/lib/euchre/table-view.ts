@@ -1,4 +1,4 @@
-import { cardId, cardLabel, effectiveSuit, isTrump } from "./cards";
+import { cardId, cardLabel, effectiveSuit, isTrump, rankPower } from "./cards";
 import { nextPlayer, partnerOf, teamOf } from "./deck";
 import { buildLegalActionExplanation, formatRecentBotAction } from "./game-ux";
 import { cardTrickPower, legalActionsForPlayer } from "./rules";
@@ -136,7 +136,7 @@ export function buildHumanHandView(state: GameState, seat: PlayerIndex = 0): Hum
 
   return {
     seat,
-    cards: (state.hands[seat] ?? []).map((card) => ({
+    cards: sortCardsForTableHand(state.hands[seat] ?? [], state.trump).map((card) => ({
       card,
       id: cardId(card),
       label: cardLabel(card),
@@ -239,4 +239,32 @@ function formatPhase(phase: Phase): string {
   return phase
     .replace(/([A-Z])/g, " $1")
     .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function sortCardsForTableHand(cards: Card[], trump?: Suit): Card[] {
+  return [...cards].sort((a, b) => {
+    const suitComparison = displaySuitOrder(a, trump) - displaySuitOrder(b, trump);
+    if (suitComparison !== 0) {
+      return suitComparison;
+    }
+
+    const aSuit = effectiveSuit(a, trump);
+    const bSuit = effectiveSuit(b, trump);
+    const aPower = trump ? cardTrickPower(a, trump, aSuit) : rankPower(a.rank);
+    const bPower = trump ? cardTrickPower(b, trump, bSuit) : rankPower(b.rank);
+    if (aPower !== bPower) {
+      return bPower - aPower;
+    }
+
+    return cardId(a).localeCompare(cardId(b));
+  });
+}
+
+function displaySuitOrder(card: Card, trump?: Suit): number {
+  const suit = effectiveSuit(card, trump);
+  const baseOrder: Suit[] = trump
+    ? [trump, ...(["spades", "hearts", "diamonds", "clubs"] as Suit[]).filter((candidate) => candidate !== trump)]
+    : ["spades", "hearts", "diamonds", "clubs"];
+
+  return baseOrder.indexOf(suit);
 }

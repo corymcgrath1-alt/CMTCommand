@@ -111,6 +111,7 @@ export default function Home() {
   const [historicalReviewStatus, setHistoricalReviewStatus] = useState<string | null>(null);
   const bots = useMemo(() => createDefaultBotProfiles(), []);
   const lastBotActionKey = useRef<string | null>(null);
+  const lastAutoNextHandKey = useRef<string | null>(null);
   const activeReviewSource = chooseActiveReviewSource({ currentReview: review, historicalReview });
 
   const loadProfileStats = useCallback(async () => {
@@ -254,6 +255,24 @@ export default function Home() {
 
     return () => window.clearTimeout(timeout);
   }, [act, bots, isSaving, persistedGameId, state]);
+
+  useEffect(() => {
+    if (!persistedGameId || isSaving || state.phase !== "handComplete") {
+      return;
+    }
+
+    const actionKey = `${persistedGameId}:${state.moveLog.length}:next-hand:${state.handNumber}`;
+    if (lastAutoNextHandKey.current === actionKey) {
+      return;
+    }
+    lastAutoNextHandKey.current = actionKey;
+
+    const timeout = window.setTimeout(() => {
+      void act({ type: "NEXT_HAND", seed: Date.now() % 1_000_000 }, "Auto deal");
+    }, 1200);
+
+    return () => window.clearTimeout(timeout);
+  }, [act, isSaving, persistedGameId, state.handNumber, state.moveLog.length, state.phase]);
 
   async function startNewGame() {
     setIsSaving(true);
@@ -483,11 +502,13 @@ export default function Home() {
           </div>
         </header>
 
-        <SetupHelp
-          farmersHandMode={farmersHandMode}
-          lonerMode={lonerMode}
-          lastSeed={lastSeed}
-        />
+        {state.phase === "idle" ? (
+          <SetupHelp
+            farmersHandMode={farmersHandMode}
+            lonerMode={lonerMode}
+            lastSeed={lastSeed}
+          />
+        ) : null}
 
         <section className="rounded border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/70">
           <span className="font-semibold text-white">Persistence:</span>{" "}
@@ -496,14 +517,13 @@ export default function Home() {
 
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <section className="flex flex-col gap-4">
-            <GameSummary state={state} />
-            {activeReviewSource ? (
-              <GameReviewPanel
-                source={activeReviewSource}
-                canReturnToCurrent={activeReviewSource.kind === "historical" && Boolean(review)}
-                onClearHistoricalReview={activeReviewSource.kind === "historical" ? clearHistoricalReview : undefined}
-              />
-            ) : null}
+            <TableSurface
+              state={state}
+              act={act}
+              disabled={isSaving}
+              selectedReplacementIds={selectedReplacementIds}
+              setSelectedReplacementIds={setSelectedReplacementIds}
+            />
             <TurnPromptPanel state={state} />
             <BiddingControls
               state={state}
@@ -515,13 +535,14 @@ export default function Home() {
               selectedReplacementIds={selectedReplacementIds}
               setSelectedReplacementIds={setSelectedReplacementIds}
             />
-            <TableSurface
-              state={state}
-              act={act}
-              disabled={isSaving}
-              selectedReplacementIds={selectedReplacementIds}
-              setSelectedReplacementIds={setSelectedReplacementIds}
-            />
+            <GameSummary state={state} />
+            {activeReviewSource ? (
+              <GameReviewPanel
+                source={activeReviewSource}
+                canReturnToCurrent={activeReviewSource.kind === "historical" && Boolean(review)}
+                onClearHistoricalReview={activeReviewSource.kind === "historical" ? clearHistoricalReview : undefined}
+              />
+            ) : null}
           </section>
 
           <aside className="flex flex-col gap-4">
@@ -1438,13 +1459,14 @@ function BiddingControls({
     return (
       <section className="rounded border border-white/10 bg-white/[0.04] p-4">
         <p className="text-sm text-white/70">{buildHandResultExplanation(state)}</p>
+        <p className="mt-2 text-xs font-semibold text-brass">Next hand will deal automatically.</p>
         {controls.warning ? <p className="mt-2 text-xs text-white/45">{controls.warning}</p> : null}
         <button
           className="mt-3 rounded bg-white px-4 py-2 text-sm font-semibold text-[#071411]"
           disabled={disabled || !controls.canStartNextHand}
           onClick={() => act({ type: "NEXT_HAND", seed: Date.now() % 1_000_000 })}
         >
-          Start Next Hand
+          Deal Next Hand Now
         </button>
       </section>
     );
@@ -1633,7 +1655,12 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
       </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {items.map(([label, value]) => (
-          <div key={label} className="rounded border border-white/10 bg-white/[0.035] px-3 py-2">
+          <div
+            key={label}
+            className={`rounded border px-3 py-2 ${
+              label === "Dealer" ? "border-brass/50 bg-brass/15" : "border-white/10 bg-white/[0.035]"
+            }`}
+          >
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40">{label}</p>
             <p className="mt-1 text-sm font-semibold text-white">{value}</p>
           </div>
@@ -1646,8 +1673,13 @@ function TableStatusBar({ status }: { status: ReturnType<typeof buildTableStatus
 function SeatCard({ seat }: { seat: TableSeatView }) {
   return (
     <section className={`relative z-10 flex min-h-36 flex-col justify-between rounded-xl border p-3 shadow-lg shadow-black/15 ${
-      seat.isActive ? "border-brass bg-[#102f25]/90" : "border-white/10 bg-[#071411]/55"
+      seat.isActive || seat.isDealer ? "border-brass bg-[#102f25]/90" : "border-white/10 bg-[#071411]/55"
     }`}>
+      {seat.isDealer ? (
+        <span className="absolute -right-2 -top-2 rounded-full border border-brass bg-brass px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#201602] shadow-lg shadow-black/30">
+          Dealer
+        </span>
+      ) : null}
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold text-white">{seat.name}</h2>
@@ -1659,7 +1691,7 @@ function SeatCard({ seat }: { seat: TableSeatView }) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {seat.isDealer ? <Badge>Dealer</Badge> : null}
+        {seat.isDealer ? <Badge tone="brass">Dealer</Badge> : null}
         {seat.isCaller ? <Badge>Caller</Badge> : null}
         {!seat.isCaller && seat.isPartnerOfCaller ? <Badge>Caller partner</Badge> : null}
         {seat.isMaker ? <Badge>Maker team</Badge> : null}
@@ -1698,7 +1730,7 @@ function HumanSeatPanel({
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold text-white">{seat.name}</h2>
             {seat.isActive ? <Badge tone="brass">Turn</Badge> : null}
-            {seat.isDealer ? <Badge>Dealer</Badge> : null}
+            {seat.isDealer ? <Badge tone="brass">Dealer</Badge> : null}
             {seat.isCaller ? <Badge>Caller</Badge> : null}
             {seat.isMaker ? <Badge>Maker team</Badge> : null}
           </div>
@@ -1742,6 +1774,8 @@ function HumanSeatPanel({
 }
 
 function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTrickView> }) {
+  const playBySeat = new Map(trick.plays.map((play, index) => [play.seat, { play, index }]));
+
   return (
     <section className="relative z-10 min-h-80 rounded-[1.25rem] border border-brass/25 bg-[#08271f]/68 p-4 shadow-inner shadow-black/35">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1756,32 +1790,23 @@ function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTri
         </div>
       </div>
 
-      <div className="mt-4 grid min-h-44 gap-3 sm:grid-cols-4">
-        {trick.plays.length ? trick.plays.map((play, index) => (
-          <div
-            key={`${play.seat}-${play.cardId}`}
-            className={`rounded-xl border px-3 py-3 text-center ${
-              play.isWinningCard ? "border-brass bg-brass/15 shadow-lg shadow-brass/10" : "border-white/10 bg-[#071411]/35"
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-white/45">#{index + 1} {play.playerName}</p>
-              {play.isLeader ? <Badge>Leader</Badge> : null}
-            </div>
-            <div className="mx-auto mt-3 w-20">
-              <PlayingCard card={play.card} playable size="trick" winning={play.isWinningCard} />
-            </div>
-            <p className="mt-1 text-xs text-white/45">
-              {play.effectiveSuit ? `Effective ${play.effectiveSuit}` : "Suit pending"}
-              {play.isTrump ? " | Trump" : ""}
-            </p>
-            {play.isWinningCard ? <p className="mt-2 text-xs font-semibold text-brass">Winning card</p> : null}
-          </div>
-        )) : (
-          <div className="rounded border border-dashed border-white/15 px-3 py-8 text-center text-sm text-white/45 sm:col-span-4">
-            No cards have been played to this trick.
-          </div>
-        )}
+      <div className="mt-4 grid min-h-64 grid-cols-[minmax(5rem,1fr)_minmax(7rem,1.1fr)_minmax(5rem,1fr)] grid-rows-[auto_auto_auto] items-center gap-3">
+        <div className="col-start-2 row-start-1">
+          <TrickSeatCard seat={2} entry={playBySeat.get(2)} />
+        </div>
+        <div className="col-start-1 row-start-2">
+          <TrickSeatCard seat={1} entry={playBySeat.get(1)} />
+        </div>
+        <div className="col-start-2 row-start-2 rounded-full border border-brass/25 bg-[#071411]/45 px-4 py-5 text-center shadow-inner shadow-black/40">
+          <p className="text-xs uppercase tracking-[0.14em] text-white/40">Table center</p>
+          <p className="mt-1 text-sm font-semibold text-white">{trick.plays.length ? `${trick.plays.length}/4 played` : "Awaiting lead"}</p>
+        </div>
+        <div className="col-start-3 row-start-2">
+          <TrickSeatCard seat={3} entry={playBySeat.get(3)} />
+        </div>
+        <div className="col-start-2 row-start-3">
+          <TrickSeatCard seat={0} entry={playBySeat.get(0)} />
+        </div>
       </div>
 
       <div className="mt-4 grid gap-2 text-sm text-white/60 sm:grid-cols-2">
@@ -1808,6 +1833,44 @@ function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTri
   );
 }
 
+function TrickSeatCard({
+  seat,
+  entry
+}: {
+  seat: PlayerIndex;
+  entry?: { play: ReturnType<typeof buildCurrentTrickView>["plays"][number]; index: number };
+}) {
+  const play = entry?.play;
+
+  return (
+    <div className={`min-h-32 rounded-xl border px-3 py-3 text-center ${
+      play?.isWinningCard ? "border-brass bg-brass/15 shadow-lg shadow-brass/10" : "border-white/10 bg-[#071411]/35"
+    }`}>
+      <div className="flex min-h-5 items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-white/55">{TABLE_PLAYER_NAMES[seat]}</p>
+        {play?.isLeader ? <Badge>Leader</Badge> : null}
+      </div>
+      {play ? (
+        <>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-white/35">Played #{entry.index + 1}</p>
+          <div className="mx-auto mt-2 w-16 sm:w-20">
+            <PlayingCard card={play.card} playable size="trick" winning={play.isWinningCard} />
+          </div>
+          <p className="mt-1 text-xs text-white/45">
+            {play.effectiveSuit ? `Effective ${play.effectiveSuit}` : "Suit pending"}
+            {play.isTrump ? " | Trump" : ""}
+          </p>
+          {play.isWinningCard ? <p className="mt-1 text-xs font-semibold text-brass">Winning</p> : null}
+        </>
+      ) : (
+        <div className="mt-3 rounded-lg border border-dashed border-white/15 px-2 py-8 text-xs text-white/35">
+          No card yet
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PlayingCard({
   card,
   playable,
@@ -1823,7 +1886,7 @@ function PlayingCard({
 }) {
   const red = suitColor(card.suit) === "red";
   const suit = displaySuitSymbol(card.suit);
-  const sizeClass = size === "hand" ? "w-full max-w-28 lg:w-24" : "w-20";
+  const sizeClass = size === "hand" ? "w-full max-w-28 lg:w-24" : "w-full";
   const colorClass = red ? "text-[#b71c2b]" : "text-[#111827]";
 
   return (
