@@ -63,6 +63,7 @@ export interface LoadedGame {
 export interface EventStore {
   createGame(input: CreateGameInput): Promise<PersistedGameRecord>;
   appendMove(input: AppendMoveInput): Promise<PersistedMoveEventRecord>;
+  listGames(status?: PersistedGameRecord["status"]): Promise<PersistedGameRecord[]>;
   loadGame(gameId: string): Promise<LoadedGame>;
   loadMoveHistory(gameId: string): Promise<PersistedMoveEventRecord[]>;
   clear?(): Promise<void>;

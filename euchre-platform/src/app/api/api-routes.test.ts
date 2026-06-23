@@ -9,6 +9,7 @@ import { POST as createGame } from "./games/route";
 import { GET as loadGame } from "./games/[gameId]/route";
 import { POST as appendEvent } from "./games/[gameId]/events/route";
 import { GET as reviewGame } from "./games/[gameId]/review/route";
+import { GET as profileAggregates } from "./profiles/route";
 
 const testDirs: string[] = [];
 
@@ -132,6 +133,33 @@ describe("API route validation", () => {
     expect(response.status).toBe(409);
     expect(body).toEqual({ error: "Game review is available after game completion" });
   });
+
+  it("returns local profile aggregates from completed game history", async () => {
+    const store = await createStore();
+    resetEventStoreForTests(store);
+    const game = await store.createGame({ config: { stickDealer: false, targetScore: 2 } });
+    await store.appendMove({ gameId: game.id, expectedSequence: 0, action: { type: "START_HAND", seed: 123 } });
+    await completeOneHand(store, game.id);
+
+    const response = await profileAggregates();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.profiles.completedGames).toBe(1);
+    expect(body.profiles.sourceGameIds).toEqual([game.id]);
+    expect(body.profiles.players[0]).toMatchObject({
+      name: "South / Human",
+      gamesPlayed: 1,
+      wins: 1,
+      losses: 0,
+      winPercentage: 100
+    });
+    expect(body.profiles.teams[0]).toMatchObject({
+      gamesPlayed: 1,
+      wins: 1,
+      losses: 0
+    });
+  }, 15_000);
 
 });
 

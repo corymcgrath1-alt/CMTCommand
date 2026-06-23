@@ -52,7 +52,21 @@ trump, winning card, winning seat, and every card played in order. Replay data i
 from the event history through the review payload, so future analysis features can build
 on the same deterministic reconstruction path instead of a separate UI-only replay model.
 
-Deferred intentionally: ranked/profile aggregates, opponent-adjusted stats, mistake
-detection, expected value, skill scoring, advanced bot or human decision quality, AI
-coaching, shareable hand links, spectator mode, realtime cross-device review sharing, and
-tournament/league reporting.
+## Basic Profile Aggregates v1
+
+`GET /api/profiles` derives local placeholder profile stats from completed game reviews:
+South / Human, West Bot, North Bot, and East Bot. The endpoint lists completed persisted
+games, rebuilds each review from the append-only move history, and rolls those reviews up
+into per-player and per-team aggregates. These are intentionally seat-based identities for
+now; later account/user IDs can replace the placeholder profile IDs without changing the
+event-history source of truth.
+
+Included v1 profile stats: games played, wins/losses, win percentage, points for/against,
+hands played, dealer/caller counts, call success, lone attempts and successful loners,
+tricks won, cards played, team final scores, average team points, maker success, euchres
+earned, and euchres suffered.
+
+Deferred intentionally: real accounts, ranked/profile ratings, partner/opponent splits,
+opponent-adjusted stats, mistake detection, expected value, skill scoring, advanced bot or
+human decision quality, AI coaching, shareable hand links, spectator mode, realtime
+cross-device review sharing, and tournament/league reporting.

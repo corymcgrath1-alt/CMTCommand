@@ -30,6 +30,7 @@ import {
   selectReplayTrick,
   type ReplaySelection
 } from "@/lib/review/replay-viewer";
+import type { ProfileAggregateSummary } from "@/lib/profiles/profile-aggregates";
 
 const STORAGE_KEY = "euchre-platform-active-game-id";
 const PLAYER_NAMES: Record<PlayerIndex, string> = {
@@ -47,17 +48,29 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState("Local state ready");
   const [review, setReview] = useState<GameReviewSummary | null>(null);
+  const [profileStats, setProfileStats] = useState<ProfileAggregateSummary | null>(null);
   const bots = useMemo(() => createDefaultBotProfiles(), []);
   const lastBotActionKey = useRef<string | null>(null);
 
+  const loadProfileStats = useCallback(async () => {
+    try {
+      const result = await fetchJson<{ profiles: ProfileAggregateSummary }>("/api/profiles");
+      setProfileStats(result.profiles);
+    } catch {
+      setProfileStats(null);
+    }
+  }, []);
+
   useEffect(() => {
+    void loadProfileStats();
+
     const savedGameId = window.localStorage.getItem(STORAGE_KEY);
     if (!savedGameId) {
       return;
     }
 
     void loadPersistedGame(savedGameId);
-  }, []);
+  }, [loadProfileStats]);
 
   async function loadPersistedGame(gameId: string) {
     setIsSaving(true);
@@ -116,6 +129,7 @@ export default function Home() {
       .then((result) => {
         if (!cancelled) {
           setReview(result.review);
+          void loadProfileStats();
         }
       })
       .catch((error) => {
@@ -127,7 +141,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [persistedGameId, state.phase, state.moveLog.length]);
+  }, [loadProfileStats, persistedGameId, state.phase, state.moveLog.length]);
 
   useEffect(() => {
     if (!persistedGameId || isSaving) {
@@ -264,6 +278,8 @@ export default function Home() {
               </div>
             </section>
 
+            <ProfileStatsPanel profiles={profileStats} />
+
             <MoveHistory moves={state.moveLog} />
           </aside>
         </div>
@@ -376,6 +392,65 @@ function GameReviewPanel({ review }: { review: GameReviewSummary }) {
           <HandReviewCard key={hand.handNumber} hand={hand} />
         ))}
       </div>
+    </section>
+  );
+}
+
+function ProfileStatsPanel({ profiles }: { profiles: ProfileAggregateSummary | null }) {
+  return (
+    <section className="rounded border border-white/10 bg-white/[0.04] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60">Local profiles</h2>
+          <p className="mt-1 text-xs text-white/45">
+            {profiles ? `${profiles.completedGames} completed game${profiles.completedGames === 1 ? "" : "s"}` : "Loading stats"}
+          </p>
+        </div>
+      </div>
+
+      {profiles && profiles.completedGames > 0 ? (
+        <>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-left text-xs">
+              <thead className="uppercase tracking-[0.12em] text-white/40">
+                <tr>
+                  <th className="border-b border-white/10 py-2 pr-2">Player</th>
+                  <th className="border-b border-white/10 px-2 py-2">W-L</th>
+                  <th className="border-b border-white/10 px-2 py-2">Win %</th>
+                  <th className="border-b border-white/10 px-2 py-2">Calls</th>
+                  <th className="border-b border-white/10 px-2 py-2">Call %</th>
+                  <th className="border-b border-white/10 pl-2 py-2">Tricks</th>
+                </tr>
+              </thead>
+              <tbody className="text-white/70">
+                {profiles.players.map((player) => (
+                  <tr key={player.profileId}>
+                    <td className="border-b border-white/10 py-2 pr-2 font-semibold text-white">{player.name}</td>
+                    <td className="border-b border-white/10 px-2 py-2">{player.wins}-{player.losses}</td>
+                    <td className="border-b border-white/10 px-2 py-2">{formatRate(player.winPercentage)}</td>
+                    <td className="border-b border-white/10 px-2 py-2">{player.successfulCalls}-{player.failedCalls}</td>
+                    <td className="border-b border-white/10 px-2 py-2">{formatRate(player.callSuccessPercentage)}</td>
+                    <td className="border-b border-white/10 py-2 pl-2">{player.tricksWon}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-1">
+            {profiles.teams.map((team) => (
+              <div key={team.team} className="rounded border border-white/10 px-3 py-2 text-white/70">
+                <p className="font-semibold text-white">{team.label}: {team.wins}-{team.losses}</p>
+                <p className="mt-1 text-white/45">
+                  Avg {team.averagePointsPerGame} pts | Maker {formatRate(team.makerSuccessPercentage)} | Euchres {team.euchresEarned} earned / {team.euchresSuffered} suffered
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="mt-3 text-sm text-white/45">Complete a persisted game to populate local profile stats.</p>
+      )}
     </section>
   );
 }
@@ -610,6 +685,10 @@ function formatScoringResult(hand: HandReview): string {
   }
 
   return `makers scored, Team ${hand.makerTeam} +${hand.pointsAwarded[hand.makerTeam ?? 0]}`;
+}
+
+function formatRate(value: number): string {
+  return `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
 }
 
 function BiddingControls({

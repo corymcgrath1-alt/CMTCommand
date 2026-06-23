@@ -109,6 +109,13 @@ export class LocalEventStore implements EventStore {
     };
   }
 
+  async listGames(status?: PersistedGameRecord["status"]): Promise<PersistedGameRecord[]> {
+    const data = await this.readData();
+    return data.games
+      .filter((game) => status === undefined || game.status === status)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
   async loadMoveHistory(gameId: string): Promise<PersistedMoveEventRecord[]> {
     const data = await this.readData();
     if (!data.games.some((candidate) => candidate.id === gameId)) {

@@ -136,6 +136,24 @@ export class SupabaseEventStore implements EventStore {
     };
   }
 
+  async listGames(status?: PersistedGameRecord["status"]): Promise<PersistedGameRecord[]> {
+    let query = this.client
+      .from("euchre_games")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    if (status !== undefined) {
+      query = query.eq("status", status);
+    }
+
+    const { data, error } = await query.returns<DbGame[]>();
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return (data ?? []).map(mapGame);
+  }
+
   async loadMoveHistory(gameId: string): Promise<PersistedMoveEventRecord[]> {
     const { data, error } = await this.client
       .from("euchre_move_events")
