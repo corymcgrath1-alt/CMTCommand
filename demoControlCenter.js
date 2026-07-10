@@ -5,6 +5,12 @@
 })(typeof window !== "undefined" ? window : globalThis, function buildDemoControlCenter(root) {
   const REQUIRED_UTILITY_SPECS = [
     {
+      id: "readinessEngine",
+      label: "Readiness Engine utility",
+      globalName: "CMTReadinessEngine",
+      functions: ["evaluateWorkOrderReadiness", "createCoverageCandidates", "summarizeSchedule", "evaluatePickupReadiness"]
+    },
+    {
       id: "operationalCompression",
       label: "Operational Compression utility",
       globalName: "CMTOperationalCompression",
@@ -261,8 +267,8 @@
     const requiredEquipment = asArray(readiness.requiredEquipment?.length ? readiness.requiredEquipment : order.requiredEquipment);
     const maria = story.maria || {};
     const mariaAvailable = /available|open/i.test(`${maria.status || ""} ${maria.schedule || ""}`) && !/unavailable|off duty|called out/i.test(`${maria.status || ""} ${maria.schedule || ""}`);
-    const mariaQualified = story.mariaCandidate?.canAssign === true
-      || (includesAll(certNames(maria), requiredCerts) && includesAll(maria.clearances, requiredClearance) && hasEquipmentAccess(maria, requiredEquipment) && mariaAvailable);
+    const mariaQualified = includesAll(certNames(maria), requiredCerts) && includesAll(maria.clearances, requiredClearance) && hasEquipmentAccess(maria, requiredEquipment) && mariaAvailable;
+    const approvalAvailable = story.mariaCandidate?.canAssign === true || context.approveCoverageAvailable === true;
     const trdWasRiskBearing = !/^ready$/i.test(status) || /not ready|at risk|blocked/i.test(status) || /not ready|blocked/i.test(`${story.trdDecision?.beforeStatus || ""}`);
     const impact = story.impactSnapshot || {};
     const impactText = `${impact.pilotRoiSummary || ""} ${impact.highestRiskWorkOrder?.id || ""} ${impact.highestRiskWorkOrder?.status || ""}`;
@@ -322,10 +328,10 @@
       makeCheck({
         id: "approve-coverage-available",
         label: "Approve Coverage action available",
-        status: story.mariaCandidate?.canAssign === true || context.approveCoverageAvailable === true || mariaQualified ? "pass" : "fail",
+        status: approvalAvailable ? "pass" : "fail",
         severity: "high",
-        summary: story.mariaCandidate?.canAssign === true || context.approveCoverageAvailable === true || mariaQualified ? "Coverage approval can be shown." : "Coverage approval is not available.",
-        detail: story.mariaCandidate?.canAssign === true ? "Maria candidate can be assigned." : "Inferred from qualification checks.",
+        summary: approvalAvailable ? "Coverage approval can be shown." : "Coverage approval is not available.",
+        detail: story.mariaCandidate?.canAssign === true ? "Maria candidate can be assigned." : "Approval availability must come from the readiness engine or rendered approval action.",
         recommendedFix: "Restore the Find Coverage action for TRD-104 and the Maria Lopez approval button.",
         sourceDetails: { canAssign: story.mariaCandidate?.canAssign, approveCoverageAvailable: context.approveCoverageAvailable }
       }),

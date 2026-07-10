@@ -12,12 +12,13 @@ There is no backend, login, database, cloud storage, external AI call, analytics
 
 1. `demoShared.js`
 2. `pilotIntakeSafety.js`
-3. `operationalCompression.js`
-4. `operationalImpact.js`
-5. `demoWalkthrough.js`
-6. `pilotReadinessPack.js`
-7. `demoControlCenter.js`
-8. `app.js`
+3. `readinessEngine.js`
+4. `operationalCompression.js`
+5. `operationalImpact.js`
+6. `demoWalkthrough.js`
+7. `pilotReadinessPack.js`
+8. `demoControlCenter.js`
+9. `app.js`
 
 `app.js` depends on all utility globals being available. If a future utility is added, load it before `app.js`.
 
@@ -25,12 +26,13 @@ There is no backend, login, database, cloud storage, external AI call, analytics
 
 - `demoShared.js`: safe localStorage access, timestamp formatting, status labels, plain-text formatting, copy fallback, demo target helpers.
 - `pilotIntakeSafety.js`: Pilot Setup CSV parsing, required-column validation, duplicate warnings, CSV export escaping, safe text sink helpers, and narrow URL protocol checks.
+- `readinessEngine.js`: deterministic work-order readiness, pickup readiness, schedule summary, and coverage candidate ranking rules.
 - `operationalCompression.js`: readiness packets, ops brief, coverage handoff, decision summary, pilot intake summary.
 - `operationalImpact.js`: issue counts, conservative review-time estimate, impact snapshot, repeat patterns, coverage bottlenecks, data quality.
 - `demoWalkthrough.js`: Pilot Story Mode steps, progress helpers, initial/reset state, demo recap.
 - `pilotReadinessPack.js`: founder checklist, qualification questions, data request, success criteria, objections, messages, scorecard.
 - `demoControlCenter.js`: deterministic Demo QA health checks, reset plan, known limitations, QA report copy.
-- `app.js`: demo data, state, page rendering, navigation, event handling, browser-local state.
+- `app.js`: demo data, state, page rendering, navigation, event handling, browser-local state. It delegates readiness and coverage rules to `readinessEngine.js`.
 
 ## LocalStorage Keys
 
@@ -57,6 +59,12 @@ Tomorrow Readiness -> TRD-104 -> Find Coverage -> Maria Lopez -> Approve Coverag
 TRD-104 must start as risk-bearing before approval. Maria Lopez must remain the recommended qualified coverage option. Approving Maria should create a local Decision Log entry and improve the Operational Impact story.
 
 Avoid changing demo data shape unless tests and browser smoke are updated together.
+
+## Readiness Engine
+
+`readinessEngine.js` is the source of truth for deterministic tomorrow-readiness evaluation. It accepts explicit work orders, technicians, equipment, pickup records, assignment overrides, and service requirements. It returns Ready, At Risk, or Not Ready plus blockers, warnings, source facts, equipment plan, and coverage-candidate scores.
+
+`app.js` keeps wrapper names such as `evaluateDemoReadiness`, `evaluateCylinderPickup`, and `getDemoCoverageCandidates` for rendering compatibility, but those wrappers delegate to `CMTReadinessEngine`. New rules should be added to the engine and covered in `tests/readinessEngine.test.js`, not duplicated in page renderers.
 
 ## Pilot Story Mode Targets
 
@@ -127,6 +135,7 @@ Use existing source detail renderers in `app.js` when possible.
 ```powershell
 node --check demoShared.js
 node --check pilotIntakeSafety.js
+node --check readinessEngine.js
 node --check demoControlCenter.js
 node --check pilotReadinessPack.js
 node --check demoWalkthrough.js
@@ -135,6 +144,7 @@ node --check operationalCompression.js
 node --check app.js
 node tests\demoShared.test.js
 node tests\pilotIntakeSafety.test.js
+node tests\readinessEngine.test.js
 node tests\demoControlCenter.test.js
 node tests\pilotReadinessPack.test.js
 node tests\demoWalkthrough.test.js

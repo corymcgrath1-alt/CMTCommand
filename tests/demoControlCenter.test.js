@@ -5,8 +5,10 @@ const impact = require("../operationalImpact.js");
 const walkthrough = require("../demoWalkthrough.js");
 const pilotPack = require("../pilotReadinessPack.js");
 const pilotIntakeSafety = require("../pilotIntakeSafety.js");
+const readinessEngine = require("../readinessEngine.js");
 
 const requiredUtilities = {
+  readinessEngine,
   operationalCompression: compression,
   operationalImpact: impact,
   demoWalkthrough: walkthrough,
@@ -142,12 +144,25 @@ assert.strictEqual(trdStory.status, "pass");
 assert.strictEqual(trdStory.failingChecks, 0);
 assert(trdStory.checks.find(check => check.id === "maria-lopez-qualified").summary.includes("Maria"));
 
+const blockedApprovalStory = control.checkTRD104Story(validContext({
+  trd104: {
+    ...validTrd104,
+    mariaCandidate: {
+      ...validTrd104.mariaCandidate,
+      canAssign: false
+    }
+  }
+}));
+assert(blockedApprovalStory.checks.some(check => check.id === "maria-lopez-qualified" && check.status === "pass"));
+assert(blockedApprovalStory.checks.some(check => check.id === "approve-coverage-available" && check.status === "fail"));
+
 const missingStory = control.checkTRD104Story(validContext({ trd104: { order: null, readiness: {} } }));
 assert(missingStory.failingChecks >= 1);
 assert(missingStory.checks.some(check => check.id === "trd-104-exists" && check.status === "fail"));
 
-const missingUtilities = control.checkRequiredUtilities({ requiredUtilities: { operationalCompression: {}, pilotIntakeSafety: {} } });
+const missingUtilities = control.checkRequiredUtilities({ requiredUtilities: { readinessEngine: {}, operationalCompression: {}, pilotIntakeSafety: {} } });
 assert(missingUtilities.failingChecks >= 1);
+assert(missingUtilities.checks.some(check => check.id === "utility-readinessEngine" && check.status === "fail"));
 assert(missingUtilities.checks.some(check => check.id === "utility-operationalCompression" && check.status === "fail"));
 assert(missingUtilities.checks.some(check => check.id === "utility-pilotIntakeSafety" && check.status === "fail"));
 

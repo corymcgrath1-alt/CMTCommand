@@ -1,9 +1,74 @@
 const fs = require("fs");
+const http = require("http");
 const path = require("path");
 
 const cdpBase = "http://127.0.0.1:9224";
-const appUrl = "http://127.0.0.1:8765/?ui=standard";
 const artifactDir = __dirname;
+const repoRoot = path.resolve(__dirname, "..", "..", "..");
+
+const contentTypes = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml; charset=utf-8"
+};
+
+const runtimeFiles = new Set([
+  "index.html",
+  "styles.css",
+  "demoShared.js",
+  "pilotIntakeSafety.js",
+  "readinessEngine.js",
+  "operationalCompression.js",
+  "operationalImpact.js",
+  "demoWalkthrough.js",
+  "pilotReadinessPack.js",
+  "demoControlCenter.js",
+  "app.js"
+]);
+
+function startStaticServer(rootDir) {
+  const server = http.createServer((request, response) => {
+    const url = new URL(request.url, "http://127.0.0.1");
+    let requestedPath = "/index.html";
+    try {
+      requestedPath = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
+    } catch (error) {
+      response.writeHead(400);
+      response.end("Bad request");
+      return;
+    }
+    const relativeRequestPath = requestedPath.replace(/^[/\\]+/, "");
+    const filePath = path.resolve(rootDir, relativeRequestPath);
+    const relativePath = path.relative(rootDir, filePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath) || relativePath.includes("..") || relativePath.includes(".git") || !runtimeFiles.has(relativePath.replaceAll("\\", "/"))) {
+      response.writeHead(403);
+      response.end("Forbidden");
+      return;
+    }
+    fs.readFile(filePath, (error, content) => {
+      if (error) {
+        response.writeHead(404);
+        response.end("Not found");
+        return;
+      }
+      response.writeHead(200, { "Content-Type": contentTypes[path.extname(filePath)] || "application/octet-stream" });
+      response.end(content);
+    });
+  });
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      resolve({
+        server,
+        appUrl: `http://127.0.0.1:${port}/?ui=standard`
+      });
+    });
+  });
+}
 
 function addAssertion(assertions, condition, label, details = {}) {
   assertions.push({
@@ -27,6 +92,7 @@ function validateResult(result) {
   const equals = (actual, expected, label) => check(actual === expected, label, { expected, actual });
 
   equals(result.loading?.safetyGlobal, true, "Pilot intake safety utility is loaded");
+  equals(result.loading?.readinessGlobal, true, "Readiness engine utility is loaded");
   equals(result.empty?.pageTitle, "Pilot Setup", "Pilot Setup page loads");
   equals(result.empty?.hasPreview, false, "Pilot Setup starts without an import preview");
   equals(result.empty?.horizontalOverflow, false, "Pilot Setup desktop viewport has no horizontal overflow");
@@ -83,6 +149,8 @@ function validateResult(result) {
   equals(result.afterReload?.importHistoryCount, 0, "Reload clears transient import history");
   equals(result.demoQa?.includesPilotIntakeSafety, true, "Demo QA reports the Pilot Intake Safety utility");
   equals(result.demoQa?.pilotIntakeSafetyRowPass, true, "Demo QA marks the Pilot Intake Safety utility row as passing");
+  equals(result.demoQa?.includesReadinessEngine, true, "Demo QA reports the Readiness Engine utility");
+  equals(result.demoQa?.readinessEngineRowPass, true, "Demo QA marks the Readiness Engine utility row as passing");
   equals(result.commandMode?.bodyCommandMode, true, "Command mode remains available");
   equals(result.commandMode?.darkModeToggled, true, "Theme toggle works in command mode");
   equals(result.commandDarkMobile?.horizontalOverflow, false, "Command dark mode has no mobile horizontal overflow");
@@ -92,6 +160,12 @@ function validateResult(result) {
   equals(result.preferencePersistence?.afterReloadTheme, "dark", "Theme persists across reload without URL override");
   equals(result.trd104Workflow?.selectedCandidateHasMaria, true, "TRD-104 coverage recommendation selects Maria Lopez");
   equals(result.trd104Workflow?.decisionLogHasMaria, true, "TRD-104 approval records Maria Lopez in the Decision Log");
+  equals(result.trd104Workflow?.decisionNoteUnsafeNodes, 0, "Decision note renders without executable nodes");
+  equals(result.trd104Workflow?.decisionNoteGlobalXss, false, "Decision note payload does not execute");
+  equals(result.trd104Workflow?.decisionNoteTextPreserved, true, "Decision note hostile text is preserved as text");
+  equals(result.trd104Workflow?.trd104RowReadyAfterApproval, true, "TRD-104 row is Ready after approval");
+  equals(result.trd104Workflow?.staleNeedsCoverageCopyGone, true, "Tomorrow Readiness removes stale TRD-104 needs coverage copy after approval");
+  equals(result.trd104Workflow?.notReadyReduced, true, "Not Ready count is reduced after approval");
   equals(result.trd104Workflow?.operationalImpactVisible, true, "Decision Log shows operational impact after approval");
   equals(result.trd104Workflow?.pilotMaterialsVisible, true, "Pilot Materials page remains reachable after approval");
   equals(result.trd104Workflow?.demoQaReady, true, "Demo QA remains ready after TRD-104 workflow");
@@ -109,7 +183,12 @@ function validateResult(result) {
 }
 
 async function getJson(pathname) {
-  const response = await fetch(`${cdpBase}${pathname}`);
+  let response;
+  try {
+    response = await fetch(`${cdpBase}${pathname}`);
+  } catch (error) {
+    throw new Error(`Chrome DevTools Protocol endpoint is not reachable at ${cdpBase}. Start Chrome with --remote-debugging-port=9224 before running this browser validation. ${error.message}`);
+  }
   if (!response.ok) throw new Error(`${pathname} returned ${response.status}`);
   return response.json();
 }
@@ -335,17 +414,24 @@ async function installPageHelpers(client) {
 }
 
 async function main() {
-  const client = new CdpClient(await getPageWsUrl());
-  await client.connect();
-  await client.send("Page.enable");
-  await client.send("Runtime.enable");
-  await client.send("Network.enable");
-  await client.send("Log.enable");
+  const localServer = process.env.CMTCOMMAND_APP_URL ? null : await startStaticServer(repoRoot);
+  const appUrl = process.env.CMTCOMMAND_APP_URL || localServer.appUrl;
+  const appOrigin = new URL(appUrl).origin;
+  const commandUrl = `${appOrigin}/?ui=command`;
+  const rootUrl = `${appOrigin}/`;
+  let client;
+  try {
+    client = new CdpClient(await getPageWsUrl());
+    await client.connect();
+    await client.send("Page.enable");
+    await client.send("Runtime.enable");
+    await client.send("Network.enable");
+    await client.send("Log.enable");
 
-  const result = {};
-  await client.setViewport(1440, 900, false);
-  await client.navigate(appUrl);
-  await installPageHelpers(client);
+    const result = {};
+    await client.setViewport(1440, 900, false);
+    await client.navigate(appUrl);
+    await installPageHelpers(client);
 
   result.loading = await client.evaluate(`(async () => {
     await window.__phase5.waitFor(() => document.querySelector('[data-page="dataintake"]'));
@@ -353,7 +439,8 @@ async function main() {
       title: document.title,
       pageTitle: document.querySelector("#pageTitle")?.textContent || "",
       appHasContent: Boolean(document.querySelector("#app")?.children.length),
-      safetyGlobal: typeof window.CMTPilotIntakeSafety === "object"
+      safetyGlobal: typeof window.CMTPilotIntakeSafety === "object",
+      readinessGlobal: typeof window.CMTReadinessEngine === "object"
     };
   })()`);
 
@@ -609,16 +696,20 @@ async function main() {
     await window.__phase5.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Demo Control Center");
     const utilityRow = Array.from(document.querySelectorAll(".qa-check-row"))
       .find(row => row.textContent.includes("Pilot Intake Safety utility"));
+    const readinessRow = Array.from(document.querySelectorAll(".qa-check-row"))
+      .find(row => row.textContent.includes("Readiness Engine utility"));
     return {
       pageTitle: document.querySelector("#pageTitle")?.textContent,
       includesReadyForDemo: document.body.textContent.includes("Ready for Demo"),
       includesPilotIntakeSafety: document.body.textContent.includes("Pilot Intake Safety utility"),
-      pilotIntakeSafetyRowPass: utilityRow?.querySelector(".qa-status-badge")?.textContent.trim() === "Pass"
+      pilotIntakeSafetyRowPass: utilityRow?.querySelector(".qa-status-badge")?.textContent.trim() === "Pass",
+      includesReadinessEngine: document.body.textContent.includes("Readiness Engine utility"),
+      readinessEngineRowPass: readinessRow?.querySelector(".qa-status-badge")?.textContent.trim() === "Pass"
     };
   })()`);
 
   await client.setViewport(1440, 900, false);
-  await client.navigate("http://127.0.0.1:8765/?ui=command");
+  await client.navigate(commandUrl);
   await installPageHelpers(client);
   result.commandMode = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -648,7 +739,7 @@ async function main() {
     };
   })()`);
 
-  await client.navigate("http://127.0.0.1:8765/");
+  await client.navigate(rootUrl);
   await installPageHelpers(client);
   result.preferencePersistence = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -664,18 +755,37 @@ async function main() {
   await installPageHelpers(client);
   result.trd104Workflow = await client.evaluate(`(async () => {
     await window.__phase5.openPage("command");
+    const beforeNotReady = Array.from(document.querySelectorAll(".readiness-hero-facts span"))
+      .find(item => item.textContent.includes("Not Ready"))?.querySelector("strong")?.textContent || "";
     document.querySelector('[data-open-coverage="TRD-104"]').click();
     await window.__phase5.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Find Coverage");
     await window.__phase5.waitFor(() => document.querySelector('[data-demo-target="approve-coverage-plan"]'));
     const selectedCandidate = document.querySelector('[data-demo-target="maria-coverage-recommendation"]')?.textContent || "";
+    window.__decisionNoteXss = false;
+    const hostileNote = '<img src=x onerror=window.__decisionNoteXss=1> approve coverage';
+    const noteInput = document.querySelector("[data-demo-note]");
+    noteInput.value = hostileNote;
+    noteInput.dispatchEvent(new Event("input", { bubbles: true }));
     document.querySelector('[data-demo-target="approve-coverage-plan"]').click();
     await window.__phase5.waitFor(() => document.body.textContent.includes("Maria Lopez Assigned") || document.body.textContent.includes("Maria Lopez"));
+    const decisionOutcomeText = document.body.textContent;
+    const decisionOutcomeUnsafeNodes = document.querySelectorAll(".demo-outcome-panel img,.demo-outcome-panel svg,.demo-outcome-panel script").length;
     await window.__phase5.openPage("decisionlog");
     const decisionLogText = document.body.textContent;
+    const decisionLogUnsafeNodes = document.querySelectorAll(".decision-log img,.decision-log svg,.decision-log script").length;
+    await window.__phase5.openPage("command");
+    const commandTextAfterApproval = document.body.textContent;
+    const afterNotReady = Array.from(document.querySelectorAll(".readiness-hero-facts span"))
+      .find(item => item.textContent.includes("Not Ready"))?.querySelector("strong")?.textContent || "";
+    const trd104Row = Array.from(document.querySelectorAll("[data-demo-workorder='TRD-104']"))
+      .find(row => row.textContent.includes("TRD-104"));
+    const trd104RowReadyAfterApproval = Boolean(trd104Row?.textContent.includes("Ready") && !trd104Row?.textContent.includes("Not Ready"));
     await window.__phase5.openPage("pilotpack");
     const pilotMaterialsText = document.body.textContent;
     await window.__phase5.openPage("demoqa");
     await window.__phase5.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Demo Control Center");
+    const demoHealthStatus = document.querySelector(".demo-health-card h2")?.textContent || "";
+    const failingCheckCount = Array.from(document.querySelectorAll(".qa-status-badge")).filter(item => item.textContent.trim() === "Fail").length;
     const demoQaText = document.body.textContent;
     document.querySelector("[data-demo-full-reset-arm]")?.click();
     await window.__phase5.waitFor(() => document.querySelector("[data-demo-full-reset-confirm]"));
@@ -685,9 +795,15 @@ async function main() {
     return {
       selectedCandidateHasMaria: selectedCandidate.includes("Maria Lopez"),
       decisionLogHasMaria: decisionLogText.includes("TRD-104") && decisionLogText.includes("Maria Lopez"),
+      decisionNoteUnsafeNodes: decisionOutcomeUnsafeNodes + decisionLogUnsafeNodes,
+      decisionNoteGlobalXss: Boolean(window.__decisionNoteXss),
+      decisionNoteTextPreserved: decisionOutcomeText.includes(hostileNote) && decisionLogText.includes(hostileNote),
+      trd104RowReadyAfterApproval,
+      staleNeedsCoverageCopyGone: !commandTextAfterApproval.includes("TRD-104 Needs Coverage"),
+      notReadyReduced: Number(afterNotReady || 0) < Number(beforeNotReady || 0),
       operationalImpactVisible: decisionLogText.includes("Operational Impact After Decision") && decisionLogText.includes("TRD-104 Impact"),
       pilotMaterialsVisible: pilotMaterialsText.includes("Pilot Materials") && pilotMaterialsText.includes("Pilot Data Request"),
-      demoQaReady: demoQaText.includes("Ready for Demo") && demoQaText.includes("Pilot Intake Safety utility"),
+      demoQaReady: demoHealthStatus.includes("Ready for Demo") && failingCheckCount === 0 && demoQaText.includes("Pilot Intake Safety utility") && demoQaText.includes("Readiness Engine utility"),
       fullResetReturnsUnapproved: resetText.includes("TRD-104 approval state") && resetText.includes("Not approved in current state")
     };
   })()`);
@@ -697,10 +813,15 @@ async function main() {
   result.consoleFailureCount = client.consoleEvents.length;
   result.networkFailureCount = client.networkFailures.length;
 
-  client.close();
-  validateResult(result);
-  writeResult(result);
-  console.log(JSON.stringify(result, null, 2));
+    validateResult(result);
+    writeResult(result);
+    console.log(JSON.stringify(result, null, 2));
+  } finally {
+    if (client) client.close();
+    if (localServer) {
+      await new Promise(resolve => localServer.server.close(resolve));
+    }
+  }
 }
 
 main().catch(error => {

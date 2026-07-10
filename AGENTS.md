@@ -64,6 +64,7 @@ The current root CMTCommand product is a static HTML/CSS/JavaScript application 
 - Dependency-free UMD utilities expose both browser globals and CommonJS exports:
   - `demoShared.js`
   - `pilotIntakeSafety.js`
+  - `readinessEngine.js`
   - `operationalCompression.js`
   - `operationalImpact.js`
   - `demoWalkthrough.js`
@@ -107,7 +108,7 @@ foreach ($test in $tests) {
 Whitespace check for the established root surface:
 
 ```powershell
-git diff --check -- app.js styles.css index.html README.md DEVELOPER_NOTES.md demoShared.js pilotIntakeSafety.js demoControlCenter.js pilotReadinessPack.js demoWalkthrough.js operationalImpact.js operationalCompression.js tests scripts AGENTS.md CODEX_TAKEOVER_PROMPT.md .github docs
+git diff --check -- app.js styles.css index.html README.md DEVELOPER_NOTES.md demoShared.js pilotIntakeSafety.js readinessEngine.js demoControlCenter.js pilotReadinessPack.js demoWalkthrough.js operationalImpact.js operationalCompression.js tests scripts AGENTS.md CODEX_TAKEOVER_PROMPT.md .github docs
 ```
 
 There is currently no root `package.json`. `npm test`, `npm run build`, `npm run lint`, and `npm run typecheck` are not established root CMTCommand commands. Do not add a package manager merely to wrap existing Node checks.

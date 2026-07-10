@@ -1,5 +1,47 @@
 # CMTCommand vNext Status
 
+## Current Autonomous Takeover Phase
+
+Slice: Authoritative Readiness Engine.
+
+The root product is being advanced beyond the completed Trusted Pilot Intake and Render Safety slice by moving tomorrow-readiness, pickup-readiness, and coverage-candidate rules out of `app.js` into a dependency-free UMD utility.
+
+### Checklist
+
+- [x] Confirmed `codex-takeover`, protected baseline tag, worktree list, and clean root status before edits.
+- [x] Ran baseline `node .\scripts\verify-root.mjs` and explicit root `tests/*.test.js` loop successfully before product edits.
+- [x] Created `docs/CODEX_EXECUTION_PLAN.md`.
+- [x] Added `readinessEngine.js` with deterministic readiness, pickup, schedule, and coverage candidate rules.
+- [x] Added `tests/readinessEngine.test.js` for TRD-104/Maria Lopez, missing technician, unavailable technician, certification expiry, equipment gaps, pickup risk, no-valid-alternative behavior, and schedule summary counts.
+- [x] Wired `app.js` readiness/pickup/coverage wrappers through `CMTReadinessEngine`.
+- [x] Updated Demo QA required utility checks, browser validation assertions, root verifier, CI paths, README, developer notes, and AGENTS map.
+- [x] Ran final focused checks, root verifier, explicit root test loop, diff hygiene, and security/debug scans.
+- [x] Performed security and UX/accessibility reviews for the changed scope and fixed material findings.
+- [x] Confirmed live browser validation is environment-blocked because no CDP endpoint or in-app browser backend is available in this session.
+- [x] Created final handoff doc.
+- [x] Create commit checkpoint.
+
+### Verification So Far
+
+- `node .\scripts\verify-root.mjs` - pass after initial app wiring.
+- `node .\tests\readinessEngine.test.js` - pass.
+- `node .\tests\demoControlCenter.test.js` - pass.
+- `node --check .\docs\cmtcommand-vnext\artifacts\phase5-browser-validation.cjs` - pass.
+- `node .\scripts\verify-root.mjs` - pass after final hardening.
+- Explicit root `tests/*.test.js` loop - pass after final hardening.
+- `git diff --check -- app.js styles.css index.html README.md DEVELOPER_NOTES.md demoShared.js pilotIntakeSafety.js readinessEngine.js demoControlCenter.js pilotReadinessPack.js demoWalkthrough.js operationalImpact.js operationalCompression.js tests scripts AGENTS.md CODEX_TAKEOVER_PROMPT.md .github docs` - pass, with line-ending warnings only.
+- Browser script execution - environment-blocked. `node .\docs\cmtcommand-vnext\artifacts\phase5-browser-validation.cjs` fails clearly because Chrome DevTools Protocol is not reachable at `http://127.0.0.1:9224`; the in-app browser runtime reports no available browser backends.
+
+### Decision Memo
+
+The static app architecture remains intact. The new engine uses the existing UMD/CommonJS pattern so future pilot adapters can call deterministic readiness rules without depending on page renderers. `app.js` keeps compatibility wrapper names for rendering and event flow, but no longer owns the core TRD-104 readiness and candidate-ranking rules.
+
+### Review Resolutions
+
+- Security: decision notes, decision-log fields, readiness explanations, coverage strings, pickup fields, handoff summaries, and coverage-control attributes are escaped before rendering; the browser-validation helper now uses a runtime file allowlist and clearer CDP failure handling.
+- UX/accessibility: TRD-104 post-approval copy now follows the computed readiness state, duplicate approvals are disabled, no-valid-alternative coverage is explicit, and Demo QA no longer treats raw Maria qualification as proof that approval is available.
+- Domain/correctness: the engine keeps TRD-104 risk-bearing before approval, recommends Maria Lopez as the top feasible candidate, rejects infeasible alternatives, includes pickup/equipment/certification constraints, and recomputes readiness after approval.
+
 ## Current Phase
 
 Phase 8 - Isolate, verify, and package the vNext release.

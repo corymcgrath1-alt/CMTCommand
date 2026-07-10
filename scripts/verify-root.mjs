@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 const syntaxFiles = [
   "demoShared.js",
   "pilotIntakeSafety.js",
+  "readinessEngine.js",
   "demoControlCenter.js",
   "pilotReadinessPack.js",
   "demoWalkthrough.js",
@@ -15,6 +16,7 @@ const syntaxFiles = [
 const testFiles = [
   "tests/demoShared.test.js",
   "tests/pilotIntakeSafety.test.js",
+  "tests/readinessEngine.test.js",
   "tests/demoControlCenter.test.js",
   "tests/pilotReadinessPack.test.js",
   "tests/demoWalkthrough.test.js",

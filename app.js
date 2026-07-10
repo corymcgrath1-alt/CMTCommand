@@ -216,6 +216,27 @@ function getServiceRequirements(service) {
   };
 }
 
+function getReadinessEngine() {
+  const utility = window.CMTReadinessEngine;
+  if (!utility) throw new Error("CMTReadinessEngine must load before app.js");
+  return utility;
+}
+
+function getReadinessEngineContext(extra = {}) {
+  return {
+    technicians: demoTechnicians,
+    equipment: demoEquipment,
+    serviceRequirements: serviceTypeRequirements,
+    workOrders: demoWorkOrders,
+    pickups: cylinderPickups,
+    assignments: state.demoAssignments,
+    pickupAssignments: state.pickupAssignments,
+    preferredBranch: "Springfield",
+    tomorrowDate: "2026-06-12",
+    ...extra
+  };
+}
+
 const emergencyRequest = {
   project: "Potomac Secure Logistics Center",
   contractor: "Atlantic Concrete Partners",
@@ -1900,46 +1921,7 @@ function dateCompare(a, b) {
 }
 
 function evaluateCylinderPickup(pickup) {
-  const tomorrow = "2026-06-12";
-  const status = getPickupStatus(pickup);
-  const assignedTech = getPickupTechnician(pickup);
-  const dueTomorrow = dateCompare(pickup.pickupDueDate, tomorrow) === 0;
-  const overdue = status === "Overdue" || dateCompare(pickup.pickupDueDate, tomorrow) < 0;
-  const issues = [];
-  let readiness = "Ready";
-  let tone = "good";
-
-  if (overdue && !assignedTech) {
-    readiness = "Not Ready";
-    tone = "bad";
-    issues.push("Field cylinders overdue for pickup.");
-  } else if (dueTomorrow && !assignedTech) {
-    readiness = "At Risk";
-    tone = "warn";
-    issues.push("Field cylinders on site, pickup due tomorrow, no pickup technician assigned.");
-  } else if (pickup.cylinderType === "Lab" && assignedTech && !assignedTech.returningToOffice) {
-    readiness = "At Risk";
-    tone = "warn";
-    issues.push("Lab-cured cylinders should return with assigned technician.");
-  } else if (assignedTech && !assignedTech.returningToOffice) {
-    readiness = "At Risk";
-    tone = "warn";
-    issues.push("Pickup assigned to technician not returning to office.");
-  } else if (assignedTech) {
-    issues.push("Future pickup assigned.");
-  } else {
-    issues.push(pickup.readinessIssue);
-  }
-
-  return {
-    readiness,
-    tone,
-    status,
-    assignedTech,
-    dueTomorrow,
-    overdue,
-    issues
-  };
+  return getReadinessEngine().evaluatePickupReadiness(pickup, getReadinessEngineContext());
 }
 
 function getCylinderPickupMetrics() {
@@ -2242,89 +2224,7 @@ function getWorkforceCriticalActions() {
 }
 
 function evaluateDemoReadiness(order, candidateTechId = null) {
-  const assignedTech = candidateTechId
-    ? demoTechnicians.find(tech => tech.id === candidateTechId)
-    : getDemoAssignedTech(order);
-  const requirements = getServiceRequirements(order.service);
-  const requiredCerts = order.requiredCerts?.length ? order.requiredCerts : requirements.requiredCerts;
-  const requiredEquipment = order.requiredEquipment?.length ? order.requiredEquipment : requirements.requiredEquipment;
-  const requiredClearance = order.requiredClearance?.length ? order.requiredClearance : requirements.clearance;
-  const blockers = [];
-  const warnings = [];
-  const equipmentPlan = [];
-
-  if (!assignedTech) {
-    blockers.push("No technician assigned.");
-  } else {
-    if (["Unavailable", "Off Duty"].includes(assignedTech.status)) {
-      blockers.push(`${assignedTech.name} is ${assignedTech.status.toLowerCase()} for tomorrow's work window.`);
-    } else if (assignedTech.status !== "Available") {
-      warnings.push(`${assignedTech.name} is ${assignedTech.status.toLowerCase()}; dispatcher should confirm release before dispatch.`);
-    }
-
-    requiredCerts.forEach(required => {
-      const cert = getDemoCert(assignedTech, required);
-      if (!cert) {
-        blockers.push(`${assignedTech.name} is missing ${required}.`);
-      } else if (cert.expiresIn < 0) {
-        blockers.push(`${required} is expired for ${assignedTech.name}.`);
-      } else if (cert.expiresIn <= 30) {
-        warnings.push(`${required} expires in ${cert.expiresIn} days for ${assignedTech.name}.`);
-      }
-    });
-
-    requiredClearance.forEach(clearance => {
-      if (!assignedTech.clearances?.includes(clearance)) {
-        blockers.push(`${assignedTech.name} is missing ${clearance}.`);
-      }
-    });
-  }
-
-  requiredEquipment.forEach(required => {
-    const item = getBestDemoEquipment(required);
-    if (!item) {
-      blockers.push(`No ${required} is listed in the local equipment roster.`);
-      return;
-    }
-    equipmentPlan.push(item);
-    if (["Out of service", "Unavailable"].includes(item.status)) {
-      blockers.push(`${item.name} is ${item.status.toLowerCase()}.`);
-    } else {
-      if (item.calibrationDays < 0) {
-        blockers.push(`${item.name} calibration expired ${Math.abs(item.calibrationDays)} days ago.`);
-      } else if (item.calibrationDays <= 30) {
-        warnings.push(`${item.name} calibration expires in ${item.calibrationDays} days.`);
-      }
-      if (item.status === "Limited/shared") {
-        warnings.push(`${item.name} is limited/shared and needs dispatch confirmation.`);
-      }
-    }
-  });
-
-  if (order.scheduleWarning) warnings.push(order.scheduleWarning);
-
-  const pickup = getCylinderPickupForWorkOrder(order.id);
-  if (pickup) {
-    const pickupReadiness = evaluateCylinderPickup(pickup);
-    if (pickupReadiness.readiness === "Not Ready") blockers.push(...pickupReadiness.issues);
-    if (pickupReadiness.readiness === "At Risk") warnings.push(...pickupReadiness.issues);
-  }
-
-  const status = blockers.length ? "Not Ready" : warnings.length ? "At Risk" : "Ready";
-  const tone = status === "Ready" ? "good" : status === "At Risk" ? "warn" : "bad";
-  return {
-    status,
-    tone,
-    assignedTech,
-    requirements,
-    requiredCerts,
-    requiredEquipment,
-    requiredClearance,
-    blockers,
-    warnings,
-    equipmentPlan,
-    reasons: blockers.length || warnings.length ? [...blockers, ...warnings] : ["Assigned technician, required certifications, equipment, calibration, and schedule are ready."]
-  };
+  return getReadinessEngine().evaluateWorkOrderReadiness(order, getReadinessEngineContext({ candidateTechId }));
 }
 
 function getDemoMetrics() {
@@ -2505,13 +2405,13 @@ function renderReadinessGapDetails(job) {
   const pickup = getCylinderPickupForWorkOrder(job.order.id);
   return `
     <details class="readiness-gap-details">
-      <summary>${getReadinessGapSummary(job)}</summary>
+      <summary>${escapeHtml(getReadinessGapSummary(job))}</summary>
       <div class="readiness-gap-detail-grid">
-        <div><span>Required Cert</span><strong>${job.order.requiredCerts.join(", ") || "None"}</strong></div>
-        <div><span>Required Equipment</span><strong>${job.order.requiredEquipment.join(", ") || "None"}</strong></div>
-        <div><span>Site Clearance</span><strong>${job.order.requiredClearance.join(", ") || "Not Required"}</strong></div>
-        <div><span>Pickup Need</span><strong>${pickup ? `${pickup.cylinderCount} ${pickup.cylinderType} Cylinders - ${evaluateCylinderPickup(pickup).status}` : "None"}</strong></div>
-        <div class="wide"><span>Primary Gap</span><strong>${primary || "No Readiness Gap"}</strong></div>
+        <div><span>Required Cert</span><strong>${renderSafeList(job.order.requiredCerts, "None")}</strong></div>
+        <div><span>Required Equipment</span><strong>${renderSafeList(job.order.requiredEquipment, "None")}</strong></div>
+        <div><span>Site Clearance</span><strong>${renderSafeList(job.order.requiredClearance, "Not Required")}</strong></div>
+        <div><span>Pickup Need</span><strong>${pickup ? `${escapeHtml(pickup.cylinderCount)} ${escapeHtml(pickup.cylinderType)} Cylinders - ${escapeHtml(evaluateCylinderPickup(pickup).status)}` : "None"}</strong></div>
+        <div class="wide"><span>Primary Gap</span><strong>${escapeHtml(primary || "No Readiness Gap")}</strong></div>
       </div>
     </details>
   `;
@@ -2555,6 +2455,17 @@ function renderCopyButton(text, label, tone = "ghost-button") {
   return `<button class="${tone}" type="button" data-copy-payload="${encodeURIComponent(text || "")}" data-copy-label="${escapeHtml(label)}">${escapeHtml(label)}</button>`;
 }
 
+function renderSafeList(values, empty = "None listed") {
+  const items = Array.isArray(values) ? values : [values];
+  const text = items.filter(item => item !== null && item !== undefined && String(item).trim()).map(String);
+  return text.length ? text.map(escapeHtml).join(", ") : escapeHtml(empty);
+}
+
+function renderSafeText(value, fallback = "") {
+  const text = value === null || value === undefined || value === "" ? fallback : value;
+  return escapeHtml(String(text));
+}
+
 function renderOpsViewToggle() {
   return `
     <div class="ops-view-toggle" role="group" aria-label="Operational summary view">
@@ -2579,7 +2490,7 @@ function renderSourceDetails(summary, label = "Source Details") {
   return `
     <details class="source-details" ${state.opsViewMode === "expanded" ? "open" : ""}>
       <summary>
-        <span>${label}</span>
+        <span>${escapeHtml(label)}</span>
         <span class="badge ${summary.stale ? "warn" : "good"}">${summary.stale ? "Stale" : "Current"}</span>
       </summary>
       <div class="source-detail-grid">
@@ -2591,11 +2502,11 @@ function renderSourceDetails(summary, label = "Source Details") {
         `).join("") : `<div><span>Source</span><strong>No source fields listed.</strong></div>`}
         <div class="wide">
           <span>Source records</span>
-          <strong>${summary.sourceRecords?.length ? summary.sourceRecords.map(escapeHtml).join(", ") : "None listed"} / ${summary.sourceHash}</strong>
+          <strong>${summary.sourceRecords?.length ? summary.sourceRecords.map(escapeHtml).join(", ") : "None listed"} / ${escapeHtml(summary.sourceHash)}</strong>
         </div>
         <div class="wide">
           <span>Detail length estimate</span>
-          <strong>${summary.characterSavings.originalDetailLength} source characters condensed to ${summary.characterSavings.summaryLength} summary characters (${summary.characterSavings.percent}% shorter).</strong>
+          <strong>${escapeHtml(summary.characterSavings.originalDetailLength)} source characters condensed to ${escapeHtml(summary.characterSavings.summaryLength)} summary characters (${escapeHtml(summary.characterSavings.percent)}% shorter).</strong>
         </div>
       </div>
     </details>
@@ -2606,8 +2517,8 @@ function renderSummaryList(title, items, empty = "None listed") {
   const values = (Array.isArray(items) ? items : [items]).filter(Boolean);
   return `
     <div class="ops-list-block">
-      <span>${title}</span>
-      ${values.length ? `<ul>${values.map(item => `<li>${escapeHtml(String(item))}</li>`).join("")}</ul>` : `<strong>${empty}</strong>`}
+      <span>${escapeHtml(title)}</span>
+      ${values.length ? `<ul>${values.map(item => `<li>${escapeHtml(String(item))}</li>`).join("")}</ul>` : `<strong>${escapeHtml(empty)}</strong>`}
     </div>
   `;
 }
@@ -3167,10 +3078,12 @@ function getDemoControl() {
 
 function getDemoControlRequiredUtilities() {
   return {
+    readinessEngine: getReadinessEngine(),
     operationalCompression: getOpsCompression(),
     operationalImpact: getOpsImpact(),
     demoWalkthrough: getDemoWalkthrough(),
-    pilotReadinessPack: getPilotPack()
+    pilotReadinessPack: getPilotPack(),
+    pilotIntakeSafety: getPilotIntakeSafety()
   };
 }
 
@@ -4036,11 +3949,11 @@ function renderCoverageHandoffPacket(summary) {
       <div class="ops-card-head">
         <div>
           <p class="eyebrow">Coverage Handoff Packet</p>
-          <h3>${summary.headline}</h3>
+          <h3>${escapeHtml(summary.headline)}</h3>
           <p>${escapeHtml(summary.summary)}</p>
         </div>
         <div class="panel-actions">
-          <span class="badge ${summary.tone}">${summary.status}</span>
+          <span class="badge ${summary.tone}">${escapeHtml(summary.status)}</span>
           ${renderCopyButton(summary.copyText, "Copy Coverage Handoff")}
         </div>
       </div>
@@ -4081,57 +3994,11 @@ function renderSmartIntakeSummary(summary) {
 }
 
 function getCoverageImpactForTech(tech, targetOrder) {
-  const assignedOrder = demoWorkOrders.find(order => order.id !== targetOrder.id && getDemoAssignedTech(order)?.id === tech.id);
-  if (!assignedOrder) {
-    return {
-      label: "No new gap",
-      tone: "good",
-      detail: tech.cascadingImpact || "No scheduled job breaks if this technician is moved.",
-      penalty: 0
-    };
-  }
-  const currentReadiness = evaluateDemoReadiness(assignedOrder);
-  const tone = currentReadiness.status === "Ready" ? "warn" : "bad";
-  const label = currentReadiness.status === "Ready" ? "Creates coverage gap" : "Worsens existing risk";
-  return {
-    label,
-    tone,
-    detail: `${assignedOrder.id} / ${assignedOrder.project} would lose ${tech.name}. ${tech.cascadingImpact || ""}`.trim(),
-    penalty: currentReadiness.status === "Ready" ? 16 : 10
-  };
+  return getReadinessEngine().getCoverageImpactForTechnician(tech, targetOrder, getReadinessEngineContext());
 }
 
 function getDemoCoverageCandidates(order) {
-  return demoTechnicians.map(tech => {
-    const evaluation = evaluateDemoReadiness(order, tech.id);
-    const requirements = evaluation.requirements;
-    const clearanceMatch = evaluation.requiredClearance.every(clearance => tech.clearances?.includes(clearance));
-    const equipmentAccess = evaluation.requiredEquipment.every(item => {
-      const lower = item.toLowerCase();
-      return tech.equipmentAccess?.some(access => {
-        const accessLower = access.toLowerCase();
-        return accessLower.includes(lower) || (lower.includes("slump") || lower.includes("air meter") || lower.includes("cylinder") || lower.includes("thermometer")) && accessLower.includes("concrete field kit");
-      });
-    });
-    const impact = getCoverageImpactForTech(tech, order);
-    const sameOffice = tech.branch === "Springfield";
-    const warningPenalty = evaluation.warnings.length * 8;
-    const blockerPenalty = evaluation.blockers.length * 24;
-    const distancePenalty = parseInt(tech.distance, 10) > 40 ? 10 : 0;
-    const score = Math.max(5, Math.min(99, 92 + (sameOffice ? 4 : -4) + (clearanceMatch ? 4 : -18) + (equipmentAccess ? 3 : -8) - warningPenalty - blockerPenalty - distancePenalty - impact.penalty));
-    return {
-      tech,
-      evaluation,
-      requirements,
-      clearanceMatch,
-      equipmentAccess,
-      impact,
-      score,
-      sameOffice,
-      canAssign: evaluation.blockers.length === 0,
-      label: evaluation.blockers.length ? "Not qualified" : evaluation.warnings.length ? "Coverage with warning" : "Direct match"
-    };
-  }).sort((a, b) => b.score - a.score);
+  return getReadinessEngine().createCoverageCandidates(order, getReadinessEngineContext());
 }
 
 function getSelectedDemoCandidate(order) {
@@ -4339,6 +4206,9 @@ function renderCommandCenter() {
   const issues = getCriticalReadinessIssues();
   const actions = getReadinessActionQueue();
   const orderedJobs = filterAndSortReadinessJobs(readiness.jobs, "tomorrowReadiness");
+  const primaryIssue = issues[0] || null;
+  const primaryGapLabel = primaryIssue ? `${primaryIssue.order.id} ${primaryIssue.label}` : "No Open Readiness Gap";
+  const primaryActionLabel = actions[0]?.title || "Dispatch as planned";
   const latestDecision = state.emergencyDecisionLog[0];
   const opsBrief = createTomorrowOpsBriefSummary(readiness, issues, actions);
   const impactSnapshot = createOperationalImpactSnapshot();
@@ -4359,10 +4229,10 @@ function renderCommandCenter() {
             <span class="badge ${issue.tone}">${issue.order.id} - ${issue.label.includes("Cert") ? "Certification Gap" : issue.label.includes("Assignment") ? "Coverage Gap" : issue.label}</span>
             <span class="badge ${issue.tone}">${issue.severity}</span>
           </div>
-          <strong>${issue.reason.replace(/\.$/, "")}</strong>
+          <strong>${escapeHtml(issue.reason.replace(/\.$/, ""))}</strong>
           <div class="gap-structure">
-            <div><span>Why It Matters</span><p>${issue.order.service === "Cylinder pickup" ? "Pickup obligations affect tomorrow readiness and lab handoff." : `${getServiceDisplayName(issue.order.service)} cannot proceed cleanly at ${issue.order.time}.`}</p></div>
-            <div><span>Recommended Fix</span><p>${getReadinessActionForIssue(issue)}</p></div>
+            <div><span>Why It Matters</span><p>${issue.order.service === "Cylinder pickup" ? "Pickup obligations affect tomorrow readiness and lab handoff." : `${escapeHtml(getServiceDisplayName(issue.order.service))} cannot proceed cleanly at ${escapeHtml(issue.order.time)}.`}</p></div>
+            <div><span>Recommended Fix</span><p>${escapeHtml(getReadinessActionForIssue(issue))}</p></div>
           </div>
           <div class="readiness-issue-footer">
             <span>${issue.module}</span>
@@ -4382,8 +4252,8 @@ function renderCommandCenter() {
         ${actions.length ? actions.slice(0, 6).map((action, index) => `
           <article class="readiness-action-card ${action.tone}">
             <span class="badge ${index === 0 ? "bad" : action.tone}">${index === 0 ? "Do First" : action.label}</span>
-            <strong>${action.title}</strong>
-            <p>${action.detail}</p>
+            <strong>${escapeHtml(action.title)}</strong>
+            <p>${escapeHtml(action.detail)}</p>
             <button class="ghost-button" type="button" data-page="${action.page}">Review</button>
           </article>
         `).join("") : `<div class="empty-state">No action queue items. Tomorrow is currently ready.</div>`}
@@ -4481,8 +4351,8 @@ function renderCommandCenter() {
           <span><strong>${readiness.notReady}</strong> Not Ready</span>
         </div>
         <div class="readiness-next-line">
-          <div><span>Primary Readiness Gap</span><strong>TRD-104 Needs Coverage</strong></div>
-          <div><span>Next Best Action</span><strong>Find Coverage</strong></div>
+          <div><span>Primary Readiness Gap</span><strong>${escapeHtml(primaryGapLabel)}</strong></div>
+          <div><span>Next Best Action</span><strong>${escapeHtml(primaryActionLabel)}</strong></div>
         </div>
         <div class="how-readiness-works">
           <strong>Readiness Rule</strong>
@@ -4527,6 +4397,14 @@ function renderReadinessDemo() {
     ["Readiness Gaps", metrics.warnings + metrics.blockers, "warn"],
     ["Hard Gaps", metrics.blockers, "bad"]
   ];
+  const selectedNeedsCoverage = selectedReadiness.status !== "Ready";
+  const storyBadge = selectedNeedsCoverage ? `${selectedOrder.id} Needs Coverage` : `${selectedOrder.id} Ready`;
+  const storyHeading = selectedNeedsCoverage
+    ? "Assigned technician is unavailable."
+    : `${selectedReadiness.assignedTech?.name || "Assigned technician"} is ready for dispatch.`;
+  const storyCopy = selectedNeedsCoverage
+    ? "Maria Lopez is the source-backed coverage recommendation after certification, equipment, and schedule-impact checks."
+    : `${selectedOrder.id} is no longer the open blocker. Review the next readiness risk or open the Decision Log for the recorded approval.`;
 
   return `
     <section class="demo-command-hero">
@@ -4547,11 +4425,11 @@ function renderReadinessDemo() {
 
     <section class="coverage-story-card panel ${selectedOrder.id === "TRD-104" ? "active" : ""}">
       <div>
-        <span class="badge bad">TRD-104 Needs Coverage</span>
-        <h2>Assigned technician is unavailable.</h2>
-        <p>Maria Lopez is the source-backed coverage recommendation after certification, equipment, and schedule-impact checks.</p>
+        <span class="badge ${selectedNeedsCoverage ? "bad" : "good"}">${escapeHtml(storyBadge)}</span>
+        <h2>${escapeHtml(storyHeading)}</h2>
+        <p>${escapeHtml(storyCopy)}</p>
       </div>
-      <button class="primary-button" type="button" data-demo-find-coverage>Find Coverage</button>
+      <button class="${selectedNeedsCoverage ? "primary-button" : "ghost-button"}" type="button" ${selectedNeedsCoverage ? "data-demo-find-coverage" : "data-page=\"decisionlog\""}>${selectedNeedsCoverage ? "Find Coverage" : "Open Decision Log"}</button>
     </section>
 
     <section class="table-panel demo-schedule-panel ${["schedule", "not-ready"].includes(activeScript.target) ? "demo-script-highlight" : ""}">
@@ -4586,12 +4464,12 @@ function renderReadinessDemo() {
                     <td><span class="badge ${readiness.tone}">${getReadinessDisplayStatus(readiness.status)}</span>${order.id === selectedOrder.id ? `<span class="badge info">Selected</span>` : ""}</td>
                     <td class="time-cell"><strong>${order.time}</strong></td>
                     <td>
-                      <strong>${order.id}</strong>
-                      <span class="subtle">${order.project}</span>
+                      <strong>${escapeHtml(order.id)}</strong>
+                      <span class="subtle">${escapeHtml(order.project)}</span>
                     </td>
-                    <td>${getServiceDisplayName(order.service)}</td>
-                    <td>${order.location}</td>
-                    <td>${readiness.assignedTech ? readiness.assignedTech.name : "Unassigned"}</td>
+                    <td>${escapeHtml(getServiceDisplayName(order.service))}</td>
+                    <td>${escapeHtml(order.location)}</td>
+                    <td>${readiness.assignedTech ? escapeHtml(readiness.assignedTech.name) : "Unassigned"}</td>
                     <td>${renderReadinessGapDetails(job)}</td>
                     <td>${readiness.status === "Ready" ? `<span class="badge good">Ready</span>` : `<button class="link-button" type="button" data-demo-find-coverage>Find Coverage</button>`}</td>
                   </tr>
@@ -4606,8 +4484,8 @@ function renderReadinessDemo() {
         <div class="panel-head">
           <div>
             <p class="eyebrow">Work Order Detail</p>
-            <h2>${selectedOrder.id} / ${getServiceDisplayName(selectedOrder.service)}</h2>
-            <p>${selectedOrder.project} / ${selectedOrder.location}</p>
+            <h2>${escapeHtml(selectedOrder.id)} / ${escapeHtml(getServiceDisplayName(selectedOrder.service))}</h2>
+            <p>${escapeHtml(selectedOrder.project)} / ${escapeHtml(selectedOrder.location)}</p>
           </div>
           <span class="badge ${selectedReadiness.tone}">${selectedReadiness.status}</span>
         </div>
@@ -4616,12 +4494,12 @@ function renderReadinessDemo() {
           <article class="selected-order">
             <h3>Summary</h3>
             <dl>
-              <div><dt>Start</dt><dd>${selectedOrder.time}</dd></div>
-              <div><dt>Priority</dt><dd>${selectedOrder.priority}</dd></div>
-              <div><dt>Technician</dt><dd>${selectedReadiness.assignedTech?.name || "Unassigned"}</dd></div>
+              <div><dt>Start</dt><dd>${escapeHtml(selectedOrder.time)}</dd></div>
+              <div><dt>Priority</dt><dd>${escapeHtml(selectedOrder.priority)}</dd></div>
+              <div><dt>Technician</dt><dd>${selectedReadiness.assignedTech?.name ? escapeHtml(selectedReadiness.assignedTech.name) : "Unassigned"}</dd></div>
               <div><dt>Status</dt><dd>${getReadinessDisplayStatus(selectedReadiness.status)}</dd></div>
             </dl>
-            <p>${selectedOrder.scope}</p>
+            <p>${escapeHtml(selectedOrder.scope)}</p>
           </article>
           <article class="selected-order">
             <h3>Readiness Blockers</h3>
@@ -4629,8 +4507,8 @@ function renderReadinessDemo() {
               ${selectedReadiness.reasons.map(reason => `
                 <div>
                   <span class="badge ${selectedReadiness.tone}">${reason.includes("missing") ? "Readiness Gap" : reason.includes("Unavailable") || reason.includes("unavailable") ? "Coverage Gap" : "Readiness Gap"}</span>
-                  <strong>${reason.replace(/\.$/, "")}</strong>
-                  <p>Impact: ${selectedOrder.id} cannot run as currently assigned.</p>
+                  <strong>${escapeHtml(reason.replace(/\.$/, ""))}</strong>
+                  <p>Impact: ${escapeHtml(selectedOrder.id)} cannot run as currently assigned.</p>
                   <p>Fix: ${reason.includes("technician") || reason.includes("unavailable") ? "Assign qualified coverage" : "Resolve before dispatch"}</p>
                 </div>
               `).join("")}
@@ -4639,10 +4517,10 @@ function renderReadinessDemo() {
           <article class="selected-order">
             <h3>Work Order Requirements</h3>
             <div class="requirement-blocks">
-              <div><span>Required Certs</span><strong>${selectedOrder.requiredCerts.join(", ")}</strong></div>
-              <div><span>Required Equipment</span><strong>${selectedOrder.requiredEquipment.join(", ")}</strong></div>
-              <div><span>Site Clearance</span><strong>${(selectedReadiness.requiredClearance || []).join(", ")}</strong></div>
-              <div><span>Pickup Needs</span><strong>${selectedOrder.hasCylinders ? `${selectedOrder.cylinderCount} ${selectedOrder.cylinderType} Cylinders - Pickup ${selectedOrder.pickupDueDate}` : "None"}</strong></div>
+              <div><span>Required Certs</span><strong>${renderSafeList(selectedOrder.requiredCerts)}</strong></div>
+              <div><span>Required Equipment</span><strong>${renderSafeList(selectedOrder.requiredEquipment)}</strong></div>
+              <div><span>Site Clearance</span><strong>${renderSafeList(selectedReadiness.requiredClearance || [])}</strong></div>
+              <div><span>Pickup Needs</span><strong>${selectedOrder.hasCylinders ? `${escapeHtml(selectedOrder.cylinderCount)} ${escapeHtml(selectedOrder.cylinderType)} Cylinders - Pickup ${escapeHtml(selectedOrder.pickupDueDate)}` : "None"}</strong></div>
             </div>
           </article>
         </div>
@@ -4716,7 +4594,7 @@ function renderCylinderPickupDetail(order) {
         <div class="panel-head compact">
           <div>
             <h3>Cylinder Pickup</h3>
-            <p>${order.cylinderCount} ${order.cylinderType.toLowerCase()} cylinders noted on the work order. No active pickup obligation is due in this workflow.</p>
+            <p>${escapeHtml(order.cylinderCount)} ${escapeHtml(String(order.cylinderType || "").toLowerCase())} cylinders noted on the work order. No active pickup obligation is due in this workflow.</p>
           </div>
         </div>
       </div>
@@ -4728,20 +4606,20 @@ function renderCylinderPickupDetail(order) {
       <div class="panel-head compact">
         <div>
           <h3>Cylinder Pickup</h3>
-          <p>${pickup.projectName} / ${pickup.jobLocation}</p>
+          <p>${escapeHtml(pickup.projectName)} / ${escapeHtml(pickup.jobLocation)}</p>
         </div>
-        <span class="badge ${evaluation.tone}">${evaluation.readiness}</span>
+        <span class="badge ${evaluation.tone}">${escapeHtml(evaluation.readiness)}</span>
       </div>
       <dl>
-        <div><dt>Type</dt><dd>${pickup.cylinderType}</dd></div>
-        <div><dt>Count</dt><dd>${pickup.cylinderCount}</dd></div>
-        <div><dt>Cast date</dt><dd>${pickup.castDate}</dd></div>
-        <div><dt>Pickup due</dt><dd>${pickup.pickupDueDate}</dd></div>
-        <div><dt>Pickup status</dt><dd><span class="badge ${toneForCylinderPickup(evaluation)}">${evaluation.status}</span></dd></div>
-        <div><dt>Assigned pickup tech</dt><dd>${evaluation.assignedTech?.name || "Unassigned"}</dd></div>
+        <div><dt>Type</dt><dd>${escapeHtml(pickup.cylinderType)}</dd></div>
+        <div><dt>Count</dt><dd>${escapeHtml(pickup.cylinderCount)}</dd></div>
+        <div><dt>Cast date</dt><dd>${escapeHtml(pickup.castDate)}</dd></div>
+        <div><dt>Pickup due</dt><dd>${escapeHtml(pickup.pickupDueDate)}</dd></div>
+        <div><dt>Pickup status</dt><dd><span class="badge ${toneForCylinderPickup(evaluation)}">${escapeHtml(evaluation.status)}</span></dd></div>
+        <div><dt>Assigned pickup tech</dt><dd>${escapeHtml(evaluation.assignedTech?.name || "Unassigned")}</dd></div>
       </dl>
-      <p>${pickup.specialInstructions}</p>
-      <button class="ghost-button" type="button" data-open-pickup="${pickup.id}">Assign Pickup</button>
+      <p>${escapeHtml(pickup.specialInstructions)}</p>
+      <button class="ghost-button" type="button" data-open-pickup="${escapeHtml(pickup.id)}">Assign Pickup</button>
     </div>
   `;
 }
@@ -4766,10 +4644,10 @@ function renderCylinderReadinessIssueList() {
       </div>
       <div class="status-list">
         ${issues.map(item => `
-          <button class="alert-row cylinder-issue-row" type="button" data-open-pickup="${item.pickup.id}">
+          <button class="alert-row cylinder-issue-row" type="button" data-open-pickup="${escapeHtml(item.pickup.id)}">
             <span class="dot ${item.tone}"></span>
-            <span><strong>${item.issue}</strong><br><span class="subtle">${item.pickup.projectName} / ${item.pickup.cylinderCount} ${item.pickup.cylinderType.toLowerCase()} cylinders / ${item.assignedTech?.name || "Unassigned"}</span></span>
-            <span class="badge ${item.tone}">${item.status}</span>
+            <span><strong>${escapeHtml(item.issue)}</strong><br><span class="subtle">${escapeHtml(item.pickup.projectName)} / ${escapeHtml(item.pickup.cylinderCount)} ${escapeHtml(String(item.pickup.cylinderType || "").toLowerCase())} cylinders / ${escapeHtml(item.assignedTech?.name || "Unassigned")}</span></span>
+            <span class="badge ${item.tone}">${escapeHtml(item.status)}</span>
           </button>
         `).join("")}
       </div>
@@ -4797,9 +4675,9 @@ function renderCylinderLocationBoard() {
             evaluation.assignedTech ? `Assigned to ${evaluation.assignedTech.name}` : "Pickup unassigned"
           ];
           return `
-            <button class="cylinder-marker ${evaluation.tone}" type="button" data-open-pickup="${pickup.id}" style="--x:${16 + (index * 19) % 68}%;--y:${18 + (index * 23) % 56}%;">
-              <strong>${pickup.projectName}</strong>
-              ${labels.map(label => `<span>${label}</span>`).join("")}
+            <button class="cylinder-marker ${evaluation.tone}" type="button" data-open-pickup="${escapeHtml(pickup.id)}" style="--x:${16 + (index * 19) % 68}%;--y:${18 + (index * 23) % 56}%;">
+              <strong>${escapeHtml(pickup.projectName)}</strong>
+              ${labels.map(label => `<span>${escapeHtml(label)}</span>`).join("")}
             </button>
           `;
         }).join("")}
@@ -4818,22 +4696,22 @@ function renderPickupSuggestionsPanel() {
       <div class="panel-head">
         <div>
           <p class="eyebrow">Pickup Coverage Suggestions</p>
-          <h2>Assign pickup for ${pickup.projectName}</h2>
-          <p>${pickup.cylinderCount} ${pickup.cylinderType.toLowerCase()} cylinders / due ${pickup.pickupDueDate} / current status: ${evaluation.status}</p>
+          <h2>Assign pickup for ${escapeHtml(pickup.projectName)}</h2>
+          <p>${escapeHtml(pickup.cylinderCount)} ${escapeHtml(String(pickup.cylinderType || "").toLowerCase())} cylinders / due ${escapeHtml(pickup.pickupDueDate)} / current status: ${escapeHtml(evaluation.status)}</p>
         </div>
-        <span class="badge ${evaluation.tone}">${evaluation.readiness}</span>
+        <span class="badge ${evaluation.tone}">${escapeHtml(evaluation.readiness)}</span>
       </div>
       <div class="pickup-suggestion-layout">
         <div class="pickup-suggestion-list">
           ${suggestions.map(item => `
-            <button class="pickup-suggestion ${item.tech.id === selected.tech.id ? "selected" : ""}" type="button" data-pickup-tech="${item.tech.id}">
+            <button class="pickup-suggestion ${item.tech.id === selected.tech.id ? "selected" : ""}" type="button" data-pickup-tech="${escapeHtml(item.tech.id)}">
               <div class="demo-candidate-head">
-                <strong>${item.tech.name}</strong>
+                <strong>${escapeHtml(item.tech.name)}</strong>
                 <span class="badge ${item.canAssign ? toneForScore(item.score) : "bad"}">${item.score}% Match</span>
               </div>
-              <p>${item.explanation}</p>
+              <p>${escapeHtml(item.explanation)}</p>
               <div class="match-meta">
-                <span>${item.tech.currentRoute || "Available route"}</span>
+                <span>${escapeHtml(item.tech.currentRoute || "Available route")}</span>
                 <span>${item.tech.returningToOffice ? "Returning to lab/office" : "Not returning to office"}</span>
               </div>
             </button>
@@ -4843,16 +4721,16 @@ function renderPickupSuggestionsPanel() {
           <h3>Pickup Assignment</h3>
           <div class="selected-order">
             <span class="badge ${selected.canAssign ? "good" : "bad"}">${selected.canAssign ? "Recommended" : "Not available"}</span>
-            <strong>${selected.tech.name}</strong>
-            <span class="subtle">${selected.reason}</span>
+            <strong>${escapeHtml(selected.tech.name)}</strong>
+            <span class="subtle">${escapeHtml(selected.reason)}</span>
             <dl>
-              <div><dt>Extra drive time</dt><dd>${selected.tech.estimatedExtraDriveTime || 18} min</dd></div>
-              <div><dt>Distance</dt><dd>${selected.tech.estimatedDistanceFromPickup || "n/a"} mi</dd></div>
+              <div><dt>Extra drive time</dt><dd>${escapeHtml(selected.tech.estimatedExtraDriveTime || 18)} min</dd></div>
+              <div><dt>Distance</dt><dd>${escapeHtml(selected.tech.estimatedDistanceFromPickup || "n/a")} mi</dd></div>
               <div><dt>Returning</dt><dd>${selected.tech.returningToOffice ? "Yes" : "No"}</dd></div>
             </dl>
           </div>
-          <button class="primary-button assign-button" type="button" data-assign-pickup="${selected.tech.id}" ${selected.canAssign ? "" : "disabled"}>
-            Assign Pickup to ${selected.tech.name}
+          <button class="primary-button assign-button" type="button" data-assign-pickup="${escapeHtml(selected.tech.id)}" ${selected.canAssign ? "" : "disabled"}>
+            Assign Pickup to ${escapeHtml(selected.tech.name)}
           </button>
         </aside>
       </div>
@@ -4868,13 +4746,13 @@ function renderPickupRoutePreview() {
       <div class="panel-head">
         <div>
           <p class="eyebrow">Pickup Route Preview</p>
-          <h2>${route.tech?.name || "Technician"} pickup route</h2>
+          <h2>${escapeHtml(route.tech?.name || "Technician")} pickup route</h2>
           <p>Mock route order only. No real routing API is used.</p>
         </div>
-        <span class="badge info">${route.stopCount} stops / ${route.driveTime} min est.</span>
+        <span class="badge info">${escapeHtml(route.stopCount)} stops / ${escapeHtml(route.driveTime)} min est.</span>
       </div>
       <div class="pickup-route">
-        ${route.orderedStops.map((stop, index) => `<span>${index + 1}. ${stop}</span>`).join("")}
+        ${route.orderedStops.map((stop, index) => `<span>${escapeHtml(index + 1)}. ${escapeHtml(stop)}</span>`).join("")}
       </div>
     </section>
   `;
@@ -4890,34 +4768,34 @@ function renderDemoCoverageScreen(order, readiness, candidates, selectedCandidat
       <div class="panel-head">
         <div>
           <p class="eyebrow">Coverage Options</p>
-          <h2>Coverage Plan For ${order.id}</h2>
+          <h2>Coverage Plan For ${escapeHtml(order.id)}</h2>
           <p>Ranks qualified technicians by availability, certification match, clearance, equipment access, ETA, pickup impact, and schedule impact.</p>
         </div>
-        <span class="badge ${readiness.tone}">Current: ${readiness.status}</span>
+        <span class="badge ${readiness.tone}">Current: ${escapeHtml(readiness.status)}</span>
       </div>
       <div class="demo-coverage-layout">
         <div class="demo-candidate-list ${activeScript.target === "coverage" ? "demo-script-highlight-soft" : ""}">
           <h3>Qualified Technician Review</h3>
-          ${visibleCandidates.map((candidate, index) => `
-            <button class="demo-candidate ${candidate.tech.id === selectedId ? "selected" : ""}" type="button" data-demo-tech="${candidate.tech.id}" ${candidate.tech.name === "Maria Lopez" ? `data-demo-target="maria-coverage-recommendation"` : ""}>
+          ${visibleCandidates.length ? visibleCandidates.map((candidate, index) => `
+            <button class="demo-candidate ${candidate.tech.id === selectedId ? "selected" : ""}" type="button" data-demo-tech="${escapeHtml(candidate.tech.id)}" ${candidate.tech.name === "Maria Lopez" ? `data-demo-target="maria-coverage-recommendation"` : ""}>
               <div class="demo-candidate-head">
-                <strong>${candidate.tech.name}</strong>
+                <strong>${escapeHtml(candidate.tech.name)}</strong>
                 <span class="badge ${candidate.canAssign ? candidate.evaluation.tone : "bad"}">${candidate.canAssign && index === 0 ? "Recommended" : candidate.canAssign ? `${candidate.score}% Match` : "Not Qualified"}</span>
               </div>
-              <p>${candidate.tech.pickupNote || "Can support the assignment without creating a new readiness gap."}</p>
+              <p>${escapeHtml(candidate.tech.pickupNote || "Can support the assignment without creating a new readiness gap.")}</p>
               <div class="match-meta">
-                <span>${candidate.score}% Coverage Fit</span>
+                <span>${escapeHtml(candidate.score)}% Coverage Fit</span>
                 <span>${candidate.sameOffice ? "Same-office match" : "Other-office match"}</span>
-                <span>ETA: ${candidate.tech.distance}</span>
+                <span>ETA: ${escapeHtml(candidate.tech.distance)}</span>
               </div>
               <div class="candidate-signal-grid">
                 <div><span>Certification Match</span><strong>${candidate.evaluation.blockers.some(reason => reason.includes("missing") || reason.includes("expired")) ? "Needs Review" : "Meets Required Certs"}</strong></div>
                 <div><span>Clearance</span><strong>${candidate.clearanceMatch ? "Cleared" : "Clearance Gap"}</strong></div>
                 <div><span>Equipment Access</span><strong>${candidate.equipmentAccess ? "Available" : "Needs Equipment Plan"}</strong></div>
-                <div><span>ETA</span><strong>${candidate.tech.distance}</strong></div>
-                <div><span>Home Base</span><strong>${candidate.tech.homeBase || candidate.tech.branch}</strong></div>
-                <div><span>Preferred End Area</span><strong>${candidate.tech.preferredEndArea || "South Office Corridor"}</strong></div>
-                <div><span>Cascading Impact</span><strong>${candidate.impact.label}</strong></div>
+                <div><span>ETA</span><strong>${escapeHtml(candidate.tech.distance)}</strong></div>
+                <div><span>Home Base</span><strong>${renderSafeText(candidate.tech.homeBase || candidate.tech.branch)}</strong></div>
+                <div><span>Preferred End Area</span><strong>${renderSafeText(candidate.tech.preferredEndArea || "South Office Corridor")}</strong></div>
+                <div><span>Cascading Impact</span><strong>${escapeHtml(candidate.impact.label)}</strong></div>
                 <div><span>Drive Time Impact</span><strong>Reduces extra miles</strong></div>
                 <div><span>Pickup Impact</span><strong>${candidate.tech.returningToOffice ? "Can Return Cylinders" : "Finalize Pickup Plan"}</strong></div>
               </div>
@@ -4926,18 +4804,23 @@ function renderDemoCoverageScreen(order, readiness, candidates, selectedCandidat
                   ? [...candidate.evaluation.blockers, ...candidate.evaluation.warnings]
                   : ["Meets required certifications, availability, equipment, and calibration checks."])
                   .slice(0, 3)
-                  .map(reason => `<span>${reason}</span>`).join("")}
+                  .map(reason => `<span>${escapeHtml(reason)}</span>`).join("")}
               </div>
             </button>
-          `).join("")}
+          `).join("") : `
+            <article class="coverage-note bad">
+              <strong>No valid internal coverage option is currently available.</strong>
+              <span>Every candidate has a hard blocker or creates another readiness gap. Review near matches, partner coverage, or manager escalation before claiming this job is resolved.</span>
+            </article>
+          `}
           ${nearMatches.length ? `
-            <details class="near-match-details">
+            <details class="near-match-details" ${visibleCandidates.length ? "" : "open"}>
               <summary>Near Matches (${nearMatches.length})</summary>
               <div class="status-list">
                 ${nearMatches.map(candidate => `
                   <article class="coverage-note warn">
-                    <strong>${candidate.tech.name}</strong>
-                    <span>${candidate.evaluation.blockers[0] || "Needs one requirement before coverage."}</span>
+                    <strong>${escapeHtml(candidate.tech.name)} - ${escapeHtml(candidate.label)}</strong>
+                    <span>${escapeHtml(candidate.evaluation.blockers[0] || candidate.impact.detail || "Needs manager review before coverage.")}</span>
                   </article>
                 `).join("")}
               </div>
@@ -4950,33 +4833,33 @@ function renderDemoCoverageScreen(order, readiness, candidates, selectedCandidat
           ${selectedCandidate ? `
             <div class="selected-order">
               <span class="badge ${selectedCandidate.evaluation.tone}">${selectedCandidate.evaluation.status} after reassignment</span>
-              <strong>${selectedCandidate.tech.name}</strong>
-              <span class="subtle">${selectedCandidate.sameOffice ? "Same-office coverage" : "Other-office coverage"} / ${selectedCandidate.tech.distance}</span>
+              <strong>${escapeHtml(selectedCandidate.tech.name)}</strong>
+              <span class="subtle">${selectedCandidate.sameOffice ? "Same-office coverage" : "Other-office coverage"} / ${escapeHtml(selectedCandidate.tech.distance)}</span>
               <dl>
-                <div><dt>Certifications</dt><dd>${order.requiredCerts.map(cert => getDemoCert(selectedCandidate.tech, cert)?.name || `Missing ${cert}`).join(", ")}</dd></div>
-                <div><dt>Clearance</dt><dd>${selectedCandidate.clearanceMatch ? order.requiredClearance.join(", ") : "Missing required clearance"}</dd></div>
-                <div><dt>Equipment plan</dt><dd>${selectedCandidate.evaluation.equipmentPlan.map(item => `${item.name} (${item.status})`).join(", ")}</dd></div>
-                <div><dt>Cascading impact</dt><dd>${selectedCandidate.impact.detail}</dd></div>
+                <div><dt>Certifications</dt><dd>${renderSafeList(order.requiredCerts.map(cert => getDemoCert(selectedCandidate.tech, cert)?.name || `Missing ${cert}`))}</dd></div>
+                <div><dt>Clearance</dt><dd>${selectedCandidate.clearanceMatch ? renderSafeList(order.requiredClearance) : "Missing required clearance"}</dd></div>
+                <div><dt>Equipment plan</dt><dd>${renderSafeList(selectedCandidate.evaluation.equipmentPlan.map(item => `${item.name} (${item.status})`))}</dd></div>
+                <div><dt>Cascading impact</dt><dd>${escapeHtml(selectedCandidate.impact.detail)}</dd></div>
                 <div><dt>Pickup impact</dt><dd>${selectedCandidate.tech.returningToOffice ? "Can return cylinders to the lab with the route." : "Finalize pickup plan after coverage."}</dd></div>
-                <div><dt>Remaining risks</dt><dd>${selectedCandidate.evaluation.warnings.length ? selectedCandidate.evaluation.warnings.join(" ") : "No remaining readiness warnings."}</dd></div>
+                <div><dt>Remaining risks</dt><dd>${selectedCandidate.evaluation.warnings.length ? renderSafeList(selectedCandidate.evaluation.warnings) : "No remaining readiness warnings."}</dd></div>
               </dl>
             </div>
             <div class="pickup-impact-choice">
               <strong>Pickup Risk</strong>
               <p>Concrete cylinders need end-of-day return planning. Finalize pickup after coverage so the route does not create a new gap.</p>
               <div class="coverage-actions compact">
-                <button class="ghost-button" type="button" data-open-pickup="${getCylinderPickupForWorkOrder(order.id)?.id || "CP-501"}">Assign Pickup Now</button>
-                <button class="ghost-button" type="button" data-open-pickup="${getCylinderPickupForWorkOrder(order.id)?.id || "CP-501"}">Finalize Pickup Plan After Coverage</button>
+                <button class="ghost-button" type="button" data-open-pickup="${escapeHtml(getCylinderPickupForWorkOrder(order.id)?.id || "CP-501")}">Assign Pickup Now</button>
+                <button class="ghost-button" type="button" data-open-pickup="${escapeHtml(getCylinderPickupForWorkOrder(order.id)?.id || "CP-501")}">Finalize Pickup Plan After Coverage</button>
               </div>
             </div>
             <label class="form-grid">
               <span>Decision Note</span>
               <textarea class="field-input ${activeScript.target === "note" ? "demo-pulse" : ""}" rows="5" data-demo-note placeholder="Example: Assign Maria Lopez for the 7:30 AM pour. Use SC-18, AM-09, TH-03, and CM-44 from Springfield field cage.">${escapeHtml(state.demoDecisionNote)}</textarea>
             </label>
-            <button class="primary-button assign-button ${activeScript.target === "assign" ? "demo-pulse" : ""}" type="button" data-demo-assign="${selectedCandidate.tech.id}" ${selectedCandidate.tech.name === "Maria Lopez" ? `data-demo-target="approve-coverage-plan"` : ""} ${selectedCandidate.canAssign ? "" : "disabled"}>
-              Approve Coverage Plan
+            <button class="primary-button assign-button ${activeScript.target === "assign" ? "demo-pulse" : ""}" type="button" data-demo-assign="${escapeHtml(selectedCandidate.tech.id)}" ${selectedCandidate.tech.name === "Maria Lopez" ? `data-demo-target="approve-coverage-plan"` : ""} ${selectedCandidate.canAssign && readiness.status !== "Ready" ? "" : "disabled"}>
+              ${readiness.status === "Ready" ? "Coverage Already Approved" : selectedCandidate.canAssign ? "Approve Coverage Plan" : "Coverage Not Feasible"}
             </button>
-            ${selectedCandidate.canAssign ? "" : `<p class="subtle">This candidate cannot be assigned because a hard blocker remains.</p>`}
+            ${selectedCandidate.canAssign && readiness.status !== "Ready" ? "" : `<p class="subtle">${readiness.status === "Ready" ? "This work order is already ready; open the Decision Log for the recorded approval." : "This candidate cannot be assigned because a hard blocker or downstream gap remains."}</p>`}
           ` : `<div class="empty-state">No candidate selected.</div>`}
         </aside>
       </div>
@@ -4991,15 +4874,15 @@ function renderDemoDecisionOutcome(activeScript = { target: "" }) {
       <div class="panel-head">
         <div>
           <p class="eyebrow">Coverage Plan Approved</p>
-          <h2>${decision.workOrder} Reassigned To ${decision.technician}</h2>
-          <p>${decision.note || "No decision note entered."}</p>
+          <h2>${escapeHtml(decision.workOrder)} Reassigned To ${escapeHtml(decision.technician)}</h2>
+          <p>${escapeHtml(decision.note || "No decision note entered.")}</p>
         </div>
         <span class="badge ${decision.tone}">${decision.status}</span>
       </div>
       <div class="grid three">
-        <div class="activity-row"><strong>Decision time</strong><span class="subtle">${decision.timestamp}</span></div>
-        <div class="activity-row"><strong>Equipment plan</strong><span class="subtle">${decision.equipmentPlan}</span></div>
-        <div class="activity-row"><strong>Remaining risks</strong><span class="subtle">${decision.remainingRisks}</span></div>
+        <div class="activity-row"><strong>Decision time</strong><span class="subtle">${escapeHtml(decision.timestamp)}</span></div>
+        <div class="activity-row"><strong>Equipment plan</strong><span class="subtle">${escapeHtml(decision.equipmentPlan)}</span></div>
+        <div class="activity-row"><strong>Remaining risks</strong><span class="subtle">${escapeHtml(decision.remainingRisks)}</span></div>
       </div>
       <div class="impact-callout">
         <strong>Impact</strong>
@@ -5297,44 +5180,44 @@ function renderDispatch() {
         <div class="panel-head">
           <div>
             <h2>Coverage Recommendation</h2>
-            <p>CMTCommand found one clean internal coverage option and one partner fallback. ${bestMatch?.tech.name || "The recommended technician"} is recommended because the rules-based check balances certification, clearance, equipment, ETA, pickup needs, and cascading impact.</p>
+            <p>CMTCommand found one clean internal coverage option and one partner fallback. ${escapeHtml(bestMatch?.tech.name || "The recommended technician")} is recommended because the rules-based check balances certification, clearance, equipment, ETA, pickup needs, and cascading impact.</p>
           </div>
         </div>
         <label class="form-grid dispatch-select">
           <span>Work Order</span>
           <select id="dispatchWorkOrder" class="field-input">
-            ${workOrders.filter(w => !w.techId || w.status === "Problem / delayed").slice(0, 12).map(w => `<option ${w.id === selected.id ? "selected" : ""} value="${w.id}">${w.id} - ${w.service}</option>`).join("")}
+            ${workOrders.filter(w => !w.techId || w.status === "Problem / delayed").slice(0, 12).map(w => `<option ${w.id === selected.id ? "selected" : ""} value="${escapeHtml(w.id)}">${escapeHtml(w.id)} - ${escapeHtml(w.service)}</option>`).join("")}
           </select>
         </label>
         <div class="selected-order">
-          <span class="badge ${toneForStatus(selected.status)}">${selected.status}</span>
-          <strong>${selected.project}</strong>
-          <span class="subtle">${selected.id} / ${selected.service}</span>
+          <span class="badge ${toneForStatus(selected.status)}">${escapeHtml(selected.status)}</span>
+          <strong>${escapeHtml(selected.project)}</strong>
+          <span class="subtle">${escapeHtml(selected.id)} / ${escapeHtml(selected.service)}</span>
           <dl>
-            <div><dt>Required</dt><dd>${selected.requiredTime}</dd></div>
-            <div><dt>Priority</dt><dd>${selected.priority}</dd></div>
-            <div><dt>Equipment</dt><dd>${selected.requiredEquipment.join(", ")}</dd></div>
+            <div><dt>Required</dt><dd>${escapeHtml(selected.requiredTime)}</dd></div>
+            <div><dt>Priority</dt><dd>${escapeHtml(selected.priority)}</dd></div>
+            <div><dt>Equipment</dt><dd>${renderSafeList(selected.requiredEquipment)}</dd></div>
           </dl>
-          <div class="pill-list">${selected.requiredCerts.map(c => `<span class="badge info">${c}</span>`).join("")}</div>
+          <div class="pill-list">${selected.requiredCerts.map(c => `<span class="badge info">${escapeHtml(c)}</span>`).join("")}</div>
         </div>
         <div class="status-list">
           ${ranked.map(item => `
             <div class="recommendation-row">
               <div style="display:flex;justify-content:space-between;gap:10px;">
-                <strong>${item.tech.name} - ${locationDistance(item.tech, selected) + 10} Min To ${selected.id}</strong>
-                <span class="badge ${item.tone}">${item.label}</span>
+                <strong>${escapeHtml(item.tech.name)} - ${escapeHtml(locationDistance(item.tech, selected) + 10)} Min To ${escapeHtml(selected.id)}</strong>
+                <span class="badge ${item.tone}">${escapeHtml(item.label)}</span>
               </div>
-              <span class="subtle">Currently: ${item.tech.location?.nearestProject || "Last known job check-in"} - Home Base: ${item.tech.location?.label || item.tech.branch} - Equipment: ${item.tech.equipment}</span>
-              <div class="progress ${item.tone}"><span style="width:${item.score}%"></span></div>
+              <span class="subtle">Currently: ${escapeHtml(item.tech.location?.nearestProject || "Last known job check-in")} - Home Base: ${escapeHtml(item.tech.location?.label || item.tech.branch)} - Equipment: ${escapeHtml(item.tech.equipment)}</span>
+              <div class="progress ${item.tone}"><span style="width:${Math.max(0, Math.min(100, Number(item.score) || 0))}%"></span></div>
               <div class="match-meta">
-                <span>${item.score}% Match</span>
-                <span>${item.tech.equipment}</span>
+                <span>${escapeHtml(item.score)}% Match</span>
+                <span>${escapeHtml(item.tech.equipment)}</span>
               </div>
               ${item.qualified ? "" : `<span class="badge bad">Missing Required Cert</span>`}
             </div>
           `).join("")}
         </div>
-        <button class="primary-button assign-button" type="button">${bestMatch?.qualified ? `Assign ${bestMatch.tech.name}` : "Assign Technician"}</button>
+        <button class="primary-button assign-button" type="button">${bestMatch?.qualified ? `Assign ${escapeHtml(bestMatch.tech.name)}` : "Assign Technician"}</button>
     </section>
     ${renderCoverageImpactAnalysis()}
   `;
@@ -5427,7 +5310,7 @@ function renderEmergencyDecisionLog(context = "full") {
               <div class="decision-log-head">
                 <div>
                   <strong>${summary.headline}</strong>
-                  <span class="subtle">${entry.timestamp} / ${entry.role} / ${entry.emergencyWorkOrder}</span>
+                  <span class="subtle">${escapeHtml(entry.timestamp)} / ${escapeHtml(entry.role)} / ${escapeHtml(entry.emergencyWorkOrder)}</span>
                 </div>
                 <div class="panel-actions">
                   <span class="badge ${summary.tone}">${entry.id}</span>
@@ -5437,30 +5320,30 @@ function renderEmergencyDecisionLog(context = "full") {
               <p>${escapeHtml(summary.summary)}</p>
               ${entry.impactLanguage ? `<div class="impact-callout"><strong>Impact</strong><span>${escapeHtml(entry.impactLanguage)}</span></div>` : ""}
               <div class="before-after-mini">
-                <span>Before: <strong>${entry.beforeStatus || "Pending"}</strong></span>
-                <span>After: <strong>${entry.afterStatus || entry.statusAfterDecision}</strong></span>
-                <span>Decision Time: <strong>${entry.timestamp}</strong></span>
+                <span>Before: <strong>${escapeHtml(entry.beforeStatus || "Pending")}</strong></span>
+                <span>After: <strong>${escapeHtml(entry.afterStatus || entry.statusAfterDecision)}</strong></span>
+                <span>Decision Time: <strong>${escapeHtml(entry.timestamp)}</strong></span>
               </div>
               <details class="decision-source-details" ${!compact && state.opsViewMode === "expanded" ? "open" : ""}>
                 <summary>Decision Source Details</summary>
                 <div class="decision-log-grid">
-                  <div><span>Assigned Technician</span><strong>${entry.assignedTechnician || "None"}</strong></div>
-                  <div><span>Replacement Technician</span><strong>${entry.replacementTechnician || "None"}</strong></div>
-                  <div><span>Partner Firm</span><strong>${entry.partnerFirm || "None"}</strong></div>
-                  <div><span>Required Certs / Access</span><strong>${entry.required}</strong></div>
-                  <div><span>Jobs Affected</span><strong>${entry.jobsAffected.join(", ")}</strong></div>
-                  <div><span>Equipment Affected</span><strong>${entry.equipmentAffected.join(", ")}</strong></div>
+                  <div><span>Assigned Technician</span><strong>${renderSafeText(entry.assignedTechnician || "None")}</strong></div>
+                  <div><span>Replacement Technician</span><strong>${renderSafeText(entry.replacementTechnician || "None")}</strong></div>
+                  <div><span>Partner Firm</span><strong>${renderSafeText(entry.partnerFirm || "None")}</strong></div>
+                  <div><span>Required Certs / Access</span><strong>${renderSafeText(entry.required)}</strong></div>
+                  <div><span>Jobs Affected</span><strong>${renderSafeList(entry.jobsAffected)}</strong></div>
+                  <div><span>Equipment Affected</span><strong>${renderSafeList(entry.equipmentAffected)}</strong></div>
                   ${compact ? "" : `
-                    <div><span>Issue</span><strong>${entry.issue || "Emergency coverage request"}</strong></div>
-                    <div><span>Recommended Action</span><strong>${entry.recommendedAction || entry.decisionType}</strong></div>
-                    <div><span>Approved Action</span><strong>${entry.approvedAction || entry.statusAfterDecision}</strong></div>
-                    <div><span>Readiness Checks Used</span><strong>${entry.readinessChecksUsed?.join(", ") || "Certs, access, equipment, coverage impact"}</strong></div>
-                    <div><span>Cascading Impact</span><strong>${entry.cascadingImpact || "Reviewed in coverage workflow"}</strong></div>
-                    <div><span>Before / After</span><strong>${entry.beforeStatus || "Pending"} to ${entry.afterStatus || entry.statusAfterDecision}</strong></div>
-                    <div><span>Reason</span><strong>${entry.reason}</strong></div>
-                    <div><span>Remaining Risks</span><strong>${entry.remainingRisks}</strong></div>
-                    <div><span>Status After Decision</span><strong>${entry.statusAfterDecision}</strong></div>
-                    <div><span>Notes</span><strong>${entry.notes || "No notes entered."}</strong></div>
+                    <div><span>Issue</span><strong>${renderSafeText(entry.issue || "Emergency coverage request")}</strong></div>
+                    <div><span>Recommended Action</span><strong>${renderSafeText(entry.recommendedAction || entry.decisionType)}</strong></div>
+                    <div><span>Approved Action</span><strong>${renderSafeText(entry.approvedAction || entry.statusAfterDecision)}</strong></div>
+                    <div><span>Readiness Checks Used</span><strong>${renderSafeList(entry.readinessChecksUsed, "Certs, access, equipment, coverage impact")}</strong></div>
+                    <div><span>Cascading Impact</span><strong>${renderSafeText(entry.cascadingImpact || "Reviewed in coverage workflow")}</strong></div>
+                    <div><span>Before / After</span><strong>${renderSafeText(entry.beforeStatus || "Pending")} to ${renderSafeText(entry.afterStatus || entry.statusAfterDecision)}</strong></div>
+                    <div><span>Reason</span><strong>${renderSafeText(entry.reason)}</strong></div>
+                    <div><span>Remaining Risks</span><strong>${renderSafeText(entry.remainingRisks)}</strong></div>
+                    <div><span>Status After Decision</span><strong>${renderSafeText(entry.statusAfterDecision)}</strong></div>
+                    <div><span>Notes</span><strong>${renderSafeText(entry.notes || "No notes entered.")}</strong></div>
                   `}
                 </div>
                 ${renderSourceDetails(summary, "Summary Source Details")}
@@ -5657,11 +5540,11 @@ function renderEscalationSummary(analysis) {
       <div class="section-title">
         <div>
           <h2>Escalation Summary</h2>
-          <p>CMTCommand found one clean internal coverage option and one partner fallback. ${best.candidate.name} is recommended because ${best.candidate.name} meets certification, clearance, equipment, ETA, and pickup requirements without creating another Not Ready job.</p>
+          <p>CMTCommand found one clean internal coverage option and one partner fallback. ${escapeHtml(best.candidate.name)} is recommended because ${escapeHtml(best.candidate.name)} meets certification, clearance, equipment, ETA, and pickup requirements without creating another Not Ready job.</p>
         </div>
       </div>
       <div class="escalation-grid">
-        <div><strong>Recommended Action</strong><span>${best.category}: assign ${best.candidate.name} or approve the proposed coverage chain.</span></div>
+        <div><strong>Recommended Action</strong><span>${escapeHtml(best.category)}: assign ${escapeHtml(best.candidate.name)} or approve the proposed coverage chain.</span></div>
         <div><strong>Cascading Impact</strong><span>${best.coverage?.uncovered ? "Coverage chain leaves a readiness gap that needs manager review." : "No new Not Ready job is created by the recommended option."}</span></div>
         <div><strong>Pickup Impact</strong><span>Concrete cylinder return is visible and should be finalized after the coverage plan is approved.</span></div>
         <div><strong>Decision Required</strong><span>Approve direct internal dispatch, approve coverage-chain reassignment, review partner firm, or escalate to Branch Manager.</span></div>
@@ -6050,9 +5933,9 @@ function renderWorkforceCriticalActions() {
       <div class="workforce-action-grid">
         ${actions.map((action, index) => `
           <article class="workforce-action-card ${action.tone}">
-            <span class="badge ${action.tone}">${action.label}</span>
-            <strong>${action.title}</strong>
-            <p>${action.detail}</p>
+            <span class="badge ${action.tone}">${escapeHtml(action.label)}</span>
+            <strong>${escapeHtml(action.title)}</strong>
+            <p>${escapeHtml(action.detail)}</p>
             <small>Action ${index + 1}</small>
           </article>
         `).join("")}
@@ -6321,8 +6204,8 @@ function renderTrainingPriorities() {
         ${priorities.map((priority, index) => `
           <article class="training-priority-card">
             <span class="badge ${index < 2 ? "bad" : index < 5 ? "warn" : "info"}">Priority ${index + 1}</span>
-            <strong>${priority.action}</strong>
-            <div class="status-list">${priority.reason.map(reason => `<div class="alert-row"><span class="dot ${index < 2 ? "bad" : "info"}"></span><span>${reason}</span></div>`).join("")}</div>
+            <strong>${escapeHtml(priority.action)}</strong>
+            <div class="status-list">${priority.reason.map(reason => `<div class="alert-row"><span class="dot ${index < 2 ? "bad" : "info"}"></span><span>${escapeHtml(reason)}</span></div>`).join("")}</div>
           </article>
         `).join("")}
       </div>
@@ -7064,7 +6947,8 @@ function formatCell(row, key) {
 }
 
 function escapeHtml(value) {
-  return value
+  const text = value === null || value === undefined ? "" : String(value);
+  return text
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -7343,6 +7227,7 @@ function assignDemoCoverage(techId, shouldRender = true) {
   const beforeReadinessData = getTomorrowReadinessData();
   const before = evaluateDemoReadiness(order);
   const candidate = getDemoCoverageCandidates(order).find(item => item.tech.id === techId) || getSelectedDemoCandidate(order);
+  if (before.status === "Ready") return;
   if (!candidate || !candidate.canAssign) return;
   state.demoAssignments[order.id] = candidate.tech.id;
   state.selectedDemoTech = candidate.tech.id;

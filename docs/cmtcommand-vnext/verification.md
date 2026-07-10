@@ -1,5 +1,92 @@
 # CMTCommand vNext Verification
 
+## Autonomous Takeover - Authoritative Readiness Engine
+
+Date: 2026-07-10
+
+Scope: root CMTCommand readiness and coverage architecture.
+
+### Baseline Before Product Edits
+
+```powershell
+node .\scripts\verify-root.mjs
+```
+
+Result: pass. Root syntax checks, deterministic Node tests, and verifier whitespace gate passed.
+
+```powershell
+$tests = Get-ChildItem .\tests -File -Filter "*.test.js"
+foreach ($test in $tests) {
+    Write-Host "`nRunning $($test.Name)..."
+    node $test.FullName
+    if ($LASTEXITCODE -ne 0) {
+        throw "Test failed: $($test.Name)"
+    }
+}
+```
+
+Result: pass. All root tests passed.
+
+### Final Local Verification
+
+```powershell
+node --check .\readinessEngine.js
+node --check .\app.js
+node --check .\demoControlCenter.js
+node .\tests\readinessEngine.test.js
+node .\tests\demoControlCenter.test.js
+node --check .\docs\cmtcommand-vnext\artifacts\phase5-browser-validation.cjs
+node .\scripts\verify-root.mjs
+```
+
+Result: pass. The verifier now includes `readinessEngine.js` and `tests/readinessEngine.test.js`.
+
+Explicit test loop:
+
+```powershell
+$tests = Get-ChildItem .\tests -File -Filter "*.test.js"
+foreach ($test in $tests) {
+    Write-Host "`nRunning $($test.Name)..."
+    node $test.FullName
+    if ($LASTEXITCODE -ne 0) {
+        throw "Test failed: $($test.Name)"
+    }
+}
+```
+
+Result: pass. Every root `tests/*.test.js` file passed.
+
+Diff hygiene:
+
+```powershell
+git diff --check -- app.js styles.css index.html README.md DEVELOPER_NOTES.md demoShared.js pilotIntakeSafety.js readinessEngine.js demoControlCenter.js pilotReadinessPack.js demoWalkthrough.js operationalImpact.js operationalCompression.js tests scripts AGENTS.md CODEX_TAKEOVER_PROMPT.md .github docs
+```
+
+Result: pass, with Git LF-to-CRLF working-copy warnings only.
+
+Browser validation:
+
+```powershell
+node .\docs\cmtcommand-vnext\artifacts\phase5-browser-validation.cjs
+```
+
+Result: environment-blocked. The script starts its own local static server but requires a Chrome DevTools Protocol endpoint at `http://127.0.0.1:9224`; no endpoint is reachable in this session. The in-app browser runtime also reports no available browser backends.
+
+Security/debug scans:
+
+```powershell
+rg -n 'TODO|FIXME|debugger|\.only\(|\.skip\(' app.js readinessEngine.js demoControlCenter.js tests scripts docs\CODEX_EXECUTION_PLAN.md docs\cmtcommand-vnext\status.md docs\cmtcommand-vnext\verification.md
+rg -n '(api[_-]?key|secret|password|token|BEGIN RSA|PRIVATE KEY|AIza|sk-[A-Za-z0-9])' app.js readinessEngine.js demoControlCenter.js tests scripts docs\CODEX_EXECUTION_PLAN.md docs\cmtcommand-vnext\status.md docs\cmtcommand-vnext\verification.md README.md DEVELOPER_NOTES.md
+```
+
+Result: no actionable findings. Matches were expected documentation/test-string false positives.
+
+### Review Findings Resolved
+
+- Security: escaped decision-note and decision-log sinks, readiness/coverage explanations, pickup fields, handoff summaries, and data attributes; hardened the browser-validation static server path policy and CDP failure handling.
+- UX/accessibility: removed stale TRD-104 "Needs Coverage" copy after approval, disabled duplicate/non-feasible approval actions, exposed explicit no-valid-alternative messaging, and added stricter Demo QA/browser assertions.
+- Domain correctness: extracted deterministic readiness and coverage rules to `readinessEngine.js`; tests cover TRD-104/Maria, missing/unavailable technicians, cert expiration, equipment gaps, pickup risks, no-valid-alternative behavior, and schedule summary counts.
+
 ## Phase 8 - Isolated Release Packaging
 
 Date: 2026-07-10

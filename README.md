@@ -77,6 +77,7 @@ CSV previews are capped at 200,000 characters. Template/export values that could
 - `styles.css`: visual system, responsive behavior, dark mode, command mode.
 - `demoShared.js`: small shared helper for timestamps, localStorage safety, status labels, and copy fallback.
 - `pilotIntakeSafety.js`: Pilot Setup CSV parsing, import validation, safe text sinks, CSV export escaping, and URL protocol checks.
+- `readinessEngine.js`: deterministic tomorrow-readiness, pickup-readiness, schedule summary, and coverage-candidate rules.
 - `operationalCompression.js`: source-backed readiness summaries and copy packets.
 - `operationalImpact.js`: deterministic impact snapshot, issue counts, conservative time-savings estimate, repeat patterns, and bottlenecks.
 - `demoWalkthrough.js`: Pilot Story Mode step definitions, progress, and recap copy.
@@ -99,6 +100,7 @@ That command runs the current root syntax checks and deterministic Node tests. T
 ```powershell
 node --check demoShared.js
 node --check pilotIntakeSafety.js
+node --check readinessEngine.js
 node --check demoControlCenter.js
 node --check pilotReadinessPack.js
 node --check demoWalkthrough.js
@@ -107,12 +109,13 @@ node --check operationalCompression.js
 node --check app.js
 node tests\demoShared.test.js
 node tests\pilotIntakeSafety.test.js
+node tests\readinessEngine.test.js
 node tests\demoControlCenter.test.js
 node tests\pilotReadinessPack.test.js
 node tests\demoWalkthrough.test.js
 node tests\operationalImpact.test.js
 node tests\operationalCompression.test.js
-git diff --check -- app.js styles.css index.html README.md DEVELOPER_NOTES.md demoShared.js pilotIntakeSafety.js demoControlCenter.js pilotReadinessPack.js demoWalkthrough.js operationalImpact.js operationalCompression.js tests scripts AGENTS.md .github
+git diff --check -- app.js styles.css index.html README.md DEVELOPER_NOTES.md demoShared.js pilotIntakeSafety.js readinessEngine.js demoControlCenter.js pilotReadinessPack.js demoWalkthrough.js operationalImpact.js operationalCompression.js tests scripts AGENTS.md .github
 ```
 
 This project is currently a static app and does not have a `package.json`, so `npm test`, `npm run lint`, `npm run typecheck`, and `npm run build` are not available unless a future pass adds package scripts.
