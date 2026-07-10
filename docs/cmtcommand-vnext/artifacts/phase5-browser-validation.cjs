@@ -29,6 +29,17 @@ const runtimeFiles = new Set([
   "app.js"
 ]);
 
+const requiredAppGlobals = [
+  "CMTDemoShared",
+  "CMTPilotIntakeSafety",
+  "CMTReadinessEngine",
+  "CMTOperationalCompression",
+  "CMTOperationalImpact",
+  "CMTDemoWalkthrough",
+  "CMTPilotReadinessPack",
+  "CMTDemoControlCenter"
+];
+
 function startStaticServer(rootDir) {
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
@@ -182,14 +193,15 @@ function validateResult(result) {
   }
 }
 
-async function getJson(pathname) {
+async function getJson(pathname, options = {}) {
+  const { label = pathname, method = "GET" } = options;
   let response;
   try {
-    response = await fetch(`${cdpBase}${pathname}`);
+    response = await fetch(`${cdpBase}${pathname}`, { method });
   } catch (error) {
-    throw new Error(`Chrome DevTools Protocol endpoint is not reachable at ${cdpBase}. Start Chrome with --remote-debugging-port=9224 before running this browser validation. ${error.message}`);
+    throw new Error(`Chrome DevTools Protocol endpoint is not reachable at ${cdpBase} while running ${label}. Start Chrome with --remote-debugging-port=9224 before running this browser validation. ${error.message}`);
   }
-  if (!response.ok) throw new Error(`${pathname} returned ${response.status}`);
+  if (!response.ok) throw new Error(`${label} returned ${response.status}`);
   return response.json();
 }
 
@@ -222,7 +234,7 @@ class CdpClient {
       const pending = this.pending.get(message.id);
       clearTimeout(pending.timer);
       this.pending.delete(message.id);
-      if (message.error) pending.reject(new Error(`${message.error.message}: ${message.error.data || ""}`));
+      if (message.error) pending.reject(new Error(`${pending.operationLabel} failed: ${message.error.message}: ${message.error.data || ""}`));
       else pending.resolve(message.result || {});
       return;
     }
@@ -266,64 +278,75 @@ class CdpClient {
     }
   }
 
-  send(method, params = {}, timeoutMs = 10000) {
+  send(method, params = {}, options = {}) {
+    const normalizedOptions = typeof options === "number" ? { timeoutMs: options } : options;
+    const { timeoutMs = 10000, label = method } = normalizedOptions;
+    const operationLabel = label === method ? method : `${method} [${label}]`;
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`${method} timed out`));
+        reject(new Error(`${operationLabel} timed out after ${timeoutMs}ms`));
       }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, { resolve, reject, timer, operationLabel });
       this.ws.send(JSON.stringify({ id, method, params }));
     });
   }
 
-  waitFor(method, timeoutMs = 10000) {
+  waitFor(method, options = {}) {
+    const normalizedOptions = typeof options === "number" ? { timeoutMs: options } : options;
+    const { timeoutMs = 10000, label = method } = normalizedOptions;
+    const operationLabel = label === method ? method : `${method} [${label}]`;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.waiters.delete(method);
-        reject(new Error(`${method} timed out`));
+        reject(new Error(`${operationLabel} timed out after ${timeoutMs}ms`));
       }, timeoutMs);
       this.waiters.set(method, { resolve, reject, timer });
     });
   }
 
-  async evaluate(expression) {
+  async evaluate(expression, label = "anonymous evaluation", timeoutMs = 15000) {
     const result = await this.send("Runtime.evaluate", {
       expression,
       awaitPromise: true,
       returnByValue: true,
       userGesture: true
-    }, 15000);
+    }, { timeoutMs, label });
     if (result.exceptionDetails) {
-      throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || "Runtime.evaluate failed");
+      const message = result.exceptionDetails.exception?.description || result.exceptionDetails.text || "Runtime.evaluate failed";
+      throw new Error(`Runtime.evaluate [${label}] failed: ${message}`);
     }
     return result.result.value;
   }
 
-  async navigate(url) {
-    const loaded = this.waitFor("Page.loadEventFired", 15000);
-    await this.send("Page.navigate", { url });
+  async navigate(url, label = `navigate to ${url}`) {
+    const domContentLoaded = this.waitFor("Page.domContentEventFired", { timeoutMs: 15000, label: `${label} DOMContentLoaded` });
+    const loaded = this.waitFor("Page.loadEventFired", { timeoutMs: 15000, label: `${label} load` });
+    await this.send("Page.navigate", { url }, { timeoutMs: 10000, label });
+    await domContentLoaded;
     await loaded;
   }
 
-  async reload() {
-    const loaded = this.waitFor("Page.loadEventFired", 15000);
-    await this.send("Page.reload", { ignoreCache: true });
+  async reload(label = "reload page") {
+    const domContentLoaded = this.waitFor("Page.domContentEventFired", { timeoutMs: 15000, label: `${label} DOMContentLoaded` });
+    const loaded = this.waitFor("Page.loadEventFired", { timeoutMs: 15000, label: `${label} load` });
+    await this.send("Page.reload", { ignoreCache: true }, { timeoutMs: 10000, label });
+    await domContentLoaded;
     await loaded;
   }
 
-  async setViewport(width, height, mobile) {
+  async setViewport(width, height, mobile, label = `${width}x${height} viewport`) {
     await this.send("Emulation.setDeviceMetricsOverride", {
       width,
       height,
       mobile,
       deviceScaleFactor: 1
-    });
+    }, { timeoutMs: 10000, label });
   }
 
   async screenshot(fileName) {
-    const result = await this.send("Page.captureScreenshot", { format: "png", fromSurface: true }, 15000);
+    const result = await this.send("Page.captureScreenshot", { format: "png", fromSurface: true }, { timeoutMs: 15000, label: `capture ${fileName}` });
     const filePath = path.join(artifactDir, fileName);
     fs.writeFileSync(filePath, Buffer.from(result.data, "base64"));
     return filePath;
@@ -334,41 +357,133 @@ class CdpClient {
   }
 }
 
-async function getPageWsUrl() {
-  const pages = await getJson("/json/list");
-  const page = pages.find(item => item.type === "page" && item.webSocketDebuggerUrl);
-  if (page) return page.webSocketDebuggerUrl;
-  return (await getJson("/json/new?about:blank")).webSocketDebuggerUrl;
+function hasOrigin(url, origin) {
+  try {
+    return new URL(url).origin === origin;
+  } catch (error) {
+    return false;
+  }
+}
+
+async function getPageTarget(appUrl) {
+  const appOrigin = new URL(appUrl).origin;
+  const pages = await getJson("/json/list", { label: "list browser page targets" });
+  const matchingPage = pages.find(item => item.type === "page" && item.webSocketDebuggerUrl && hasOrigin(item.url, appOrigin));
+  if (matchingPage) return { ...matchingPage, createdByValidator: false };
+
+  const createdPage = await getJson(`/json/new?${encodeURIComponent(appUrl)}`, {
+    method: "PUT",
+    label: `create app page target for ${appOrigin}`
+  });
+  if (!createdPage.webSocketDebuggerUrl) {
+    throw new Error(`Created page target for ${appOrigin} did not include a websocket URL: ${JSON.stringify(createdPage)}`);
+  }
+  return { ...createdPage, createdByValidator: true };
+}
+
+async function closeCreatedTarget(target) {
+  if (!target?.createdByValidator || !target.id) return;
+  try {
+    await fetch(`${cdpBase}/json/close/${encodeURIComponent(target.id)}`);
+  } catch (error) {
+    console.warn(`Unable to close created CDP target ${target.id}: ${error.message}`);
+  }
+}
+
+async function waitForAppReady(client, expectedOrigin, label) {
+  const globals = JSON.stringify(requiredAppGlobals);
+  const origin = JSON.stringify(expectedOrigin);
+  return client.evaluate(`(async () => {
+    const expectedOrigin = ${origin};
+    const requiredGlobals = ${globals};
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const snapshot = () => {
+      const app = document.querySelector("#app");
+      const missingGlobals = requiredGlobals.filter(name => typeof window[name] !== "object");
+      return {
+        url: window.location.href,
+        origin: window.location.origin,
+        expectedOrigin,
+        readyState: document.readyState,
+        hasApp: Boolean(app),
+        appChildCount: app?.children.length || 0,
+        pageTitle: document.querySelector("#pageTitle")?.textContent || "",
+        navCount: document.querySelectorAll("[data-page]").length,
+        scriptCount: document.scripts.length,
+        missingGlobals
+      };
+    };
+    const deadline = performance.now() + 10000;
+    while (performance.now() < deadline) {
+      const state = snapshot();
+      if (
+        state.origin === expectedOrigin &&
+        (state.readyState === "interactive" || state.readyState === "complete") &&
+        state.hasApp &&
+        state.appChildCount > 0 &&
+        state.navCount > 0 &&
+        state.missingGlobals.length === 0
+      ) {
+        return state;
+      }
+      await sleep(50);
+    }
+    throw new Error("Timed out waiting for CMTCommand app readiness: " + JSON.stringify(snapshot()));
+  })()`, label, 12000);
 }
 
 async function installPageHelpers(client) {
   await client.evaluate(`(() => {
     window.__phase5 = {
-      waitFor(condition, timeout = 2500) {
+      diagnosticSnapshot() {
+        const preview = document.querySelector(".import-preview");
+        return {
+          url: window.location.href,
+          readyState: document.readyState,
+          title: document.title,
+          pageTitle: document.querySelector("#pageTitle")?.textContent || "",
+          bodyTextSample: document.body?.textContent?.replace(/\\s+/g, " ").trim().slice(0, 240) || "",
+          hasApp: Boolean(document.querySelector("#app")),
+          appChildCount: document.querySelector("#app")?.children.length || 0,
+          previewBadge: preview?.querySelector(".badge")?.textContent.trim() || "",
+          activeElement: document.activeElement?.tagName || ""
+        };
+      },
+      waitFor(condition, options = {}) {
+        const normalizedOptions = typeof options === "number" ? { timeout: options } : options;
+        const { timeout = 2500, label = "condition" } = normalizedOptions;
         return new Promise((resolve, reject) => {
           const start = performance.now();
           const tick = () => {
-            if (condition()) return resolve(true);
-            if (performance.now() - start > timeout) return reject(new Error("waitFor timeout"));
-            requestAnimationFrame(tick);
+            let passed = false;
+            try {
+              passed = Boolean(condition());
+            } catch (error) {
+              return reject(new Error("waitFor " + label + " threw: " + error.message + " " + JSON.stringify(this.diagnosticSnapshot())));
+            }
+            if (passed) return resolve(true);
+            if (performance.now() - start > timeout) {
+              return reject(new Error("Timed out waiting for " + label + " after " + timeout + "ms: " + JSON.stringify(this.diagnosticSnapshot())));
+            }
+            setTimeout(tick, 50);
           };
           tick();
         });
       },
       async openPage(page) {
-        await this.waitFor(() => document.querySelector('[data-page="' + page + '"]'));
+        await this.waitFor(() => document.querySelector('[data-page="' + page + '"]'), { label: "nav button " + page });
         document.querySelector('[data-page="' + page + '"]').click();
-        await this.waitFor(() => document.querySelector("#pageTitle"));
+        await this.waitFor(() => document.querySelector("#pageTitle"), { label: "page title after opening " + page });
       },
       async openPilot() {
         await this.openPage("dataintake");
-        await this.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Pilot Setup");
+        await this.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Pilot Setup", { label: "Pilot Setup page title" });
       },
       async uploadCsv(csv, name) {
         const cancel = document.querySelector("[data-cancel-import]");
         if (cancel) {
           cancel.click();
-          await this.waitFor(() => !document.querySelector(".import-preview"));
+          await this.waitFor(() => !document.querySelector(".import-preview"), { label: "import preview cancellation" });
         }
         const select = document.querySelector("#importEntitySelect");
         if (select) {
@@ -381,7 +496,7 @@ async function installPageHelpers(client) {
         const input = document.querySelector("#csvImportFile");
         input.files = transfer.files;
         input.dispatchEvent(new Event("change", { bubbles: true }));
-        await this.waitFor(() => document.querySelector(".import-preview .badge"));
+        await this.waitFor(() => document.querySelector(".import-preview .badge"), { label: "CSV import preview badge" });
       },
       previewSnapshot() {
         const preview = document.querySelector(".import-preview");
@@ -410,7 +525,7 @@ async function installPageHelpers(client) {
         };
       }
     };
-  })()`);
+  })()`, "install phase5 page helpers");
 }
 
 async function main() {
@@ -420,21 +535,30 @@ async function main() {
   const commandUrl = `${appOrigin}/?ui=command`;
   const rootUrl = `${appOrigin}/`;
   let client;
+  let pageTarget;
   try {
-    client = new CdpClient(await getPageWsUrl());
+    pageTarget = await getPageTarget(appUrl);
+    client = new CdpClient(pageTarget.webSocketDebuggerUrl);
     await client.connect();
-    await client.send("Page.enable");
-    await client.send("Runtime.enable");
-    await client.send("Network.enable");
-    await client.send("Log.enable");
+    await client.send("Page.enable", {}, { label: "enable Page domain" });
+    await client.send("Runtime.enable", {}, { label: "enable Runtime domain" });
+    await client.send("Network.enable", {}, { label: "enable Network domain" });
+    await client.send("Log.enable", {}, { label: "enable Log domain" });
+    await client.send("Page.bringToFront", {}, { label: "bring validator app target to front" });
 
     const result = {};
-    await client.setViewport(1440, 900, false);
-    await client.navigate(appUrl);
+    result.target = {
+      createdByValidator: pageTarget.createdByValidator,
+      initialUrl: pageTarget.url,
+      appUrl
+    };
+    await client.setViewport(1440, 900, false, "initial standard desktop viewport");
+    await client.navigate(appUrl, "load standard CMTCommand app");
+    result.initialAppReady = await waitForAppReady(client, appOrigin, "wait for initial CMTCommand app readiness");
     await installPageHelpers(client);
 
   result.loading = await client.evaluate(`(async () => {
-    await window.__phase5.waitFor(() => document.querySelector('[data-page="dataintake"]'));
+    await window.__phase5.waitFor(() => document.querySelector('[data-page="dataintake"]'), { label: "Pilot Setup nav button before loading snapshot" });
     return {
       title: document.title,
       pageTitle: document.querySelector("#pageTitle")?.textContent || "",
@@ -442,7 +566,7 @@ async function main() {
       safetyGlobal: typeof window.CMTPilotIntakeSafety === "object",
       readinessGlobal: typeof window.CMTReadinessEngine === "object"
     };
-  })()`);
+  })()`, "loading snapshot");
 
   result.empty = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -456,23 +580,23 @@ async function main() {
       labels: Array.from(document.querySelectorAll("label")).slice(0, 8).map(el => el.textContent.trim().replace(/\\s+/g, " ")),
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth
     };
-  })()`);
+  })()`, "empty Pilot Setup state");
 
   result.success = await client.evaluate(`(async () => {
     document.querySelector('[data-demo-import="workorders"]').click();
-    await window.__phase5.waitFor(() => document.querySelector(".import-preview .badge")?.textContent.trim() === "Ready");
+    await window.__phase5.waitFor(() => document.querySelector(".import-preview .badge")?.textContent.trim() === "Ready", { label: "Work Orders template Ready badge" });
     return window.__phase5.previewSnapshot();
-  })()`);
+  })()`, "Work Orders template preview");
 
   result.afterApply = await client.evaluate(`(async () => {
     document.querySelector("[data-apply-import]").click();
-    await window.__phase5.waitFor(() => !document.querySelector(".import-preview"));
+    await window.__phase5.waitFor(() => !document.querySelector(".import-preview"), { label: "preview clears after apply" });
     return {
       previewVisible: Boolean(document.querySelector(".import-preview")),
       importHistoryCount: window.__phase5.importHistoryCount(),
       importHistoryText: document.querySelector("[data-import-history-count]")?.textContent || ""
     };
-  })()`);
+  })()`, "apply Work Orders preview");
 
   result.hostileCsv = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -491,7 +615,7 @@ async function main() {
       globalCmtXss: Boolean(window.__cmtXss),
       globalFileXss: Boolean(window.__fileXss)
     };
-  })()`);
+  })()`, "hostile CSV blocked preview");
 
   result.validHostileValues = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -509,7 +633,7 @@ async function main() {
       unsafeNodes: snapshot.unsafeNodes,
       globalValidValueXss: Boolean(window.__validValueXss)
     };
-  })()`);
+  })()`, "valid hostile values preview");
 
   result.malformed = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -528,7 +652,7 @@ async function main() {
       copyButtonLabel: document.querySelector(".intake-summary-card .primary-button")?.textContent.trim() || "",
       textSnippet: snapshot.text.slice(0, 240)
     };
-  })()`);
+  })()`, "malformed CSV blocked preview");
 
   result.missingColumns = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -539,7 +663,7 @@ async function main() {
       applyDisabled: snapshot.applyDisabled,
       missingServiceTypeVisible: snapshot.text.includes("service_type")
     };
-  })()`);
+  })()`, "missing required CSV columns preview");
 
   result.multipleMissingColumns = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -552,7 +676,7 @@ async function main() {
       missingServiceTypeVisible: snapshot.text.includes("service_type"),
       missingEquipmentVisible: snapshot.text.includes("required_equipment")
     };
-  })()`);
+  })()`, "multiple missing CSV columns preview");
 
   result.partialData = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -573,7 +697,7 @@ async function main() {
       missingWarnings: (snapshot.text.match(/Missing column: [A-Za-z0-9_]+/g) || []),
       textSnippet: snapshot.text.slice(0, 360)
     };
-  })()`);
+  })()`, "partial CSV cleanup preview");
 
   result.oversized = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -584,7 +708,7 @@ async function main() {
       applyDisabled: snapshot.applyDisabled,
       boundedMessage: /too large|200,000|characters/i.test(snapshot.text)
     };
-  })()`);
+  })()`, "oversized CSV blocked preview");
 
   result.readErrorRecovery = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -604,7 +728,7 @@ async function main() {
     const blocked = window.__phase5.previewSnapshot();
     window.FileReader = OriginalFileReader;
     document.querySelector('[data-demo-import="workorders"]').click();
-    await window.__phase5.waitFor(() => document.querySelector(".import-preview .badge")?.textContent.trim() === "Ready");
+    await window.__phase5.waitFor(() => document.querySelector(".import-preview .badge")?.textContent.trim() === "Ready", { label: "Work Orders template recovery Ready badge" });
     const recovered = window.__phase5.previewSnapshot();
     return {
       blocked: {
@@ -615,7 +739,7 @@ async function main() {
       recoveredBadge: recovered.badge,
       recoveredApplyDisabled: recovered.applyDisabled
     };
-  })()`);
+  })()`, "FileReader error recovery");
 
   result.documentMetadata = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -629,14 +753,14 @@ async function main() {
     const input = document.querySelector("#documentUploadInput");
     input.files = transfer.files;
     input.dispatchEvent(new Event("change", { bubbles: true }));
-    await window.__phase5.waitFor(() => document.querySelector("[data-document-index]"));
+    await window.__phase5.waitFor(() => document.querySelector("[data-document-index]"), { label: "staged document card" });
     return {
       filenameText: document.querySelector('[data-document-field="fileName"]')?.textContent,
       notesText: document.querySelector('[data-document-field="notes"]')?.textContent,
       unsafeNodes: document.querySelectorAll("[data-document-index] img,[data-document-index] svg,[data-document-index] script").length,
       globalDocXss: Boolean(window.__docXss)
     };
-  })()`);
+  })()`, "document metadata hostile text render");
 
   result.pilotRequestConfirmation = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -650,14 +774,14 @@ async function main() {
     form.elements.technicians.value = "12";
     form.elements.readinessProblem.value = "Quotes, ampersands & Unicode Ω should survive.";
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    await window.__phase5.waitFor(() => document.querySelector(".success-banner"));
+    await window.__phase5.waitFor(() => document.querySelector(".success-banner"), { label: "pilot request success banner" });
     const banner = document.querySelector(".success-banner");
     return {
       bannerText: banner?.textContent || "",
       unsafeNodes: banner?.querySelectorAll("img,svg,script").length || 0,
       globalPilotXss: Boolean(window.__pilotRequestXss)
     };
-  })()`);
+  })()`, "pilot request confirmation hostile text render");
 
   result.keyboardAndSemantics = await client.evaluate(`(() => {
     const previewButton = document.querySelector('[data-demo-import="workorders"]');
@@ -670,16 +794,17 @@ async function main() {
       labels: Array.from(document.querySelectorAll("label")).map(label => label.textContent.trim().replace(/\\s+/g, " ")).filter(Boolean).slice(0, 12),
       sectionHeadings: Array.from(document.querySelectorAll("#app h2,#app h3")).slice(0, 10).map(el => el.textContent.trim())
     };
-  })()`);
+  })()`, "keyboard and semantics snapshot");
 
-  result.wideViewport = await client.evaluate("window.__phase5.viewportSnapshot()");
+  result.wideViewport = await client.evaluate("window.__phase5.viewportSnapshot()", "wide viewport snapshot");
   result.wideScreenshot = await client.screenshot("phase5-pilot-setup-wide-after.png");
 
-  await client.setViewport(390, 844, true);
-  result.narrowViewport = await client.evaluate("window.__phase5.viewportSnapshot()");
+  await client.setViewport(390, 844, true, "Pilot Setup narrow mobile viewport");
+  result.narrowViewport = await client.evaluate("window.__phase5.viewportSnapshot()", "narrow viewport snapshot");
   result.narrowScreenshot = await client.screenshot("phase5-pilot-setup-narrow-after.png");
 
-  await client.reload();
+  await client.reload("reload standard app after intake checks");
+  result.afterReloadAppReady = await waitForAppReady(client, appOrigin, "wait for app readiness after reload");
   await installPageHelpers(client);
   result.afterReload = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -689,11 +814,11 @@ async function main() {
       importHistoryCount: window.__phase5.importHistoryCount(),
       pageTitle: document.querySelector("#pageTitle")?.textContent
     };
-  })()`);
+  })()`, "post-reload transient state snapshot");
 
   result.demoQa = await client.evaluate(`(async () => {
     await window.__phase5.openPage("demoqa");
-    await window.__phase5.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Demo Control Center");
+    await window.__phase5.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Demo Control Center", { label: "Demo Control Center page title" });
     const utilityRow = Array.from(document.querySelectorAll(".qa-check-row"))
       .find(row => row.textContent.includes("Pilot Intake Safety utility"));
     const readinessRow = Array.from(document.querySelectorAll(".qa-check-row"))
@@ -706,10 +831,11 @@ async function main() {
       includesReadinessEngine: document.body.textContent.includes("Readiness Engine utility"),
       readinessEngineRowPass: readinessRow?.querySelector(".qa-status-badge")?.textContent.trim() === "Pass"
     };
-  })()`);
+  })()`, "Demo QA utility snapshot");
 
-  await client.setViewport(1440, 900, false);
-  await client.navigate(commandUrl);
+  await client.setViewport(1440, 900, false, "Command mode desktop viewport");
+  await client.navigate(commandUrl, "load command mode app");
+  result.commandAppReady = await waitForAppReady(client, appOrigin, "wait for command mode app readiness");
   await installPageHelpers(client);
   result.commandMode = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -727,9 +853,9 @@ async function main() {
       hasPreviewTemplate: Boolean(document.querySelector('[data-demo-import="workorders"]')),
       darkModeToggled: toggled
     };
-  })()`);
+  })()`, "command mode and dark toggle snapshot");
 
-  await client.setViewport(390, 844, true);
+  await client.setViewport(390, 844, true, "Command dark narrow mobile viewport");
   result.commandDarkMobile = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
     return {
@@ -737,9 +863,10 @@ async function main() {
       bodyCommandMode: document.body.classList.contains("command-mode"),
       bodyThemeDark: document.body.classList.contains("theme-dark")
     };
-  })()`);
+  })()`, "command dark mobile viewport snapshot");
 
-  await client.navigate(rootUrl);
+  await client.navigate(rootUrl, "load root app without URL override");
+  result.rootAppReady = await waitForAppReady(client, appOrigin, "wait for root app readiness without URL override");
   await installPageHelpers(client);
   result.preferencePersistence = await client.evaluate(`(async () => {
     await window.__phase5.openPilot();
@@ -749,17 +876,18 @@ async function main() {
       storedUiMode: localStorage.getItem("cmtcommand-ui-mode"),
       storedTheme: localStorage.getItem("cmtcommand-theme")
     };
-  })()`);
+  })()`, "preference persistence snapshot");
 
-  await client.navigate(appUrl);
+  await client.navigate(appUrl, "reload standard app before TRD-104 workflow");
+  result.trd104AppReady = await waitForAppReady(client, appOrigin, "wait for standard app readiness before TRD-104 workflow");
   await installPageHelpers(client);
   result.trd104Workflow = await client.evaluate(`(async () => {
     await window.__phase5.openPage("command");
     const beforeNotReady = Array.from(document.querySelectorAll(".readiness-hero-facts span"))
       .find(item => item.textContent.includes("Not Ready"))?.querySelector("strong")?.textContent || "";
     document.querySelector('[data-open-coverage="TRD-104"]').click();
-    await window.__phase5.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Find Coverage");
-    await window.__phase5.waitFor(() => document.querySelector('[data-demo-target="approve-coverage-plan"]'));
+    await window.__phase5.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Find Coverage", { label: "Find Coverage page title for TRD-104" });
+    await window.__phase5.waitFor(() => document.querySelector('[data-demo-target="approve-coverage-plan"]'), { label: "approve coverage plan action" });
     const selectedCandidate = document.querySelector('[data-demo-target="maria-coverage-recommendation"]')?.textContent || "";
     window.__decisionNoteXss = false;
     const hostileNote = '<img src=x onerror=window.__decisionNoteXss=1> approve coverage';
@@ -767,7 +895,7 @@ async function main() {
     noteInput.value = hostileNote;
     noteInput.dispatchEvent(new Event("input", { bubbles: true }));
     document.querySelector('[data-demo-target="approve-coverage-plan"]').click();
-    await window.__phase5.waitFor(() => document.body.textContent.includes("Maria Lopez Assigned") || document.body.textContent.includes("Maria Lopez"));
+    await window.__phase5.waitFor(() => document.body.textContent.includes("Maria Lopez Assigned") || document.body.textContent.includes("Maria Lopez"), { label: "Maria Lopez approval outcome" });
     const decisionOutcomeText = document.body.textContent;
     const decisionOutcomeUnsafeNodes = document.querySelectorAll(".demo-outcome-panel img,.demo-outcome-panel svg,.demo-outcome-panel script").length;
     await window.__phase5.openPage("decisionlog");
@@ -783,14 +911,14 @@ async function main() {
     await window.__phase5.openPage("pilotpack");
     const pilotMaterialsText = document.body.textContent;
     await window.__phase5.openPage("demoqa");
-    await window.__phase5.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Demo Control Center");
+    await window.__phase5.waitFor(() => document.querySelector("#pageTitle")?.textContent === "Demo Control Center", { label: "Demo Control Center after TRD-104 workflow" });
     const demoHealthStatus = document.querySelector(".demo-health-card h2")?.textContent || "";
     const failingCheckCount = Array.from(document.querySelectorAll(".qa-status-badge")).filter(item => item.textContent.trim() === "Fail").length;
     const demoQaText = document.body.textContent;
     document.querySelector("[data-demo-full-reset-arm]")?.click();
-    await window.__phase5.waitFor(() => document.querySelector("[data-demo-full-reset-confirm]"));
+    await window.__phase5.waitFor(() => document.querySelector("[data-demo-full-reset-confirm]"), { label: "full reset confirmation action" });
     document.querySelector("[data-demo-full-reset-confirm]")?.click();
-    await window.__phase5.waitFor(() => document.querySelector("[data-demo-full-reset-arm]"));
+    await window.__phase5.waitFor(() => document.querySelector("[data-demo-full-reset-arm]"), { label: "full reset returns to armed state" });
     const resetText = document.body.textContent;
     return {
       selectedCandidateHasMaria: selectedCandidate.includes("Maria Lopez"),
@@ -806,7 +934,7 @@ async function main() {
       demoQaReady: demoHealthStatus.includes("Ready for Demo") && failingCheckCount === 0 && demoQaText.includes("Pilot Intake Safety utility") && demoQaText.includes("Readiness Engine utility"),
       fullResetReturnsUnapproved: resetText.includes("TRD-104 approval state") && resetText.includes("Not approved in current state")
     };
-  })()`);
+  })()`, "TRD-104 coverage approval workflow");
 
   result.consoleEvents = client.consoleEvents;
   result.networkFailures = client.networkFailures;
@@ -818,6 +946,7 @@ async function main() {
     console.log(JSON.stringify(result, null, 2));
   } finally {
     if (client) client.close();
+    await closeCreatedTarget(pageTarget);
     if (localServer) {
       await new Promise(resolve => localServer.server.close(resolve));
     }

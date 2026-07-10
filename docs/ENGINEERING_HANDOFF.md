@@ -6,7 +6,7 @@ Date: 2026-07-10
 
 - Worktree: `C:\Users\Surface i7\Documents\CMTCommand-codex`.
 - Branch: `codex-takeover`.
-- Starting `HEAD`: `b6a3d2ba221c851a011d005ff96befddefcafbce`.
+- Browser-validator repair run started from `HEAD`: `92b40a572afed4a33aa19f7dc18eb1ba124d4044`.
 - Protected baseline tag `pre-codex-takeover^{commit}`: `d23c70a7044f46f129cb2272ab83a1840441484a`.
 - Root verifier and explicit `tests/*.test.js` loop passed before product edits.
 - Protected paths were not edited, staged, tested, formatted, or cleaned.
@@ -32,9 +32,18 @@ CMTCommand is a local tomorrow-readiness command system for construction materia
 - Improved TRD-104 post-approval behavior: the story copy follows computed readiness, duplicate approval is disabled, and the Decision Log/Operational Impact path reflects the approval.
 - Improved coverage fallback UX by showing explicit no-valid-internal-option messaging and near-match blockers when no candidate can be assigned safely.
 - Hardened the browser-validation helper with a local runtime-file allowlist, path containment, malformed URL handling, self-served ephemeral app URL, stricter TRD-104 assertions, and clearer CDP endpoint errors.
+- Repaired the live browser-validation timeout by giving every CDP command, wait, screenshot, navigation, and `Runtime.evaluate` an operation-specific label; creating/connecting to a page target whose URL matches the self-served CMTCommand origin; waiting for DOMContentLoaded/load, `document.readyState`, rendered `#app`, app navigation, and required CMTCommand globals before workflow assertions; and replacing animation-frame polling with bounded timer polling plus DOM diagnostics.
 - Created and maintained `docs/CODEX_EXECUTION_PLAN.md`.
 
 ## Validation Evidence
+
+Passed:
+
+```powershell
+node .\docs\cmtcommand-vnext\artifacts\phase5-browser-validation.cjs
+```
+
+Result: pass against Microsoft Edge CDP at `http://127.0.0.1:9224`. The script self-served the app on `http://127.0.0.1:51652/?ui=standard`, created a matching CDP page target, passed 72 browser assertions, and reported `consoleFailureCount: 0` and `networkFailureCount: 0`.
 
 Passed:
 
@@ -67,14 +76,6 @@ Passed with line-ending warnings only:
 git diff --check -- app.js styles.css index.html README.md DEVELOPER_NOTES.md demoShared.js pilotIntakeSafety.js readinessEngine.js demoControlCenter.js pilotReadinessPack.js demoWalkthrough.js operationalImpact.js operationalCompression.js tests scripts AGENTS.md CODEX_TAKEOVER_PROMPT.md .github docs
 ```
 
-Environment-blocked:
-
-```powershell
-node .\docs\cmtcommand-vnext\artifacts\phase5-browser-validation.cjs
-```
-
-The browser script now self-serves the app but requires a Chrome DevTools Protocol endpoint at `http://127.0.0.1:9224`; none is reachable in this session. The in-app browser runtime also reports no available browser backends.
-
 Not applicable: npm build, lint, type-check, package audit, backend/API tests, migrations, auth, deployment checks, and production service checks. The root product remains a static dependency-free local app.
 
 ## Security And Reliability
@@ -97,7 +98,6 @@ Not applicable: npm build, lint, type-check, package audit, backend/API tests, m
 
 ## Remaining Limitations
 
-- Live browser validation must be rerun in an environment with CDP at `127.0.0.1:9224` or an available in-app browser backend.
 - The app is still local/static. Production identity, backend persistence, live scheduling/LIMS/ERP adapters, deployment, real customer data, and external credentials remain outside this local scope.
 - No manual screen-reader session was possible in this run.
 

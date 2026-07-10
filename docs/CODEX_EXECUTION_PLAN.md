@@ -10,7 +10,7 @@ CMTCommand answers one operational question for CMT, geotech, and special-inspec
 
 - Working directory confirmed: `C:\Users\Surface i7\Documents\CMTCommand-codex`.
 - Active branch confirmed: `codex-takeover`.
-- Current `HEAD`: `b6a3d2ba221c851a011d005ff96befddefcafbce`.
+- Current `HEAD` at the browser-validator repair start: `92b40a572afed4a33aa19f7dc18eb1ba124d4044`.
 - Protected baseline tag `pre-codex-takeover^{commit}` resolves to `d23c70a7044f46f129cb2272ab83a1840441484a`.
 - `git worktree list` shows the original repository at `C:\Users\Surface i7\Documents\CMT Command Center` on `feat/trusted-pilot-intake-safety` and this autonomous worktree at `C:\Users\Surface i7\Documents\CMTCommand-codex` on `codex-takeover`.
 - `git status --short --branch` was clean at takeover start.
@@ -144,23 +144,24 @@ Acceptance criteria:
 - Addressed security review findings by escaping user-entered decision notes, decision log fields, readiness/coverage strings, handoff summaries, pickup workflow fields, and coverage-control attributes before rendering.
 - Addressed UX/accessibility review findings by deriving the TRD-104 story/action copy from current readiness state, disabling duplicate/non-feasible approvals, exposing no-valid-alternative messaging, tightening Demo QA utility checks, and expanding browser-validation assertions for post-approval copy.
 - Updated the browser-validation script to fail clearly when Chrome DevTools Protocol is unavailable and to close its local static server on failure.
+- Repaired the live browser-validation timeout by adding labeled CDP operation errors, creating/connecting to a page target whose URL matches the self-served CMTCommand origin, waiting for DOMContentLoaded/load plus `document.readyState`, rendered `#app`, navigation, and required CMTCommand globals before assertions, and replacing animation-frame polling with bounded timer polling that reports DOM diagnostics.
 
 ## Current Validation Status
 
 - Baseline verifier: passing.
 - Baseline explicit tests: passing.
-- Current `node .\scripts\verify-root.mjs`: passing after final app and validation-script hardening.
-- Current explicit root `tests/*.test.js` loop: passing after final app and validation-script hardening.
+- Current `node .\scripts\verify-root.mjs`: passing after browser-validator repair.
+- Current explicit root `tests/*.test.js` loop: passing after browser-validator repair.
 - Current focused checks: `node --check .\readinessEngine.js`, `node .\tests\readinessEngine.test.js`, `node .\tests\demoControlCenter.test.js`, `node --check .\app.js`, `node --check .\demoControlCenter.js`, and `node --check .\docs\cmtcommand-vnext\artifacts\phase5-browser-validation.cjs` passed.
 - `git diff --check -- app.js styles.css index.html README.md DEVELOPER_NOTES.md demoShared.js pilotIntakeSafety.js readinessEngine.js demoControlCenter.js pilotReadinessPack.js demoWalkthrough.js operationalImpact.js operationalCompression.js tests scripts AGENTS.md CODEX_TAKEOVER_PROMPT.md .github docs`: passed with line-ending warnings only.
 - Hygiene scans for debug/test-only residue and secrets found no actionable issue; false positives are documentation words such as `secret`/`token` and existing test strings.
-- Browser validation: environment-blocked in this session. `node .\docs\cmtcommand-vnext\artifacts\phase5-browser-validation.cjs` now self-serves the app but requires a Chrome DevTools Protocol endpoint at `127.0.0.1:9224`; none is reachable. The in-app browser connector also reports no available browser backends (`agent.browsers.list()` returned `[]`). Earlier port `8765` checks served an older copy and were not used as evidence.
+- Browser validation: passing in this session against Microsoft Edge CDP at `http://127.0.0.1:9224`. `node .\docs\cmtcommand-vnext\artifacts\phase5-browser-validation.cjs` self-served CMTCommand on `http://127.0.0.1:51652/?ui=standard`, created its own matching CDP page target, waited for app readiness, passed 72 assertions, and reported `consoleFailureCount: 0` and `networkFailureCount: 0`.
 - Build/lint/type-check/package audit: not applicable; no root package system exists.
 
 ## Remaining Work
 
-No locally actionable root work remains after the staged checkpoint. Live browser validation remains the only environment-blocked quality gate.
+No locally actionable root work remains after the browser-validator repair and validation pass.
 
 ## External Blockers
 
-Live browser validation is blocked by the current execution environment, not by product code. Live integrations, production deployment, authentication, backend persistence, and real customer data remain intentionally out of scope.
+Live integrations, production deployment, authentication, backend persistence, and real customer data remain intentionally out of scope. No browser-validation blocker remains in the current Edge CDP environment.
