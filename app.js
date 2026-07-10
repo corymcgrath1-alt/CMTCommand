@@ -94,6 +94,8 @@ const state = {
   lastLocationLogKey: "",
   emergencyDecisionLog: [],
   intakeImport: null,
+  intakeImportReadToken: 0,
+  intakeSelectedEntity: "technicians",
   intakeImportedRecords: [],
   intakeDocuments: [],
   extractionSample: null,
@@ -2536,6 +2538,12 @@ function getOpsCompression() {
   return window.CMTOperationalCompression;
 }
 
+function getPilotIntakeSafety() {
+  const utility = window.CMTPilotIntakeSafety;
+  if (!utility) throw new Error("CMTPilotIntakeSafety must load before app.js");
+  return utility;
+}
+
 function getOpsContext(extra = {}) {
   return {
     generatedAt: getDemoTimestamp(),
@@ -2544,7 +2552,7 @@ function getOpsContext(extra = {}) {
 }
 
 function renderCopyButton(text, label, tone = "ghost-button") {
-  return `<button class="${tone}" type="button" data-copy-payload="${encodeURIComponent(text || "")}" data-copy-label="${escapeHtml(label)}">${label}</button>`;
+  return `<button class="${tone}" type="button" data-copy-payload="${encodeURIComponent(text || "")}" data-copy-label="${escapeHtml(label)}">${escapeHtml(label)}</button>`;
 }
 
 function renderOpsViewToggle() {
@@ -3599,6 +3607,7 @@ function renderDemoControlCenter() {
         </div>
       </section>
       ${renderDemoHealthCard(report)}
+      ${renderQaSection(sections["required-utilities"], { copyLabel: "Copy Utility QA" })}
       <div class="qa-grid">
         ${renderQaSection(sections["trd-104-story"], { copyLabel: "Copy TRD-104 Status" })}
         ${renderWalkthroughTargetAudit(sections["walkthrough-target-audit"])}
@@ -4021,7 +4030,7 @@ function renderSmartIntakeSummary(summary) {
         </div>
         <div class="panel-actions">
           <span class="badge ${summary.tone}">${summary.status}</span>
-          ${renderCopyButton(summary.cleanupRequestText || summary.copyText, "Copy Cleanup Request", "primary-button")}
+          ${renderCopyButton(summary.cleanupRequestText || summary.copyText, summary.copyButtonLabel || "Copy Cleanup Request", "primary-button")}
         </div>
       </div>
       <div class="ops-brief-grid compact">
@@ -4285,6 +4294,7 @@ function render() {
     settings: renderSettings
   }[state.activePage];
   document.getElementById("app").innerHTML = `${view()}${renderWalkthroughOverlay()}`;
+  hydrateSafeTextSinks();
   wirePageControls();
   applyWalkthroughAfterRender();
 }
@@ -5014,7 +5024,7 @@ function renderPilotRequestForm() {
         </div>
         <span class="badge info">${state.pilotRequests.length} local ${state.pilotRequests.length === 1 ? "request" : "requests"}</span>
       </div>
-      ${state.pilotConfirmation ? `<div class="success-banner">${state.pilotConfirmation}</div>` : ""}
+      ${state.pilotConfirmation ? `<div class="success-banner">${escapeHtml(state.pilotConfirmation)}</div>` : ""}
       <form class="pilot-request-form" data-pilot-form>
         <label>Name<input class="field-input" name="name" required></label>
         <label>Company<input class="field-input" name="company" required></label>
@@ -6565,63 +6575,20 @@ function renderBilling() {
 }
 
 function csvEscape(value) {
-  const text = String(value ?? "");
-  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  return getPilotIntakeSafety().csvEscape(value);
 }
 
 function rowsToCsv(rows, columns) {
-  return [columns.join(","), ...rows.map(row => columns.map(column => csvEscape(row[column])).join(","))].join("\n");
+  return getPilotIntakeSafety().rowsToCsv(rows, columns);
 }
 
 function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let cell = "";
-  let quoted = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
-    const next = text[i + 1];
-    if (char === '"' && quoted && next === '"') {
-      cell += '"';
-      i += 1;
-    } else if (char === '"') {
-      quoted = !quoted;
-    } else if (char === "," && !quoted) {
-      row.push(cell.trim());
-      cell = "";
-    } else if ((char === "\n" || char === "\r") && !quoted) {
-      if (char === "\r" && next === "\n") i += 1;
-      row.push(cell.trim());
-      if (row.some(value => value.length)) rows.push(row);
-      row = [];
-      cell = "";
-    } else {
-      cell += char;
-    }
-  }
-  row.push(cell.trim());
-  if (row.some(value => value.length)) rows.push(row);
-  if (!rows.length) return [];
-  const headers = rows[0].map(header => header.trim());
-  return rows.slice(1).map(values => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+  return getPilotIntakeSafety().parseCsv(text);
 }
 
-function validateImport(entity, rows) {
+function validateImport(entity, parseResultOrRows) {
   const config = intakeEntityConfig[entity];
-  const headers = rows.length ? Object.keys(rows[0]) : [];
-  const missingColumns = config.requiredColumns.filter(column => !headers.includes(column));
-  const rowWarnings = rows.flatMap((row, index) => config.requiredColumns
-    .filter(column => !String(row[column] || "").trim())
-    .map(column => `Row ${index + 1}: missing ${column}`));
-  const seen = new Set();
-  const duplicateWarnings = rows.flatMap((row, index) => {
-    const key = config.requiredColumns.map(column => String(row[column] || "").trim().toLowerCase()).join("|");
-    if (!key.trim()) return [];
-    if (seen.has(key)) return [`Row ${index + 1}: possible duplicate ${config.label}`];
-    seen.add(key);
-    return [];
-  });
-  return { missingColumns, rowWarnings, duplicateWarnings };
+  return getPilotIntakeSafety().validateImport(config, parseResultOrRows);
 }
 
 function makeTemplateRows(entity) {
@@ -6695,8 +6662,8 @@ function renderImportExportSection() {
       </div>
       ${state.lastCsvExport ? `
         <div class="coverage-note good">
-          <strong>${state.lastCsvExport.status}</strong>
-          <span>${state.lastCsvExport.filename} / ${state.lastCsvExport.rows} rows / ${state.lastCsvExport.columns} columns / ${state.lastCsvExport.timestamp}</span>
+          <strong>${escapeHtml(state.lastCsvExport.status)}</strong>
+          <span>${escapeHtml(state.lastCsvExport.filename)} / ${state.lastCsvExport.rows} rows / ${state.lastCsvExport.columns} columns / ${escapeHtml(state.lastCsvExport.timestamp)}</span>
         </div>
       ` : ""}
       <div class="csv-import-box">
@@ -6707,7 +6674,7 @@ function renderImportExportSection() {
         <div class="form-grid">
           <label>Import type
             <select id="importEntitySelect">
-              ${Object.entries(intakeEntityConfig).map(([key, config]) => `<option value="${key}">${config.label}</option>`).join("")}
+              ${Object.entries(intakeEntityConfig).map(([key, config]) => `<option value="${key}" ${state.intakeSelectedEntity === key ? "selected" : ""}>${config.label}</option>`).join("")}
             </select>
           </label>
           <label>CSV file
@@ -6716,43 +6683,120 @@ function renderImportExportSection() {
         </div>
       </div>
       ${importState ? renderImportPreview(importState) : ""}
+      ${renderImportHistory()}
     </section>
   `;
 }
 
 function renderImportPreview(importState) {
   const config = intakeEntityConfig[importState.entity];
-  const rows = importState.rows.slice(0, 6);
-  const headers = rows.length ? Object.keys(rows[0]) : config.requiredColumns;
   const intakeSummary = createPilotIntakeSummary(importState);
+  const blocked = Boolean(importState.validation.blocked);
+  const parseBlocked = Boolean(importState.validation.parseErrors?.length);
+  const needsReview = Boolean(importState.validation.rowWarnings.length || importState.validation.duplicateWarnings.length || importState.validation.headerWarnings?.length);
   return `
     <section class="import-preview">
       <div class="panel-head compact">
         <div>
           <h2>Import Preview: ${config.label}</h2>
-          <p>${importState.rows.length} rows staged. Review warnings before applying.</p>
+          <p>${parseBlocked ? "Preview blocked by parse errors. Fix the CSV and upload again." : `${importState.rows.length} rows staged. Review warnings before applying.`}</p>
         </div>
-        <span class="badge ${importState.validation.missingColumns.length ? "bad" : "good"}">${importState.validation.missingColumns.length ? "Needs review" : "Ready"}</span>
+        <span class="badge ${blocked ? "bad" : needsReview ? "warn" : "good"}">${blocked ? "Blocked" : needsReview ? "Needs review" : "Ready"}</span>
       </div>
       ${renderSmartIntakeSummary(intakeSummary)}
-      <div class="warning-list">
-        ${importState.validation.missingColumns.map(column => `<span class="badge bad">Missing column: ${column}</span>`).join("")}
-        ${importState.validation.rowWarnings.slice(0, 8).map(warning => `<span class="badge warn">${warning}</span>`).join("")}
-        ${importState.validation.duplicateWarnings.slice(0, 8).map(warning => `<span class="badge warn">${warning}</span>`).join("")}
-        ${!importState.validation.missingColumns.length && !importState.validation.rowWarnings.length && !importState.validation.duplicateWarnings.length ? `<span class="badge good">Required columns present</span>` : ""}
-      </div>
+      <div class="warning-list" data-intake-warning-list></div>
       <div class="data-table-wrap">
         <table>
-          <thead><tr>${headers.map(header => `<th>${header}</th>`).join("")}</tr></thead>
-          <tbody>${rows.map(row => `<tr>${headers.map(header => `<td>${escapeHtml(String(row[header] || ""))}</td>`).join("")}</tr>`).join("")}</tbody>
+          <thead data-intake-preview-head></thead>
+          <tbody data-intake-preview-body></tbody>
         </table>
       </div>
       <div class="coverage-actions">
-        <button class="primary-button" type="button" data-apply-import>Apply Import</button>
+        <button class="primary-button" type="button" data-apply-import ${blocked ? "disabled" : ""}>Apply Import</button>
         <button class="ghost-button" type="button" data-cancel-import>Cancel Import</button>
       </div>
     </section>
   `;
+}
+
+function renderImportHistory() {
+  const entries = state.intakeImportedRecords.slice(0, 4);
+  return `
+    <div class="import-history" data-import-history-count="${state.intakeImportedRecords.length}">
+      <div class="section-title compact">
+        <div>
+          <h3>Recent Local Imports</h3>
+          <p>Applied previews stay in this browser session and do not overwrite sample records.</p>
+        </div>
+      </div>
+      ${entries.length ? `
+        <div class="status-list">
+          ${entries.map(entry => `
+            <article class="coverage-note good" data-import-history-entry>
+              <strong>${escapeHtml(entry.entity)}</strong>
+              <span>${entry.rows.length} ${entry.rows.length === 1 ? "row" : "rows"} from ${escapeHtml(entry.source)} at ${escapeHtml(entry.appliedAt)}</span>
+            </article>
+          `).join("")}
+        </div>
+      ` : `<div class="empty-state" data-import-history-empty>No local imports applied yet.</div>`}
+    </div>
+  `;
+}
+
+function hydrateIntakePreviewSinks() {
+  if (!state.intakeImport) return;
+  const safety = getPilotIntakeSafety();
+  const validation = state.intakeImport.validation || {};
+  const warningList = document.querySelector("[data-intake-warning-list]");
+  if (warningList) {
+    warningList.textContent = "";
+    const warningGroups = [
+      ["bad", (validation.parseErrors || []).map(error => `Parse error: ${error}`)],
+      ["bad", (validation.missingColumns || []).map(column => `Missing column: ${column}`)],
+      ["warn", validation.headerWarnings || []],
+      ["warn", (validation.rowWarnings || []).slice(0, 8)],
+      ["warn", (validation.duplicateWarnings || []).slice(0, 8)]
+    ];
+    const warnings = warningGroups.flatMap(([tone, items]) => items.map(text => ({ tone, text })));
+    if (warnings.length) {
+      warnings.forEach(item => safety.appendTextElement(document, warningList, "span", item.text, `badge ${item.tone}`));
+    } else {
+      safety.appendTextElement(document, warningList, "span", "Required columns present", "badge good");
+    }
+  }
+
+  const columns = state.intakeImport.columns?.length
+    ? state.intakeImport.columns
+    : Object.keys(state.intakeImport.rows[0] || {}).map((key, index) => ({ key, displayName: key, index }));
+  const head = document.querySelector("[data-intake-preview-head]");
+  const body = document.querySelector("[data-intake-preview-body]");
+  if (!head || !body) return;
+  head.textContent = "";
+  body.textContent = "";
+  const headerRow = document.createElement("tr");
+  columns.forEach(column => safety.appendTextElement(document, headerRow, "th", column.displayName));
+  head.appendChild(headerRow);
+  state.intakeImport.rows.slice(0, 6).forEach(row => {
+    const tableRow = document.createElement("tr");
+    columns.forEach(column => safety.appendTextElement(document, tableRow, "td", row[column.key] || ""));
+    body.appendChild(tableRow);
+  });
+}
+
+function hydrateDocumentUploadSinks() {
+  const safety = getPilotIntakeSafety();
+  document.querySelectorAll("[data-document-index]").forEach(card => {
+    const record = state.intakeDocuments[Number(card.dataset.documentIndex)];
+    if (!record) return;
+    card.querySelectorAll("[data-document-field]").forEach(field => {
+      safety.setTextContent(field, record[field.dataset.documentField] || "");
+    });
+  });
+}
+
+function hydrateSafeTextSinks() {
+  hydrateIntakePreviewSinks();
+  hydrateDocumentUploadSinks();
 }
 
 function renderDocumentUploadSection() {
@@ -6786,19 +6830,19 @@ function renderDocumentUploadSection() {
           </label>
         </div>
         <div class="document-list">
-          ${state.intakeDocuments.length ? state.intakeDocuments.map(doc => `
-            <article class="document-card">
+          ${state.intakeDocuments.length ? state.intakeDocuments.map((doc, index) => `
+            <article class="document-card" data-document-index="${index}">
               <div class="coverage-card-top">
-                <strong>${doc.fileName}</strong>
+                <strong data-document-field="fileName"></strong>
                 <span class="badge ${toneForStatus(doc.status)}">${doc.status}</span>
               </div>
               <div class="coverage-detail-grid">
-                <div><span>Type</span><strong>${doc.type}</strong></div>
-                <div><span>Project</span><strong>${doc.project}</strong></div>
-                <div><span>Technician</span><strong>${doc.technician}</strong></div>
-                <div><span>Equipment</span><strong>${doc.equipment}</strong></div>
-                <div><span>Upload date</span><strong>${doc.uploadDate}</strong></div>
-                <div><span>Notes</span><strong>${doc.notes}</strong></div>
+                <div><span>Type</span><strong data-document-field="type"></strong></div>
+                <div><span>Project</span><strong data-document-field="project"></strong></div>
+                <div><span>Technician</span><strong data-document-field="technician"></strong></div>
+                <div><span>Equipment</span><strong data-document-field="equipment"></strong></div>
+                <div><span>Upload date</span><strong data-document-field="uploadDate"></strong></div>
+                <div><span>Notes</span><strong data-document-field="notes"></strong></div>
               </div>
             </article>
           `).join("") : `<div class="empty-state">No local documents staged yet. Choose files to add pilot upload records.</div>`}
@@ -7004,6 +7048,12 @@ function downloadCsv(filename, rows, columns) {
   const blob = new Blob([rowsToCsv(rows, columns)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
+  if (!getPilotIntakeSafety().isAllowedUrl(url, ["blob:"])) {
+    state.lastCsvExport.status = "CSV prepared; browser blocked unsafe download URL";
+    URL.revokeObjectURL(url);
+    render();
+    return;
+  }
   link.href = url;
   link.download = filename;
   document.body.appendChild(link);
@@ -7016,18 +7066,29 @@ function downloadCsv(filename, rows, columns) {
   URL.revokeObjectURL(url);
 }
 
-function stageImport(entity, rows, source = "Uploaded CSV") {
+function stageImport(entity, rowsOrParseResult, source = "Uploaded CSV") {
+  const safeEntity = intakeEntityConfig[entity] ? entity : "technicians";
+  const config = intakeEntityConfig[safeEntity];
+  const safety = getPilotIntakeSafety();
+  const parseResult = Array.isArray(rowsOrParseResult)
+    ? safety.createParseResultFromRows(rowsOrParseResult, Object.keys(rowsOrParseResult[0] || Object.fromEntries(config.requiredColumns.map(column => [column, ""]))))
+    : rowsOrParseResult;
+  const validation = validateImport(safeEntity, parseResult);
+  const rows = Array.isArray(parseResult?.rows) ? parseResult.rows : [];
+  const columns = Array.isArray(parseResult?.columns) ? parseResult.columns : [];
+  state.intakeSelectedEntity = safeEntity;
   state.intakeImport = {
-    entity,
+    entity: safeEntity,
     rows,
+    columns,
     source,
-    validation: validateImport(entity, rows)
+    validation
   };
   render();
 }
 
 function applyImport() {
-  if (!state.intakeImport) return;
+  if (!state.intakeImport || state.intakeImport.validation?.blocked) return;
   const entry = {
     entity: intakeEntityConfig[state.intakeImport.entity].label,
     rows: state.intakeImport.rows,
@@ -7046,7 +7107,7 @@ function stageUploadedDocuments(files) {
   const equipmentId = document.getElementById("documentEquipmentSelect")?.value || "";
   const notes = document.getElementById("documentNotesInput")?.value || "";
   const uploadDate = new Date().toLocaleDateString();
-  const docs = Array.from(files).map(file => ({
+  const docs = Array.from(files).map(file => getPilotIntakeSafety().normalizeDocumentRecord({
     fileName: file.name,
     type,
     project,
@@ -7154,15 +7215,40 @@ function wirePageControls() {
     });
   });
 
+  const importEntitySelect = document.getElementById("importEntitySelect");
+  if (importEntitySelect) {
+    importEntitySelect.addEventListener("change", event => {
+      if (intakeEntityConfig[event.target.value]) state.intakeSelectedEntity = event.target.value;
+    });
+  }
+
   const csvImportFile = document.getElementById("csvImportFile");
   if (csvImportFile) {
     csvImportFile.addEventListener("change", event => {
       const file = event.target.files[0];
       if (!file) return;
-      const entity = document.getElementById("importEntitySelect")?.value || "technicians";
+      const entity = document.getElementById("importEntitySelect")?.value || state.intakeSelectedEntity || "technicians";
+      const safety = getPilotIntakeSafety();
+      const readToken = state.intakeImportReadToken + 1;
+      state.intakeImportReadToken = readToken;
+      if (file.size > safety.MAX_CSV_CHARACTERS) {
+        stageImport(entity, safety.createErrorParseResult(`CSV file "${file.name}" is too large for local preview (${file.size} bytes; limit ${safety.MAX_CSV_CHARACTERS}).`), file.name);
+        return;
+      }
       const reader = new FileReader();
-      reader.onload = () => stageImport(entity, parseCsv(String(reader.result || "")), file.name);
-      reader.readAsText(file);
+      reader.onload = () => {
+        if (state.intakeImportReadToken !== readToken) return;
+        stageImport(entity, parseCsv(String(reader.result || "")), file.name);
+      };
+      reader.onerror = () => {
+        if (state.intakeImportReadToken !== readToken) return;
+        stageImport(entity, safety.createErrorParseResult(`CSV file "${file.name}" could not be read. Choose a readable CSV and try again.`), file.name);
+      };
+      try {
+        reader.readAsText(file);
+      } catch (error) {
+        stageImport(entity, safety.createErrorParseResult(`CSV file "${file.name}" could not be opened by this browser.`), file.name);
+      }
     });
   }
 

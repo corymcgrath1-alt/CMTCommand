@@ -151,10 +151,27 @@ assert.strictEqual(intake.sourceFields["Duplicate risks"], 1);
 assert(intake.cleanupRequestText.includes("Pilot cleanup request for Work Orders"));
 assert(intake.copyText.includes("Smart Intake Cleanup Request"));
 
+const blockedIntake = ops.createPilotIntakeSummary([
+  { work_order: "TRD-104", project: "Potomac Crossing Garage", service_type: "Concrete Pour" }
+], {
+  parseErrors: ["Unmatched quote near line 2"],
+  missingColumns: [],
+  rowWarnings: [],
+  duplicateWarnings: []
+}, { generatedAt, label: "Work Orders" });
+
+assert.strictEqual(blockedIntake.status, "Blocked");
+assert.strictEqual(blockedIntake.sourceFields["Accepted rows"], 0);
+assert.strictEqual(blockedIntake.copyButtonLabel, "Copy Parse Error");
+assert(!/imported/i.test(blockedIntake.summary));
+assert(!/imported/i.test(blockedIntake.cleanupRequestText));
+assert(blockedIntake.cleanupRequestText.includes("No rows were accepted"));
+
 const bannedCopyTerms = /(AI-generated|semantic compression|token savings|machine learning)/i;
 assert(!bannedCopyTerms.test(packet.copyText));
 assert(!bannedCopyTerms.test(handoff.copyText));
 assert(!bannedCopyTerms.test(decision.copyText));
 assert(!bannedCopyTerms.test(intake.copyText));
+assert(!bannedCopyTerms.test(blockedIntake.copyText));
 
 console.log("operationalCompression tests passed");

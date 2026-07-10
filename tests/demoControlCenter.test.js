@@ -4,12 +4,14 @@ const compression = require("../operationalCompression.js");
 const impact = require("../operationalImpact.js");
 const walkthrough = require("../demoWalkthrough.js");
 const pilotPack = require("../pilotReadinessPack.js");
+const pilotIntakeSafety = require("../pilotIntakeSafety.js");
 
 const requiredUtilities = {
   operationalCompression: compression,
   operationalImpact: impact,
   demoWalkthrough: walkthrough,
-  pilotReadinessPack: pilotPack
+  pilotReadinessPack: pilotPack,
+  pilotIntakeSafety
 };
 
 const validImpactSnapshot = {
@@ -144,9 +146,10 @@ const missingStory = control.checkTRD104Story(validContext({ trd104: { order: nu
 assert(missingStory.failingChecks >= 1);
 assert(missingStory.checks.some(check => check.id === "trd-104-exists" && check.status === "fail"));
 
-const missingUtilities = control.checkRequiredUtilities({ requiredUtilities: { operationalCompression: {} } });
+const missingUtilities = control.checkRequiredUtilities({ requiredUtilities: { operationalCompression: {}, pilotIntakeSafety: {} } });
 assert(missingUtilities.failingChecks >= 1);
 assert(missingUtilities.checks.some(check => check.id === "utility-operationalCompression" && check.status === "fail"));
+assert(missingUtilities.checks.some(check => check.id === "utility-pilotIntakeSafety" && check.status === "fail"));
 
 const copyMaterials = fullCopyMaterials();
 copyMaterials.managerEmail = { label: "Manager Email copy", text: "" };

@@ -110,6 +110,7 @@
       generatedAt: getGeneratedAt(context),
       sourceHash: hash,
       stale: Boolean(context.previousSourceHash && context.previousSourceHash !== hash),
+      copyButtonLabel: input.copyButtonLabel || "",
       characterSavings: estimateCharacterSavings(sourceFields, input.summary)
     };
     summary.copyText = input.copyText || buildCopyText(summary, input.copyHeading);
@@ -432,9 +433,51 @@
 
   function createPilotIntakeSummary(importRows = [], validationResults = {}, context = {}) {
     const rows = Array.isArray(importRows) ? importRows : [];
+    const parseErrors = asArray(validationResults.parseErrors);
     const rowWarnings = asArray(validationResults.rowWarnings);
     const duplicateWarnings = asArray(validationResults.duplicateWarnings);
     const missingColumns = asArray(validationResults.missingColumns);
+    if (parseErrors.length) {
+      const label = context.label || "pilot rows";
+      const repairActions = [
+        "Fix the CSV syntax before applying this file.",
+        "Check for unmatched quotes, broken rows, or an interrupted export.",
+        "Upload the corrected CSV again from Pilot Setup."
+      ];
+      const summary = makeSummary({
+        headline: "CSV Preview Blocked",
+        status: "Blocked",
+        severity: "High",
+        tone: "bad",
+        summary: `${label} preview is blocked by ${parseErrors.length} parse error${parseErrors.length === 1 ? "" : "s"}. No rows were accepted for local readiness review.`,
+        keyFacts: [
+          "Preview blocked before apply",
+          `${parseErrors.length} parse error${parseErrors.length === 1 ? "" : "s"}`,
+          `${rows.length} partial ${rows.length === 1 ? "row" : "rows"} held for diagnostics only`,
+          "Good enough for readiness demo: No"
+        ],
+        blockers: parseErrors.map(error => `Parse error: ${error}`),
+        missingData: ["valid CSV syntax"],
+        recommendedNextAction: repairActions[0],
+        sourceFields: {
+          "Import label": label,
+          "Preview status": "Blocked",
+          "Accepted rows": 0,
+          "Diagnostic partial rows": rows.length,
+          "Parse errors": parseErrors
+        },
+        sourceRecords: [],
+        copyHeading: "CSV Parse Repair Request",
+        copyButtonLabel: "Copy Parse Error"
+      }, context);
+      summary.cleanupRequestText = [
+        `CSV parse repair request for ${label}`,
+        `The preview was blocked before apply. No rows were accepted for local readiness review.`,
+        `Parse errors:\n${parseErrors.map(error => `- ${error}`).join("\n")}`,
+        `Repair actions:\n${repairActions.map(action => `- ${action}`).join("\n")}`
+      ].join("\n\n");
+      return summary;
+    }
     const missingRows = new Set();
     const missingFieldCounts = {};
     rowWarnings.forEach(warning => {

@@ -5132,6 +5132,17 @@ body.theme-dark .readiness-signal-card {
     padding: 16px 14px;
   }
 
+  .topbar-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .search-wrap {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: none;
+  }
+
   h1 {
     font-size: 28px;
   }

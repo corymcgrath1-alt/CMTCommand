@@ -11,18 +11,20 @@ There is no backend, login, database, cloud storage, external AI call, analytics
 `index.html` should load scripts in this order:
 
 1. `demoShared.js`
-2. `operationalCompression.js`
-3. `operationalImpact.js`
-4. `demoWalkthrough.js`
-5. `pilotReadinessPack.js`
-6. `demoControlCenter.js`
-7. `app.js`
+2. `pilotIntakeSafety.js`
+3. `operationalCompression.js`
+4. `operationalImpact.js`
+5. `demoWalkthrough.js`
+6. `pilotReadinessPack.js`
+7. `demoControlCenter.js`
+8. `app.js`
 
 `app.js` depends on all utility globals being available. If a future utility is added, load it before `app.js`.
 
 ## Module Responsibilities
 
 - `demoShared.js`: safe localStorage access, timestamp formatting, status labels, plain-text formatting, copy fallback, demo target helpers.
+- `pilotIntakeSafety.js`: Pilot Setup CSV parsing, required-column validation, duplicate warnings, CSV export escaping, safe text sink helpers, and narrow URL protocol checks.
 - `operationalCompression.js`: readiness packets, ops brief, coverage handoff, decision summary, pilot intake summary.
 - `operationalImpact.js`: issue counts, conservative review-time estimate, impact snapshot, repeat patterns, coverage bottlenecks, data quality.
 - `demoWalkthrough.js`: Pilot Story Mode steps, progress helpers, initial/reset state, demo recap.
@@ -86,6 +88,16 @@ Main sections:
 
 Keep Demo QA deterministic. It should report static/local demo readiness, not real monitoring or production QA automation.
 
+## Pilot Setup Intake Safety
+
+Pilot Setup accepts local CSV files and staged document metadata. User-controlled values must render with `textContent` or explicit DOM node construction. Do not add raw imported values to template literals, `innerHTML`, URL attributes, or clipboard/download attributes without a sink-specific safety check.
+
+CSV export should go through `pilotIntakeSafety.rowsToCsv`, which quotes CSV fields and prefixes spreadsheet formula-leading values. URL-valued attributes should use `pilotIntakeSafety.isAllowedUrl` with a narrow protocol list for that sink.
+
+CSV upload previews are intentionally bounded by `pilotIntakeSafety.MAX_CSV_CHARACTERS`. The app checks `file.size` before `FileReader.readAsText` and reports a blocked preview instead of reading oversized files into memory.
+
+Demo QA checks that the utility loaded, but deterministic Node tests are the required proof for parser, validation, rendering-sink helper, and URL-policy behavior.
+
 ## Copy Behavior
 
 All app copy buttons use `renderCopyButton` and the delegated `copyOperationalText` handler. The handler normalizes payload text, tries `navigator.clipboard.writeText`, falls back to a hidden textarea, and gives short button feedback.
@@ -114,6 +126,7 @@ Use existing source detail renderers in `app.js` when possible.
 
 ```powershell
 node --check demoShared.js
+node --check pilotIntakeSafety.js
 node --check demoControlCenter.js
 node --check pilotReadinessPack.js
 node --check demoWalkthrough.js
@@ -121,6 +134,7 @@ node --check operationalImpact.js
 node --check operationalCompression.js
 node --check app.js
 node tests\demoShared.test.js
+node tests\pilotIntakeSafety.test.js
 node tests\demoControlCenter.test.js
 node tests\pilotReadinessPack.test.js
 node tests\demoWalkthrough.test.js
@@ -129,6 +143,14 @@ node tests\operationalCompression.test.js
 ```
 
 There is currently no `package.json`, so npm scripts are unavailable.
+
+The local and CI entry point for these checks is:
+
+```powershell
+node scripts\verify-root.mjs
+```
+
+`.github/workflows/root-static-checks.yml` runs the same script for root static-app changes.
 
 ## Browser Smoke Checklist
 

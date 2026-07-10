@@ -1,0 +1,51 @@
+name: Root static checks
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/root-static-checks.yml"
+      - "AGENTS.md"
+      - "README.md"
+      - "DEVELOPER_NOTES.md"
+      - "scripts/verify-root.mjs"
+      - "index.html"
+      - "app.js"
+      - "styles.css"
+      - "demoShared.js"
+      - "pilotIntakeSafety.js"
+      - "demoControlCenter.js"
+      - "pilotReadinessPack.js"
+      - "demoWalkthrough.js"
+      - "operationalImpact.js"
+      - "operationalCompression.js"
+      - "tests/**"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/root-static-checks.yml"
+      - "AGENTS.md"
+      - "README.md"
+      - "DEVELOPER_NOTES.md"
+      - "scripts/verify-root.mjs"
+      - "index.html"
+      - "app.js"
+      - "styles.css"
+      - "demoShared.js"
+      - "pilotIntakeSafety.js"
+      - "demoControlCenter.js"
+      - "pilotReadinessPack.js"
+      - "demoWalkthrough.js"
+      - "operationalImpact.js"
+      - "operationalCompression.js"
+      - "tests/**"
+
+jobs:
+  root-static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node scripts/verify-root.mjs

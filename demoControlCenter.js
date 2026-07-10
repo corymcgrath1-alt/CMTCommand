@@ -27,6 +27,12 @@
       label: "Pilot Readiness Pack utility",
       globalName: "CMTPilotReadinessPack",
       functions: ["createPilotMaterialsSummary", "getManagerEmailCopy", "getPilotDataRequestCopy", "getOnePageBusinessCaseCopy", "getDemoScorecardCopy"]
+    },
+    {
+      id: "pilotIntakeSafety",
+      label: "Pilot Intake Safety utility",
+      globalName: "CMTPilotIntakeSafety",
+      functions: ["parseCsv", "validateImport", "rowsToCsv", "appendTextElement", "isAllowedUrl"]
     }
   ];
 
