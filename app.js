@@ -2056,7 +2056,7 @@ function certificationBusinessImpact(certification) {
   const impacts = {
     "ICC Structural Steel and Bolting": "Required for structural steel inspection bids and federal/security projects.",
     "ICC Reinforced Concrete": "Required for hospital, school, and concrete special inspection coverage.",
-    "WACEL Soils": "Unlocks DOT soil density and data center earthwork assignments.",
+    "WACEL Soils": "Supports DOT soil density and data center earthwork assignments.",
     "Nuclear Gauge Safety Training": "Required for nuclear density testing and soil compaction coverage.",
     "ACI Concrete Field Testing Technician Grade I": "Required for concrete pour coverage and cylinder casting readiness.",
     "ACI Concrete Strength Testing Technician": "Protects concrete lab continuity and supervisor bench strength.",
@@ -2714,16 +2714,16 @@ function renderOperationalImpactSection(snapshot) {
   const topBottleneck = snapshot.coverageBottlenecks[0];
   const cards = [
     {
-      label: "Issues Caught Before Tomorrow",
+      label: "Readiness Issues Caught",
       value: snapshot.issuesCaughtBeforeTomorrow,
       tone: snapshot.issuesCaughtBeforeTomorrow ? "warn" : "good",
-      detail: `CMTCommand found ${snapshot.issuesCaughtBeforeTomorrow} readiness issues before they became morning dispatch problems.`
+      detail: `${snapshot.issuesCaughtBeforeTomorrow} coverage, certification, equipment, or data gaps surfaced before dispatch.`
     },
     {
-      label: "Estimated Review Time Saved",
+      label: "Manual Review Reduced",
       value: `${snapshot.estimatedReviewTimeSavedMinutes.savedMinutesLow}-${snapshot.estimatedReviewTimeSavedMinutes.savedMinutesHigh} min`,
       tone: "info",
-      detail: "Conservative estimate based on scheduled jobs, at-risk work, and blockers reviewed."
+      detail: "Conservative estimate from jobs, blockers, and decision records reviewed."
     },
     {
       label: "Highest Risk Work Order",
@@ -2732,10 +2732,10 @@ function renderOperationalImpactSection(snapshot) {
       detail: `${snapshot.highestRiskWorkOrder.reason} ${snapshot.highestRiskWorkOrder.recommendedFix}`
     },
     {
-      label: "Most Common Blocker",
+      label: "Repeat Blocker",
       value: snapshot.mostCommonBlockerType,
       tone: "warn",
-      detail: "Most repeated issue type found across readiness checks and source data."
+      detail: "Most repeated readiness issue in the local schedule snapshot."
     },
     {
       label: "Coverage Bottleneck",
@@ -2744,7 +2744,7 @@ function renderOperationalImpactSection(snapshot) {
       detail: topBottleneck ? `${topBottleneck.availableQualifiedTechCount} available qualified techs for ${topBottleneck.requiredCoverageCount} scheduled jobs.` : "No coverage bottleneck found in this snapshot."
     },
     {
-      label: "Data Quality Score",
+      label: "Pilot Data Quality",
       value: `${snapshot.dataQualityScore.score}/100`,
       tone: impactTone(snapshot.dataQualityScore.gradeLabel),
       detail: `${snapshot.dataQualityScore.gradeLabel}. ${snapshot.dataQualityScore.recommendedCleanupActions[0] || "Source data is usable for this readiness demo."}`
@@ -2755,8 +2755,8 @@ function renderOperationalImpactSection(snapshot) {
       <div class="panel-head">
         <div>
           <p class="eyebrow">Operational Impact</p>
-          <h2>What CMTCommand Caught Before Tomorrow</h2>
-          <p>Deterministic estimates from the local demo data, readiness checks, equipment status, certifications, intake validation, and decision log.</p>
+          <h2>Readiness Risk Caught Before Dispatch</h2>
+          <p>Local estimates from tomorrow schedule data, certifications, equipment status, intake quality, and the decision log.</p>
         </div>
         <div class="panel-actions">
           ${renderOpsViewToggle()}
@@ -2788,7 +2788,7 @@ function renderPilotRoiSnapshot(snapshot) {
       <div class="ops-card-head">
         <div>
           <p class="eyebrow">Pilot ROI Snapshot</p>
-          <h3>Manager Proof</h3>
+          <h3>Pilot Impact Evidence</h3>
           <p>${escapeHtml(snapshot.pilotRoiSummary)}</p>
         </div>
         <div class="panel-actions">
@@ -2936,7 +2936,7 @@ function renderPilotMaterialsSummary() {
     ["Recommended manager action", summary.recommendedManagerAction, "good"]
   ];
   return `
-    <section class="pilot-materials-summary">
+    <section class="pilot-materials-summary ops-docket">
       ${items.map(([label, value, tone]) => `
         <article>
           <span>${escapeHtml(label)}</span>
@@ -3017,7 +3017,7 @@ function renderPilotDataRequestSection() {
       <div class="section-title">
         <div>
           <h2>Pilot Data Request</h2>
-          <p>Start with a limited export. No payroll, pricing, client financials, employee personal data, or sensitive HR data needed.</p>
+          <p>Start with a limited, anonymized export. Payroll, pricing, client financials, employee personal data, and sensitive HR data are not needed.</p>
         </div>
         ${renderCopyButton(getPilotPack().getPilotDataRequestCopy(), "Copy Pilot Data Request", "primary-button")}
       </div>
@@ -3091,13 +3091,13 @@ function renderPilotMessageLibrary() {
       <div class="section-title">
         <div>
           <h2>Copyable Messages</h2>
-          <p>Manager-ready text for outreach, follow-up, and internal buy-in.</p>
+          <p>Plain text for outreach, follow-up, and internal pilot approval.</p>
         </div>
       </div>
       <div class="pilot-pack-grid two">
-        ${renderPilotCopyCard("Manager Email", "Short pre-demo email that frames the readiness problem.", "Copy Manager Email", getPilotPack().getManagerEmailCopy(), "Pre-demo")}
-        ${renderPilotCopyCard("Post-Demo Follow-Up", "Thank-you note with recap, data ask, and next step.", "Copy Post-Demo Follow-Up", getPilotPack().getPostDemoFollowUpCopy(context), "After demo")}
-        ${renderPilotCopyCard("One-Page Business Case", "Internal business case for an owner, branch manager, or operations manager.", "Copy One-Page Business Case", getPilotPack().getOnePageBusinessCaseCopy(context), "Business case")}
+        ${renderPilotCopyCard("Manager Email", "Short note that frames the tomorrow-readiness problem.", "Copy Manager Email", getPilotPack().getManagerEmailCopy(), "Pre-demo")}
+        ${renderPilotCopyCard("Post-Demo Follow-Up", "Recap, anonymized data ask, and next step.", "Copy Post-Demo Follow-Up", getPilotPack().getPostDemoFollowUpCopy(context), "After demo")}
+        ${renderPilotCopyCard("One-Page Business Case", "Internal pilot case for an owner, branch manager, or operations manager.", "Copy One-Page Business Case", getPilotPack().getOnePageBusinessCaseCopy(context), "Business case")}
       </div>
     </section>
   `;
@@ -3138,8 +3138,8 @@ function renderPilotReadinessPack() {
       <section class="panel pilot-pack-hero">
         <div>
           <p class="eyebrow">Pilot Readiness Pack</p>
-          <h2>Turn the demo into a credible pilot conversation.</h2>
-          <p>Use this pack to run a focused CMTCommand pilot conversation. It turns the demo into a manager-ready discussion about tomorrow readiness, coverage gaps, data quality, decision traceability, and measurable operational impact.</p>
+          <h2>Founder packet for a limited pilot.</h2>
+          <p>Use this operating packet to discuss tomorrow readiness, coverage gaps, data quality, decision records, and pilot evidence without broadening the product scope.</p>
         </div>
         <div class="pilot-pack-actions">
           <button class="primary-button" type="button" data-start-walkthrough>Start Demo Walkthrough</button>
@@ -3418,7 +3418,7 @@ function renderDemoHealthCard(report) {
         <article><span>Passing</span><strong>${report.passingChecks}</strong></article>
         <article><span>Warnings</span><strong>${report.warningChecks}</strong></article>
         <article><span>Failing</span><strong>${report.failingChecks}</strong></article>
-        <article><span>Generated</span><strong>${escapeHtml(report.generatedAt)}</strong></article>
+        <article><span>Checked</span><strong>${escapeHtml(report.generatedAt)}</strong></article>
       </div>
       <div class="qa-actions">
         ${renderCopyButton(copyText, "Copy QA Report", "primary-button")}
@@ -3448,7 +3448,7 @@ function renderWalkthroughTargetAudit(section) {
       <div class="section-title compact">
         <div>
           <h2>Walkthrough Target Audit</h2>
-          <p>Checks Pilot Story Mode target IDs and identifies targets that render after navigation.</p>
+          <p>Confirms the 5-minute buyer walkthrough can find each target in the local UI.</p>
         </div>
         <div class="qa-actions">
           ${renderQaStatusBadge(section.status)}
@@ -3547,7 +3547,7 @@ function renderPreDemoChecklist() {
       <div class="section-title compact">
         <div>
           <h2>Pre-Demo Checklist</h2>
-          <p>Founder checklist for a clean manager, owner, PM, dispatcher, or operations lead walkthrough.</p>
+          <p>Pre-flight checks before showing the local demo to a manager, owner, PM, dispatcher, or operations lead.</p>
         </div>
         <div class="qa-actions">
           ${renderCopyButton(createPreDemoChecklistCopy(), "Copy Pre-Demo Checklist", "primary-button")}
@@ -3560,6 +3560,40 @@ function renderPreDemoChecklist() {
             <input type="checkbox" data-pre-demo-check="${item.id}" ${state.preDemoChecklist[item.id] ? "checked" : ""}>
             <span>${escapeHtml(item.label)}</span>
           </label>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderUiPolishChecklist() {
+  const checks = [
+    ["Tomorrow Readiness readable at a glance", "Ready, At Risk, Not Ready, and next action are visible without scrolling."],
+    ["TRD-104 stands out", "Highest-risk work order uses stronger risk styling and a clear Find Coverage action."],
+    ["Primary action is obvious", "Find Coverage, Approve Coverage Plan, and Run Demo QA are visually prioritized."],
+    ["Source details stay secondary", "Source Fields are available through details panels without dominating the page."],
+    ["Walkthrough target highlight is visible", "Pilot Story Mode highlight can be seen in standard, dark, and command modes."],
+    ["No generic dashboard wording on main pages", "Labels favor coverage, certification, equipment, dispatch, source fields, and decision records."],
+    ["Mobile has no horizontal overflow", "390px layout stacks cards and wraps action rows cleanly."]
+  ];
+  return `
+    <section class="qa-section ui-polish-checklist">
+      <div class="section-title compact">
+        <div>
+          <h2>UI Credibility Checklist</h2>
+          <p>Static checklist for keeping the demo operational, specific, and free of generic dashboard cues.</p>
+        </div>
+        ${renderQaStatusBadge("pass", "Review")}
+      </div>
+      <div class="ui-polish-list">
+        ${checks.map(([label, detail]) => `
+          <article>
+            ${renderQaStatusBadge("pass", "Check")}
+            <div>
+              <strong>${escapeHtml(label)}</strong>
+              <p>${escapeHtml(detail)}</p>
+            </div>
+          </article>
         `).join("")}
       </div>
     </section>
@@ -3598,10 +3632,10 @@ function renderDemoControlCenter() {
         <div>
           <p class="eyebrow">Founder QA Center</p>
           <h2>Demo Control Center</h2>
-          <p>Pre-flight check for the local CMTCommand demo before showing it to a manager, owner, PM, dispatcher, or operations lead.</p>
+          <p>Pre-flight checklist for the local CMTCommand demo before showing it to a manager, owner, PM, dispatcher, or operations lead.</p>
         </div>
         <div class="qa-actions">
-          <button class="primary-button" type="button" data-start-walkthrough>Start Pilot Story Mode</button>
+          <button class="primary-button" type="button" data-start-walkthrough>Start Demo Walkthrough</button>
           <button class="ghost-button" type="button" data-page="command">Open Tomorrow Readiness</button>
           <button class="ghost-button" type="button" data-page="pilotpack">Open Pilot Materials</button>
         </div>
@@ -3617,6 +3651,7 @@ function renderDemoControlCenter() {
       ${renderPilotMaterialsQa(sections["pilot-materials-qa"])}
       ${renderLocalDemoStateInspector(sections["local-demo-state"])}
       ${renderPreDemoChecklist()}
+      ${renderUiPolishChecklist()}
       ${renderKnownLimitations()}
       <section class="qa-section qa-report-export">
         <div>
@@ -3870,17 +3905,17 @@ function renderWalkthroughOverlay() {
           <div><i style="width:${progress.percent}%"></i></div>
         </div>
         <div class="demo-walkthrough-copy">
-          <span class="badge info">Demo Step</span>
+          <span class="badge info">5-Min Demo Path</span>
           <h2>${escapeHtml(step.title)}</h2>
           ${isFinal ? `
-            <p>${escapeHtml("In this walkthrough, CMTCommand reviewed tomorrow's scheduled work, identified TRD-104 as the highest-risk job, explained the coverage blocker, recommended Maria Lopez, documented the approval, and updated the operational impact snapshot.")}</p>
+            <p>${escapeHtml("CMTCommand reviewed tomorrow's schedule, identified TRD-104 as the highest-risk job, explained the coverage gap, recommended Maria Lopez, recorded the decision, and updated the impact snapshot.")}</p>
             <div class="demo-recap-metrics">
               ${renderDemoRecapMetrics()}
             </div>
           ` : `
             <dl>
-              <div><dt>What you are seeing</dt><dd>${escapeHtml(step.seeing)}</dd></div>
-              <div><dt>Why this matters</dt><dd>${escapeHtml(step.why)}</dd></div>
+              <div><dt>Current view</dt><dd>${escapeHtml(step.seeing)}</dd></div>
+              <div><dt>Operational reason</dt><dd>${escapeHtml(step.why)}</dd></div>
               <div><dt>Buyer takeaway</dt><dd>${escapeHtml(step.takeaway)}</dd></div>
             </dl>
           `}
@@ -3942,7 +3977,7 @@ function renderTomorrowOpsBrief(summary) {
     <section class="panel ops-brief-card ${summary.tone}" data-demo-target="tomorrow-ops-brief">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">Ops Brief</p>
+          <p class="eyebrow">Tomorrow Ops Brief</p>
           <h2>${summary.headline}</h2>
           <p>${escapeHtml(summary.summary)}</p>
         </div>
@@ -3954,11 +3989,11 @@ function renderTomorrowOpsBrief(summary) {
         </div>
       </div>
       <div class="ops-brief-grid">
-        ${summary.keyFacts.slice(0, 4).map(fact => `<article><span>Brief Fact</span><strong>${escapeHtml(fact)}</strong></article>`).join("")}
+        ${summary.keyFacts.slice(0, 4).map((fact, index) => `<article><span>${["Tomorrow Dispatch", "Inspection Readiness", "Coverage Gap", "Manager Action"][index] || "Source Fact"}</span><strong>${escapeHtml(fact)}</strong></article>`).join("")}
       </div>
       <div class="ops-summary-columns">
         ${renderSummaryList("Top Blockers", summary.blockers.slice(0, 4), "No readiness blockers")}
-        ${renderSummaryList("Missing Data", summary.missingData.slice(0, 4), "No missing source fields")}
+        ${renderSummaryList("Source Field Gaps", summary.missingData.slice(0, 4), "No missing source fields")}
         ${renderSummaryList("Recommended Action", [summary.recommendedNextAction])}
       </div>
       ${renderSourceDetails(summary)}
@@ -3982,11 +4017,11 @@ function renderReadinessPacket(summary) {
         </div>
       </div>
       <div class="ops-brief-grid compact">
-        ${summary.keyFacts.map(fact => `<article><span>Packet Detail</span><strong>${escapeHtml(fact)}</strong></article>`).join("")}
+        ${summary.keyFacts.map((fact, index) => `<article><span>${["Work Order Signal", "Certification Match", "Equipment Required", "Assigned Tech"][index] || "Source Field"}</span><strong>${escapeHtml(fact)}</strong></article>`).join("")}
       </div>
       <div class="ops-summary-columns">
         ${renderSummaryList("Current Blockers", summary.blockers, "No blockers")}
-        ${renderSummaryList("Missing Data", summary.missingData, "No missing source fields")}
+        ${renderSummaryList("Source Field Gaps", summary.missingData, "No missing source fields")}
         ${renderSummaryList("Recommended Action", [summary.recommendedNextAction])}
       </div>
       ${renderSourceDetails(summary)}
@@ -4024,7 +4059,7 @@ function renderSmartIntakeSummary(summary) {
     <section class="ops-packet-card intake-summary-card ${summary.tone}" data-demo-target="smart-intake-summary">
       <div class="ops-card-head">
         <div>
-          <p class="eyebrow">Smart Intake Summary</p>
+          <p class="eyebrow">Pilot Data Quality</p>
           <h3>${summary.headline}</h3>
           <p>${escapeHtml(summary.summary)}</p>
         </div>
@@ -4034,7 +4069,7 @@ function renderSmartIntakeSummary(summary) {
         </div>
       </div>
       <div class="ops-brief-grid compact">
-        ${summary.keyFacts.map(fact => `<article><span>Intake Fact</span><strong>${escapeHtml(fact)}</strong></article>`).join("")}
+        ${summary.keyFacts.map(fact => `<article><span>Source Field</span><strong>${escapeHtml(fact)}</strong></article>`).join("")}
       </div>
       <div class="ops-summary-columns">
         ${renderSummaryList("Cleanup Actions", [summary.recommendedNextAction, ...summary.missingData.slice(0, 3)])}
@@ -4321,7 +4356,7 @@ function renderCommandCenter() {
       ${issues.length ? issues.slice(0, 5).map(issue => `
         <article class="readiness-issue-card ${issue.tone}">
           <div class="gap-card-head">
-            <span class="badge ${issue.tone}">${issue.order.id} - ${issue.label.includes("Cert") ? "Readiness Gap" : issue.label.includes("Assignment") ? "Coverage Gap" : issue.label}</span>
+            <span class="badge ${issue.tone}">${issue.order.id} - ${issue.label.includes("Cert") ? "Certification Gap" : issue.label.includes("Assignment") ? "Coverage Gap" : issue.label}</span>
             <span class="badge ${issue.tone}">${issue.severity}</span>
           </div>
           <strong>${issue.reason.replace(/\.$/, "")}</strong>
@@ -4340,7 +4375,7 @@ function renderCommandCenter() {
       <div class="section-title">
         <div>
           <h2>Next Actions Queue</h2>
-          <p>Practical actions to close gaps before tomorrow starts.</p>
+          <p>Dispatcher-ready actions to close gaps before tomorrow starts.</p>
         </div>
       </div>
       <div class="readiness-action-list">
@@ -4414,24 +4449,21 @@ function renderCommandCenter() {
   const pilotBody = `
     ${renderDemoBeforeAfter()}
     <section class="pilot-cta panel immersive">
-      <span class="badge info">90-Day Pilot</span>
-      <h2>Pilot This With Anonymized Real Data.</h2>
-      <p>Upload one week of schedule data, a technician roster, certifications, and equipment list. CMTCommand will show which jobs are ready, which are at risk, and what actions close the gaps.</p>
+      <span class="badge info">Limited Pilot</span>
+      <h2>Test With Anonymized Real Data.</h2>
+      <p>Use one week of schedule data, a technician roster, certifications, and equipment list to see which jobs are Ready, At Risk, or Not Ready.</p>
       <button class="primary-button" type="button" data-page="dataintake">Open Pilot Setup</button>
     </section>
   `;
 
   return `
     ${renderWalkthroughLaunchStrip()}
-    ${renderTomorrowOpsBrief(opsBrief)}
-    ${renderOperationalImpactSection(impactSnapshot)}
-
     <section class="readiness-command-hero">
       <div class="readiness-score-card ${readiness.tone}">
         <div class="readiness-score-main">
           <div>
             <p class="eyebrow">Scheduled Does Not Mean Ready.</p>
-            <h2>Can We Successfully Perform Tomorrow's Work?</h2>
+            <h2>Tomorrow Dispatch Readiness</h2>
             <div class="readiness-score-line">
               <strong>${readiness.score}%</strong>
               <span class="badge ${readiness.tone}">${readiness.status}</span>
@@ -4443,7 +4475,7 @@ function renderCommandCenter() {
           </div>
         </div>
         <div class="readiness-hero-facts">
-          <span><strong>${readiness.total}</strong> Jobs Tomorrow</span>
+          <span><strong>${readiness.total}</strong> Tomorrow Jobs</span>
           <span><strong>${readiness.ready}</strong> Ready</span>
           <span><strong>${readiness.atRisk}</strong> At Risk</span>
           <span><strong>${readiness.notReady}</strong> Not Ready</span>
@@ -4453,8 +4485,8 @@ function renderCommandCenter() {
           <div><span>Next Best Action</span><strong>Find Coverage</strong></div>
         </div>
         <div class="how-readiness-works">
-          <strong>How Readiness Works</strong>
-          <p>A job is Ready only when the assigned person, required certs, equipment, site clearance, pickup needs, and cascading coverage impact all check out.</p>
+          <strong>Readiness Rule</strong>
+          <p>Ready means assigned tech, certifications, equipment, clearance, pickup needs, and downstream coverage impact all check out.</p>
         </div>
         <div class="coverage-actions">
           <button class="primary-button" type="button" data-open-coverage="TRD-104">Find Coverage</button>
@@ -4463,6 +4495,8 @@ function renderCommandCenter() {
       </div>
     </section>
 
+    ${renderTomorrowOpsBrief(opsBrief)}
+
     <section class="readiness-accordion-stack">
       ${renderAccordion("Critical Readiness Gaps", "3 Issues - 2 Need Coverage - 1 Needs Equipment", criticalBody, { open: true })}
       ${renderAccordion("Job Readiness Table", `${readiness.total} Jobs - ${readiness.ready} Ready - ${readiness.atRisk} At Risk - ${readiness.notReady} Not Ready`, tableBody, { open: true })}
@@ -4470,6 +4504,7 @@ function renderCommandCenter() {
       ${renderAccordion("Decision Log", `${state.emergencyDecisionLog.length || 0} Entries Today - Latest: ${latestDecision ? latestDecision.decisionType : "No Decision Yet"}`, decisionBody)}
       ${renderAccordion("90-Day Pilot", "Use Real Schedule, Technician, Certification, And Equipment Data", pilotBody)}
     </section>
+    ${renderOperationalImpactSection(impactSnapshot)}
   `;
 }
 
@@ -4497,8 +4532,8 @@ function renderReadinessDemo() {
     <section class="demo-command-hero">
       <div>
         <p class="eyebrow">Find Coverage</p>
-        <h2>Find Qualified Coverage Without Creating A New Gap.</h2>
-        <p>Compare available, qualified, cleared technicians by certs, equipment, ETA, pickup impact, and cascading schedule risk.</p>
+        <h2>Assign qualified coverage without creating a new gap.</h2>
+        <p>Compare available technicians by certification match, equipment access, ETA, pickup impact, and downstream schedule risk.</p>
       </div>
       <div class="demo-hero-actions">
         <button class="primary-button" type="button" data-demo-find-coverage>Find Coverage</button>
@@ -4513,17 +4548,17 @@ function renderReadinessDemo() {
     <section class="coverage-story-card panel ${selectedOrder.id === "TRD-104" ? "active" : ""}">
       <div>
         <span class="badge bad">TRD-104 Needs Coverage</span>
-        <h2>Assigned Technician Is Unavailable.</h2>
-        <p>CMTCommand found a qualified replacement and checked downstream impact before reassignment.</p>
+        <h2>Assigned technician is unavailable.</h2>
+        <p>Maria Lopez is the source-backed coverage recommendation after certification, equipment, and schedule-impact checks.</p>
       </div>
-      <button class="primary-button" type="button" data-demo-find-coverage>Compare Coverage Options</button>
+      <button class="primary-button" type="button" data-demo-find-coverage>Find Coverage</button>
     </section>
 
     <section class="table-panel demo-schedule-panel ${["schedule", "not-ready"].includes(activeScript.target) ? "demo-script-highlight" : ""}">
         <div class="table-head">
           <div>
-            <h2>Tomorrow Schedule</h2>
-            <p>Click a full row to inspect readiness gaps and coverage options.</p>
+            <h2>Tomorrow Dispatch Board</h2>
+            <p>Scan readiness by work order, assigned tech, service type, and required action.</p>
           </div>
           <span class="badge ${metrics.notReady ? "bad" : "good"}">${metrics.notReady} Not Ready</span>
         </div>
@@ -4589,14 +4624,14 @@ function renderReadinessDemo() {
             <p>${selectedOrder.scope}</p>
           </article>
           <article class="selected-order">
-            <h3>Why This Is Not Ready</h3>
+            <h3>Readiness Blockers</h3>
             <div class="gap-explain-list">
               ${selectedReadiness.reasons.map(reason => `
                 <div>
                   <span class="badge ${selectedReadiness.tone}">${reason.includes("missing") ? "Readiness Gap" : reason.includes("Unavailable") || reason.includes("unavailable") ? "Coverage Gap" : "Readiness Gap"}</span>
                   <strong>${reason.replace(/\.$/, "")}</strong>
                   <p>Impact: ${selectedOrder.id} cannot run as currently assigned.</p>
-                  <p>Fix: ${reason.includes("technician") || reason.includes("unavailable") ? "Assign Qualified Replacement" : "Resolve This Requirement Before Dispatch"}</p>
+                  <p>Fix: ${reason.includes("technician") || reason.includes("unavailable") ? "Assign qualified coverage" : "Resolve before dispatch"}</p>
                 </div>
               `).join("")}
             </div>
@@ -4621,7 +4656,7 @@ function renderReadinessDemo() {
     ${state.demoCoverageOpen ? renderDemoCoverageScreen(selectedOrder, selectedReadiness, coverageCandidates, selectedCandidate, activeScript) : ""}
     ${state.demoDecision ? renderDemoDecisionOutcome(activeScript) : ""}
     ${state.demoDecision ? renderDemoBeforeAfter() : ""}
-    ${state.demoDecision ? `<section class="pilot-cta panel immersive"><span class="badge info">90-Day Pilot</span><h2>Pilot This With Anonymized Real Data.</h2><p>Upload one week of schedule data, a technician roster, certifications, and equipment list. CMTCommand will show which jobs are ready, which are at risk, and what actions close the gaps.</p><button class="primary-button" type="button" data-page="dataintake">Open Pilot Setup</button></section>` : ""}
+    ${state.demoDecision ? `<section class="pilot-cta panel immersive"><span class="badge info">Limited Pilot</span><h2>Test with anonymized real data.</h2><p>Use one week of schedule data, a technician roster, certifications, and equipment list to review real readiness blockers before dispatch.</p><button class="primary-button" type="button" data-page="dataintake">Open Pilot Setup</button></section>` : ""}
   `;
 }
 
@@ -4658,11 +4693,11 @@ function renderCylinderPickupDashboardCard() {
     <section class="panel cylinder-dashboard-card">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">Demo preview module</p>
+          <p class="eyebrow">Readiness Preview</p>
           <h2>Cylinder Pickup Tracker</h2>
           <p>Operational readiness for field cylinders and pickup obligations. This does not include lab results, break schedules, sample login, or report authoring.</p>
         </div>
-        <button class="primary-button" type="button" data-optimize-pickups>Optimize Pickups</button>
+        <button class="primary-button" type="button" data-optimize-pickups>Plan Pickups</button>
       </div>
       <div class="cylinder-metric-grid">
         <div><span>Cylinder Pickups Due Tomorrow</span><strong>${metrics.dueTomorrow}</strong></div>
@@ -4782,7 +4817,7 @@ function renderPickupSuggestionsPanel() {
     <section class="panel pickup-suggestions-panel">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">Smart Pickup Suggestions</p>
+          <p class="eyebrow">Pickup Coverage Suggestions</p>
           <h2>Assign pickup for ${pickup.projectName}</h2>
           <p>${pickup.cylinderCount} ${pickup.cylinderType.toLowerCase()} cylinders / due ${pickup.pickupDueDate} / current status: ${evaluation.status}</p>
         </div>
@@ -4855,35 +4890,35 @@ function renderDemoCoverageScreen(order, readiness, candidates, selectedCandidat
       <div class="panel-head">
         <div>
           <p class="eyebrow">Coverage Options</p>
-          <h2>Compare Coverage Options For ${order.id}</h2>
-          <p>Replacement ranking checks availability, certifications, clearance, equipment access, dispatch ETA, and cascading impact.</p>
+          <h2>Coverage Plan For ${order.id}</h2>
+          <p>Ranks qualified technicians by availability, certification match, clearance, equipment access, ETA, pickup impact, and schedule impact.</p>
         </div>
         <span class="badge ${readiness.tone}">Current: ${readiness.status}</span>
       </div>
       <div class="demo-coverage-layout">
         <div class="demo-candidate-list ${activeScript.target === "coverage" ? "demo-script-highlight-soft" : ""}">
-          <h3>Qualified Replacement Technician List</h3>
+          <h3>Qualified Technician Review</h3>
           ${visibleCandidates.map((candidate, index) => `
             <button class="demo-candidate ${candidate.tech.id === selectedId ? "selected" : ""}" type="button" data-demo-tech="${candidate.tech.id}" ${candidate.tech.name === "Maria Lopez" ? `data-demo-target="maria-coverage-recommendation"` : ""}>
               <div class="demo-candidate-head">
                 <strong>${candidate.tech.name}</strong>
-                <span class="badge ${candidate.canAssign ? candidate.evaluation.tone : "bad"}">${candidate.canAssign && index === 0 ? "Best Match" : candidate.canAssign ? `${candidate.score}% Match` : "Not Qualified"}</span>
+                <span class="badge ${candidate.canAssign ? candidate.evaluation.tone : "bad"}">${candidate.canAssign && index === 0 ? "Recommended" : candidate.canAssign ? `${candidate.score}% Match` : "Not Qualified"}</span>
               </div>
               <p>${candidate.tech.pickupNote || "Can support the assignment without creating a new readiness gap."}</p>
               <div class="match-meta">
-                <span>${candidate.score}% Match</span>
+                <span>${candidate.score}% Coverage Fit</span>
                 <span>${candidate.sameOffice ? "Same-office match" : "Other-office match"}</span>
                 <span>ETA: ${candidate.tech.distance}</span>
               </div>
               <div class="candidate-signal-grid">
-                <div><span>Cert Match</span><strong>${candidate.evaluation.blockers.some(reason => reason.includes("missing") || reason.includes("expired")) ? "Needs Review" : "Meets Required Certs"}</strong></div>
+                <div><span>Certification Match</span><strong>${candidate.evaluation.blockers.some(reason => reason.includes("missing") || reason.includes("expired")) ? "Needs Review" : "Meets Required Certs"}</strong></div>
                 <div><span>Clearance</span><strong>${candidate.clearanceMatch ? "Cleared" : "Clearance Gap"}</strong></div>
                 <div><span>Equipment Access</span><strong>${candidate.equipmentAccess ? "Available" : "Needs Equipment Plan"}</strong></div>
                 <div><span>ETA</span><strong>${candidate.tech.distance}</strong></div>
                 <div><span>Home Base</span><strong>${candidate.tech.homeBase || candidate.tech.branch}</strong></div>
                 <div><span>Preferred End Area</span><strong>${candidate.tech.preferredEndArea || "South Office Corridor"}</strong></div>
                 <div><span>Cascading Impact</span><strong>${candidate.impact.label}</strong></div>
-                <div><span>OT Impact</span><strong>Reduce Pointless Drive Time</strong></div>
+                <div><span>Drive Time Impact</span><strong>Reduces extra miles</strong></div>
                 <div><span>Pickup Impact</span><strong>${candidate.tech.returningToOffice ? "Can Return Cylinders" : "Finalize Pickup Plan"}</strong></div>
               </div>
               <div class="demo-candidate-reasons">
@@ -4911,7 +4946,7 @@ function renderDemoCoverageScreen(order, readiness, candidates, selectedCandidat
         </div>
         <aside class="demo-decision-panel ${["note", "assign"].includes(activeScript.target) ? "demo-script-highlight-soft" : ""}">
           ${handoff ? renderCoverageHandoffPacket(handoff) : ""}
-          <h3>Decision</h3>
+          <h3>Coverage Approval</h3>
           ${selectedCandidate ? `
             <div class="selected-order">
               <span class="badge ${selectedCandidate.evaluation.tone}">${selectedCandidate.evaluation.status} after reassignment</span>
@@ -4927,8 +4962,8 @@ function renderDemoCoverageScreen(order, readiness, candidates, selectedCandidat
               </dl>
             </div>
             <div class="pickup-impact-choice">
-              <strong>Pickup Risk Detected</strong>
-              <p>Concrete cylinders need end-of-day return planning. Finalize pickup after the coverage decision so the route does not create a new gap.</p>
+              <strong>Pickup Risk</strong>
+              <p>Concrete cylinders need end-of-day return planning. Finalize pickup after coverage so the route does not create a new gap.</p>
               <div class="coverage-actions compact">
                 <button class="ghost-button" type="button" data-open-pickup="${getCylinderPickupForWorkOrder(order.id)?.id || "CP-501"}">Assign Pickup Now</button>
                 <button class="ghost-button" type="button" data-open-pickup="${getCylinderPickupForWorkOrder(order.id)?.id || "CP-501"}">Finalize Pickup Plan After Coverage</button>
@@ -6858,8 +6893,8 @@ function renderSmartExtractionSection() {
     <section class="panel intake-section">
       <div class="panel-head">
         <div>
-          <h2>Smart Extraction Preview</h2>
-          <p>Smart Extraction is a review-assisted workflow. Extracted data must be verified before saving.</p>
+          <h2>Document Field Preview</h2>
+          <p>Review-assisted field extraction. Extracted data must be verified before saving.</p>
         </div>
         <span class="badge warn">Review required</span>
       </div>

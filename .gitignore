@@ -1,2 +1,41 @@
 brackethub/
 brackethub/**
+
+# Local Codex/agent state
+.agents/
+.codex/
+
+# Preserved cleanup artifacts; keep local unless intentionally restored.
+_migration_review/
+_migration_review/**
+
+# Dependency, build, and tool caches
+node_modules/
+.pnpm-store/
+.next/
+.data/
+playtest-results/
+simulations/
+tsconfig.tsbuildinfo
+
+# Local logs and dev-server output
+*.log
+*.out
+*.err
+server-*.log
+server-*.out
+server-*.err
+
+# Generated release/export bundles
+*.zip
+CMTCommand-demo-release-*/
+
+# Local planning and research artifacts
+*.xlsx
+outreach-tracker.csv
+demo-outreach-script.md
+
+# Generated screenshots and browser-run evidence
+cmtcommand-*.png
+docs/cmtcommand-vnext/artifacts/*.json
+docs/cmtcommand-vnext/artifacts/*.png
