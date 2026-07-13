@@ -11,7 +11,8 @@
   - `app.js`
   - `scripts/verify-root.mjs`
   - `.github/workflows/root-static-checks.yml`
-  - `tests/`
+- `tests/`
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Confirmed
@@ -85,6 +86,21 @@ Current enforced-by-convention policy:
 - Do not add a package manager just to wrap existing Node checks.
 
 Pilot V1 operational dependencies must be selected during the guarded architecture phase described in [ADR-001](decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md) and the [implementation sequence](plans/PILOT_V1_IMPLEMENTATION_SEQUENCE.md).
+
+## Operational vNext Target Standards
+
+Phase 3 selects these target standards for the future operational app only:
+
+- TypeScript end to end.
+- Next.js App Router on Node.js runtime.
+- App-local package boundary under future `apps/operational/`.
+- PostgreSQL with Drizzle ORM and Drizzle Kit migrations.
+- Zod validation at API/action/import boundaries.
+- Pure TypeScript readiness engine with no framework/database/auth imports.
+- Vitest for domain and integration tests.
+- Playwright for operational UI/E2E tests.
+
+These are not root static-demo commands or implemented files yet.
 
 ## Generated-File Policy
 

@@ -14,6 +14,7 @@
   - `docs/cmtcommand-vnext/review.md`
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Confirmed Decisions
@@ -43,6 +44,18 @@
 | Pilot V1 needs managed deployment, backups, rollback, health, logging, and monitoring. | Founder decision, 2026-07-13 | Architecture selection must include operations, not just framework choice. | Vendor remains unresolved. | Target |
 | Browser validation becomes blocking only after stabilization; ten clean runs is the proposed threshold. | Founder decision, 2026-07-13 | Avoids turning flaky browser checks into merge gates. | Requires reliability tracking before enforcement. | Target policy |
 
+## Architecture Decisions - 2026-07-13
+
+| Decision | Evidence | Consequence | Known tradeoff | Appears current |
+| --- | --- | --- | --- | --- |
+| Operational vNext should be a full-stack TypeScript modular monolith. | [ADR-002](decisions/ADR-002_OPERATIONAL_VNEXT_APPLICATION_ARCHITECTURE.md) | One primary application for UI, server logic, imports, and domain coordination. | Requires module discipline to avoid a tangled monolith. | Target |
+| Operational vNext should use Next.js App Router on Node.js runtime. | [ADR-002](decisions/ADR-002_OPERATIONAL_VNEXT_APPLICATION_ARCHITECTURE.md) | Enables full-stack TypeScript and managed Next.js deployment path. | Framework-specific security and upgrade discipline required. | Target |
+| Operational vNext should live in future `apps/operational/`. | [ADR-003](decisions/ADR-003_OPERATIONAL_VNEXT_REPOSITORY_BOUNDARY.md) | Preserves root static demo and creates app-local dependency/build boundary. | A future root workspace may be needed if shared packages become real. | Target |
+| Operational vNext should use PostgreSQL with Drizzle ORM and Drizzle Kit. | [ADR-002](decisions/ADR-002_OPERATIONAL_VNEXT_APPLICATION_ARCHITECTURE.md), [Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md) | Relational data model supports pilot entities, constraints, snapshots, decisions, and audits. | Exact provider remains checkpoint. | Target |
+| Readiness engine should be pure deterministic TypeScript. | [ADR-002](decisions/ADR-002_OPERATIONAL_VNEXT_APPLICATION_ARCHITECTURE.md), [ADR-005](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md) | Domain tests can run without browser, server, database, auth, or network. | Requires mapping persistence models into domain facts. | Target |
+| Auth uses managed identity plus app-owned RBAC, office scope, and audit. | [ADR-004](decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md) | Keeps credentials outside CMTCommand while enforcing product permissions server-side. | Exact auth provider remains checkpoint. | Target |
+| Imports use database-tracked in-app processing, not distributed queue infrastructure by default. | [ADR-005](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md) | Keeps Pilot V1 simple and observable. | Queue may be needed if measured imports exceed platform limits. | Target |
+
 ## Resolved Or Partially Resolved Phase 1 Questions
 
 | Previous question | Status | Resolution location |
@@ -66,6 +79,7 @@ Founder-approved Pilot V1 direction:
 - Preserve the current static demo as trusted reference.
 - Follow the guarded phases in [Pilot V1 Implementation Sequence](plans/PILOT_V1_IMPLEMENTATION_SEQUENCE.md).
 - Use [ADR-001](decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md) as the boundary decision before architecture implementation.
+- Use ADR-002 through ADR-005 and the [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md) before Phase 4 scaffolding.
 
 Repository-supported candidate slices recorded in `docs/cmtcommand-vnext/plan.md` remain historical planning evidence:
 
@@ -94,10 +108,9 @@ Do not treat old candidate slices as committed roadmap unless they align with th
 
 ### Architecture
 
-- [OPEN QUESTION - High Impact] Which framework should be selected for bounded operational vNext?
-- [OPEN QUESTION - High Impact] Which database provider should be selected?
-- [OPEN QUESTION - High Impact] Which authentication provider should be selected?
-- [OPEN QUESTION - High Impact] Which hosting provider should be selected?
+- [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should be selected before pilot deployment configuration?
+- [OPEN QUESTION - High Impact] Which exact managed authentication provider should be selected before auth scaffolding?
+- [OPEN QUESTION - High Impact] Which exact managed Next.js hosting provider should be selected before pilot deployment configuration?
 - [OPEN QUESTION - Medium Impact] When should current demo logic be extracted or shared with operational vNext, if ever?
 
 ### Data
@@ -123,6 +136,6 @@ Do not treat old candidate slices as committed roadmap unless they align with th
 
 ### Testing
 
-- [OPEN QUESTION - High Impact] Which test framework should operational vNext use?
 - [OPEN QUESTION - High Impact] What exact acceptance fixtures represent a TRD-104-equivalent imported customer scenario?
 - [OPEN QUESTION - Medium Impact] Should documentation link validation become a maintained script?
+- [OPEN QUESTION - Medium Impact] Which exact Vitest/Playwright command set should Phase 4 scaffolding expose?

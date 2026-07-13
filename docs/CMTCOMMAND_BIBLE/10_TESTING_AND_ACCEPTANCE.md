@@ -12,6 +12,7 @@
   - `docs/cmtcommand-vnext/verification.md`
   - `docs/cmtcommand-vnext/status.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Current Demo - Confirmed
@@ -68,6 +69,12 @@ Browser/CDP validation should not become a blocking CI or pull-request check whi
 
 Use ten consecutive clean runs as the founder-approved proposed reliability threshold before making browser validation blocking. This threshold is policy direction, not an enforced repository fact.
 
+## Architecture Selection - 2026-07-13
+
+Operational vNext should use Vitest for deterministic TypeScript domain/service tests and Playwright for browser/E2E coverage. Domain tests for readiness and coverage must not require a browser, web server, database, auth provider, or network service.
+
+See the layered testing architecture in [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md).
+
 ## Practical Testing Matrix
 
 | Change type | Minimum expected verification |
@@ -116,7 +123,7 @@ If not run, report:
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Which test framework should operational vNext use?
+- [OPEN QUESTION - Medium Impact] Which exact Vitest/Playwright command set should Phase 4 scaffolding expose?
 - [OPEN QUESTION - High Impact] What exact acceptance fixtures represent a TRD-104-equivalent imported customer scenario?
 - [OPEN QUESTION - Medium Impact] Should documentation link validation become a maintained script?
 - [OPEN QUESTION - Medium Impact] What coverage threshold is required before Pilot V1 browser validation can become blocking?

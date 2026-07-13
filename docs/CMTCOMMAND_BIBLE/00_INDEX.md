@@ -15,6 +15,7 @@
   - `scripts/verify-root.mjs`
   - `.github/workflows/root-static-checks.yml`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Purpose
@@ -65,6 +66,15 @@ Pilot V1 additions:
 - [ADR-001 Preserve Static Demo And Build Operational vNext](decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md): read before changing architecture or proposing a backend path.
 - [Pilot V1 Implementation Sequence](plans/PILOT_V1_IMPLEMENTATION_SEQUENCE.md): read before sequencing operationalization work.
 
+Operational vNext architecture:
+
+- [ADR-002 Operational vNext Application Architecture](decisions/ADR-002_OPERATIONAL_VNEXT_APPLICATION_ARCHITECTURE.md): governs app architecture, stack direction, module boundaries, and deployment category.
+- [ADR-003 Operational vNext Repository Boundary](decisions/ADR-003_OPERATIONAL_VNEXT_REPOSITORY_BOUNDARY.md): governs where the operational app will live and how the static demo stays isolated.
+- [ADR-004 Tenancy Authorization And Audit Model](decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md): governs auth, membership, RBAC, office scope, Decision Log distinction, and audit model.
+- [ADR-005 Import And Readiness Execution Model](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md): governs imports, readiness execution, snapshots, recalculation, and queue threshold.
+- [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md): canonical technical overview.
+- [Phase 4 Scaffolding Readiness Checklist](plans/PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md): gate before creating the operational app shell.
+
 Templates:
 
 - [Feature Specification Template](templates/FEATURE_SPEC_TEMPLATE.md)
@@ -83,6 +93,8 @@ For any nontrivial work, read:
 5. The chapter specific to the task
 
 For Pilot V1 operational work, also read [ADR-001](decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md), the [Pilot V1 spec](specs/PILOT_V1_TOMORROW_READINESS_AND_COVERAGE.md), and the [implementation sequence](plans/PILOT_V1_IMPLEMENTATION_SEQUENCE.md).
+
+For operational app scaffolding or architecture work, also read ADR-002 through ADR-005, the [Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md), and the [Phase 4 Checklist](plans/PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md).
 
 ## Evidence And Confidence Conventions
 
@@ -118,7 +130,18 @@ Do not treat inferred statements as product commitments. Do not treat founder ta
 - The first operational wedge is Tomorrow Readiness + Coverage Decision System.
 - The current static app remains the trusted demo, product-reference implementation, and visual behavior baseline.
 - Pilot V1 is a 90-day, single-office Tomorrow Readiness and Coverage pilot.
-- The operational product needs a backend-backed implementation, but the exact framework, database, auth provider, and hosting provider remain unresolved until a guarded architecture phase.
+- The operational product needs a backend-backed implementation. Phase 3 selected the architecture category and core stack; exact managed auth, database, and hosting providers remain checkpoints.
+
+## Architecture Decision - 2026-07-13
+
+- Operational vNext should be a full-stack TypeScript modular monolith.
+- It should use Next.js App Router on the Node.js runtime.
+- It should live in a future `apps/operational/` directory without moving the root static demo.
+- It should use PostgreSQL or a PostgreSQL-compatible managed relational database.
+- It should use Drizzle ORM and Drizzle Kit migrations.
+- It should isolate readiness logic as pure deterministic TypeScript.
+- It should use managed authentication as an identity boundary and app-owned server-side authorization for organization, office, role, and audit behavior.
+- It should start imports as database-tracked in-app processing, not distributed queue infrastructure.
 
 ## Maintenance Expectations
 
@@ -152,8 +175,7 @@ The founder decisions resolved the previous highest-impact questions about stati
 
 ## High-Impact Open Questions
 
-- [OPEN QUESTION - High Impact] Which operational framework should be selected for the bounded Pilot V1 implementation?
-- [OPEN QUESTION - High Impact] Which database provider should hold Pilot V1 persistent data?
-- [OPEN QUESTION - High Impact] Which authentication provider should support invite-only, organization-scoped access?
-- [OPEN QUESTION - High Impact] Which managed hosting provider should satisfy Pilot V1 deployment, backup, monitoring, and rollback requirements?
+- [OPEN QUESTION - High Impact] Which exact managed authentication provider should be selected before auth scaffolding?
+- [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should be selected before pilot deployment configuration?
+- [OPEN QUESTION - High Impact] Which exact managed Next.js hosting provider should be selected before pilot deployment configuration?
 - [OPEN QUESTION - High Impact] Should Pilot V1 imports replace complete source snapshots or support incremental updates?

@@ -12,6 +12,7 @@
   - `MIGRATION_CLEANUP_REPORT.md`
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Current Demo - Confirmed
@@ -87,10 +88,16 @@ Pilot V1 requires a managed cloud deployment with:
 
 The provider and implementation stack remain unresolved until the guarded architecture phase.
 
+## Architecture Selection - 2026-07-13
+
+Operational vNext should target a managed Next.js-capable deployment platform plus managed PostgreSQL. Vercel plus a managed PostgreSQL provider is the leading provider path because it aligns with the selected Next.js architecture and low-operations pilot requirement, but exact provider selection remains a checkpoint before real deployment configuration.
+
+No deployment configuration is implemented yet.
+
 ## Pilot V1 Operational Gaps
 
-- No selected hosting provider.
-- No selected database provider.
+- No exact selected hosting provider.
+- No exact selected database provider.
 - No selected auth provider.
 - No deployment pipeline.
 - No environment-variable contract.
@@ -112,8 +119,8 @@ Do not commit generated/local artifacts unless explicitly scoped:
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Which managed hosting provider should satisfy Pilot V1 deployment and rollback requirements?
-- [OPEN QUESTION - High Impact] Which managed database provider should satisfy Pilot V1 backup and recovery requirements?
+- [OPEN QUESTION - High Impact] Which exact managed Next.js hosting provider should satisfy Pilot V1 deployment and rollback requirements?
+- [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should satisfy Pilot V1 backup and recovery requirements?
 - [OPEN QUESTION - High Impact] What database recovery time and recovery point expectations apply to the pilot?
 - [OPEN QUESTION - Medium Impact] What structured log fields are safe and necessary for import failures and readiness decisions?
 - [OPEN QUESTION - Medium Impact] What health-check response should represent application and database readiness?

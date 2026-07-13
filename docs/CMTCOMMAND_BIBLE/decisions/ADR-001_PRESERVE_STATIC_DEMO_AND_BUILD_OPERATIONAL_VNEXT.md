@@ -12,6 +12,7 @@
   - `styles.css`
   - `scripts/verify-root.mjs`
   - `docs/CMTCOMMAND_BIBLE/04_SYSTEM_ARCHITECTURE.md`
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Context
@@ -26,7 +27,7 @@ Preserve the current static application as the trusted demo and behavioral refer
 
 Build the operational Pilot V1 behind a deliberate architectural boundary.
 
-Keep the exact framework, database, authentication provider, and hosting provider unresolved until the guarded architecture-selection phase.
+Keep the exact framework, database, authentication provider, and hosting provider unresolved until the guarded architecture-selection phase. Phase 3 later resolved the architecture category and core stack in ADR-002 through ADR-005; exact managed providers remain checkpoints.
 
 ## Status
 
@@ -116,6 +117,5 @@ This decision can be superseded by a later ADR if the bounded vNext approach pro
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Which framework should implement bounded operational vNext?
-- [OPEN QUESTION - High Impact] Which database, authentication provider, and hosting provider should be selected?
+- [OPEN QUESTION - High Impact] Which exact managed auth, database, and hosting providers should be selected before real pilot deployment configuration?
 - [OPEN QUESTION - Medium Impact] Which demo logic, if any, should eventually be extracted into shared tested modules?

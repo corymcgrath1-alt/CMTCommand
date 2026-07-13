@@ -12,6 +12,7 @@
   - `docs/cmtcommand-vnext/status.md`
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Current Demo - Implemented Standards
@@ -127,7 +128,7 @@ Not confirmed:
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Which operational UI framework or component strategy should be selected for Pilot V1?
+- [OPEN QUESTION - Medium Impact] Which component system should operational vNext use inside the selected Next.js app?
 - [OPEN QUESTION - Medium Impact] What accessibility target should future UI work meet?
 - [OPEN QUESTION - Medium Impact] Should the operational app keep dense operational UI as default, or simplify for sales demos?
 - [OPEN QUESTION - Medium Impact] Which current demo surfaces should remain visible after Pilot V1 starts?

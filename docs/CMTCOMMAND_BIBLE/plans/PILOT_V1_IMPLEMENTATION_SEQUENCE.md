@@ -11,6 +11,7 @@
   - `scripts/verify-root.mjs`
   - `docs/CMTCOMMAND_BIBLE/specs/PILOT_V1_TOMORROW_READINESS_AND_COVERAGE.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md`
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Purpose
@@ -46,6 +47,8 @@ This sequence guards the transition from static trusted demo to operational Pilo
 | Exit criteria | Approved architecture decisions identify framework, database, auth, hosting, and verification approach. |
 | Verification requirements | Documentation review, link validation, no production app diffs unless explicitly scoped. |
 | Stop conditions | Stack choice would require altering current demo behavior or adding production code before decision approval. |
+
+Phase 3 architecture selection produced ADR-002 through ADR-005, the [Operational vNext Architecture Blueprint](OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md), and the [Phase 4 Scaffolding Readiness Checklist](PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md). It selected a full-stack TypeScript modular monolith in future `apps/operational/`, Next.js App Router on Node.js, PostgreSQL, Drizzle, Zod, Vitest, Playwright, managed auth category, server-side app-owned authorization, and database-tracked imports.
 
 ## Phase 2 - Operational Data Foundation
 
@@ -160,9 +163,13 @@ This sequence guards the transition from static trusted demo to operational Pilo
 - Do not choose vendors by accident through scaffolding.
 - Do not describe target state as implemented until verified by code/tests.
 
+## Next Guarded Phase
+
+The next phase may create only a guarded operational application shell if explicitly requested. It should satisfy [Phase 4 Scaffolding Readiness Checklist](PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md) and implement no Pilot V1 business features.
+
 ## Remaining Open Questions
 
-- [OPEN QUESTION - High Impact] Which framework, database, authentication provider, and hosting provider should Phase 1 select?
+- [OPEN QUESTION - High Impact] Which exact managed auth, database, and hosting providers should be selected before real pilot deployment configuration?
 - [OPEN QUESTION - High Impact] What exact readiness-warning thresholds and coverage-ranking weights should be approved before Phase 4/5?
 - [OPEN QUESTION - High Impact] What recovery objectives and retention/deletion periods are required before Phase 7?
 - [OPEN QUESTION - Medium Impact] Which static-demo assets or logic should be shared with operational vNext, if any?

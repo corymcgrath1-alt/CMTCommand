@@ -14,6 +14,7 @@
   - `README.md`
   - `docs/cmtcommand-vnext/plan.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Current Demo - Confirmed
@@ -126,6 +127,14 @@ The operational model must relate:
 
 Do not claim database-level enforcement until schemas and constraints exist.
 
+## Architecture Selection - 2026-07-13
+
+Operational vNext should use PostgreSQL or a PostgreSQL-compatible managed relational database with Drizzle ORM and Drizzle Kit migrations. Database rows are persistence models, not the complete domain model.
+
+The conceptual data model in [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md) identifies the required entities, ownership boundaries, identifiers, mutable versus append-only behavior, source-system identifiers, audit requirements, and retention implications.
+
+Internal primary keys should be stable internal identifiers. Customer source-system identifiers and human-readable operational numbers such as `TRD-104` should be stored separately and must not be the sole database primary key.
+
 ## Derived Data
 
 Current demo derived data:
@@ -172,7 +181,7 @@ External integrations explicitly absent in current root evidence:
 ## Open Questions
 
 - [OPEN QUESTION - High Impact] Should initial imports replace complete source snapshots or support incremental updates?
-- [OPEN QUESTION - High Impact] What database schema should represent readiness rule results, snapshots, and recalculation history?
+- [OPEN QUESTION - High Impact] What exact database schema should implement the conceptual readiness, snapshot, and recalculation model?
 - [OPEN QUESTION - High Impact] What retention and deletion periods apply to customer Pilot V1 data?
 - [OPEN QUESTION - Medium Impact] Can Project Managers edit imported records directly, or only submit corrections?
 - [OPEN QUESTION - Medium Impact] Should partner-firm personnel be represented as eligible coverage resources?

@@ -12,6 +12,7 @@
   - `demoControlCenter.js`
   - `docs/cmtcommand-vnext/plan.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Current Demo - Confirmed
@@ -142,7 +143,7 @@ Pilot V1 initially receives controlled CSV/XLSX imports for technician, availabi
 
 - Preserve the static demo instead of rewriting it in place.
 - Build operational Pilot V1 behind a deliberate architectural boundary.
-- Choose the framework, database, authentication provider, and hosting provider only during a later guarded architecture phase.
+- Choose framework, database, authentication, and hosting details through guarded architecture decisions rather than incidental scaffolding. Phase 3 selected the architecture category and core stack; exact managed providers remain checkpoints.
 
 ## Implementation Gaps
 
@@ -152,7 +153,7 @@ Pilot V1 initially receives controlled CSV/XLSX imports for technician, availabi
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Which implementation stack best supports Pilot V1 without destabilizing the current demo?
+- [OPEN QUESTION - High Impact] Which exact managed auth, database, and hosting providers should be selected before real pilot deployment configuration?
 - [OPEN QUESTION - High Impact] What exact operational-impact and time-saved formulas should Pilot V1 use?
 - [OPEN QUESTION - Medium Impact] What accessibility target should future operational UI work meet?
 - [OPEN QUESTION - Medium Impact] Which current prototype surfaces should remain visible in the static demo after Pilot V1 starts?

@@ -16,6 +16,7 @@
   - `docs/cmtcommand-vnext/review.md`
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Current Demo - Confirmed
@@ -69,6 +70,14 @@ Pilot V1 must be invite-only, organization-scoped, initially limited to one part
 All reads and writes must be scoped to the authenticated organization and, where applicable, office.
 
 Corrections to the Decision Log must preserve the original action and add an auditable correcting entry rather than erasing history.
+
+## Architecture Selection - 2026-07-13
+
+Operational vNext should use a managed authentication provider for identity and app-owned server-side authorization for organization memberships, office scope, role assignments, permission checks, Decision Log behavior, and audit events.
+
+Authorization must be declared in a central policy module, reused by Server Components, Server Actions, Route Handlers, and service methods, and tested with allowed and denied cases. Client-side route guards and hidden buttons are UX hints only.
+
+See [ADR-004 Tenancy Authorization And Audit Model](decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md).
 
 ## Pilot V1 Target Roles And Boundaries
 
@@ -131,7 +140,7 @@ The demo must continue to use fictional or anonymized data. Pilot import validat
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Which authentication provider should implement invite-only Pilot V1 access?
+- [OPEN QUESTION - High Impact] Which exact managed authentication provider should implement invite-only Pilot V1 access?
 - [OPEN QUESTION - High Impact] What approval rules define significant operational changes?
 - [OPEN QUESTION - High Impact] What retention and deletion periods apply to customer data and Decision Log entries?
 - [OPEN QUESTION - Medium Impact] What logging policy safely supports troubleshooting without exposing pilot data?

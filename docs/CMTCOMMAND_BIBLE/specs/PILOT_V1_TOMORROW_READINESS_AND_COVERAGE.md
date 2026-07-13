@@ -14,6 +14,7 @@
   - `docs/CMTCOMMAND_BIBLE/01_VISION_AND_PRODUCT_PRINCIPLES.md`
   - `docs/CMTCOMMAND_BIBLE/02_DOMAIN_MODEL_AND_GLOSSARY.md`
   - `docs/CMTCOMMAND_BIBLE/03_USERS_ROLES_AND_WORKFLOWS.md`
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Problem
@@ -344,6 +345,12 @@ Pilot V1 requires managed cloud deployment with development, staging, pilot-prod
 
 Provider selection is open.
 
+## Architecture Alignment - 2026-07-13
+
+Operational vNext should implement this specification as a TypeScript modular monolith in a future `apps/operational/` app using Next.js App Router, PostgreSQL, Drizzle, Zod, server-side authorization, a pure readiness engine, and database-tracked import processing.
+
+This alignment is target-state architecture, not current implementation. See [Operational vNext Architecture Blueprint](../plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md).
+
 ## Acceptance Criteria
 
 1. Given valid imported Pilot V1 data, the system creates a durable import history entry and calculates a readiness snapshot.
@@ -381,7 +388,7 @@ Provider selection is open.
 
 ## Remaining Open Questions
 
-- [OPEN QUESTION - High Impact] Which framework, database, authentication provider, and hosting provider should operational vNext use?
+- [OPEN QUESTION - High Impact] Which exact managed authentication provider, managed PostgreSQL provider, and managed hosting provider should operational vNext use?
 - [OPEN QUESTION - High Impact] What exact certification-expiration and calibration-expiration warning thresholds should apply?
 - [OPEN QUESTION - High Impact] How should travel-time and turnaround risk be calculated?
 - [OPEN QUESTION - High Impact] What ranking weights should order coverage candidates?

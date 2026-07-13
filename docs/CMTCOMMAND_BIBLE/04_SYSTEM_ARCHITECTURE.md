@@ -19,6 +19,7 @@
   - `.github/workflows/root-static-checks.yml`
   - `docs/cmtcommand-vnext/baseline.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
 
 ## Current Architecture - Confirmed
@@ -85,7 +86,7 @@ The current static application must remain intact as the trusted demo, product-r
 
 The operational pilot cannot remain a browser-local static application. It needs persistent server-side data, authentication, multiple users, role-based authorization, organization and office scoping, durable imports, durable readiness snapshots, an auditable Decision Log, managed deployment, monitoring, backups, and rollback.
 
-Do not rewrite the existing demo in place. Create a clearly bounded operational implementation while preserving the demo. The exact framework, database product, authentication provider, and hosting provider are unresolved until a later guarded architecture phase.
+Do not rewrite the existing demo in place. Create a clearly bounded operational implementation while preserving the demo. Phase 3 selected the architecture category and core stack; exact managed auth, database, and hosting providers remain checkpoints.
 
 See [ADR-001](decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md).
 
@@ -110,6 +111,20 @@ Target responsibilities for operational vNext:
 - Generalize the TRD-104/Maria Lopez workflow to imported customer data without hardcoding fictional records.
 - Keep current static demo behavior available as a reference during implementation.
 
+## Architecture Selection - 2026-07-13
+
+Phase 3 selects Operational vNext as a full-stack TypeScript modular monolith using Next.js App Router on the Node.js runtime, PostgreSQL, Drizzle ORM/Drizzle Kit, Zod, Vitest, Playwright, managed authentication category, server-side app-owned authorization, and a managed Next.js/PostgreSQL deployment category.
+
+Operational vNext should live in a future `apps/operational/` directory. Do not create that directory until the guarded scaffolding phase.
+
+Governing documents:
+
+- [ADR-002 Operational vNext Application Architecture](decisions/ADR-002_OPERATIONAL_VNEXT_APPLICATION_ARCHITECTURE.md)
+- [ADR-003 Operational vNext Repository Boundary](decisions/ADR-003_OPERATIONAL_VNEXT_REPOSITORY_BOUNDARY.md)
+- [ADR-004 Tenancy Authorization And Audit Model](decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md)
+- [ADR-005 Import And Readiness Execution Model](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md)
+- [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md)
+
 ## Known Constraints
 
 - `app.js` is large and highly coupled to page rendering/state.
@@ -129,15 +144,15 @@ The current architecture favors a low-friction local demo with tested pure utili
 ## Implementation Gaps
 
 - No operational app boundary exists yet.
-- No backend, database, auth, deployment, or observability stack has been selected.
+- No operational app has been scaffolded.
+- Exact managed auth, database, and hosting providers remain checkpoints.
 - No production-grade organization/office scoping exists.
 - No durable readiness snapshot or Decision Log implementation exists.
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Which framework should be selected for the bounded operational implementation?
-- [OPEN QUESTION - High Impact] Which database provider should hold Pilot V1 persistent data?
-- [OPEN QUESTION - High Impact] Which authentication provider should support invite-only organization-scoped access?
-- [OPEN QUESTION - High Impact] Which managed hosting provider should satisfy Pilot V1 operations requirements?
+- [OPEN QUESTION - High Impact] Which exact managed authentication provider should be selected before auth scaffolding?
+- [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should be selected before pilot deployment configuration?
+- [OPEN QUESTION - High Impact] Which exact managed Next.js hosting provider should be selected before pilot deployment configuration?
 - [OPEN QUESTION - Medium Impact] When should current demo logic be extracted or shared with operational vNext, if ever?
 - [OPEN QUESTION - Medium Impact] Should unrelated nested projects be split out before operational architecture work begins?
