@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { closeDatabasePool, getDatabase, type OperationalDatabase } from "../../src/server/db/client";
 import { getSafeTestDatabaseConfig } from "../../src/server/db/test-safety";
 import { organizations } from "../../src/server/db/schema";
+import { getPostgresErrorInfo } from "../../src/server/tenancy/errors";
 import {
   createOfficeForOrganization,
   createOrganization,
@@ -224,9 +225,16 @@ describe("organization and office tenancy foundation", () => {
     const organization = await mustCreateOrganization("Delete Guard", "Delete Guard");
     const office = await mustCreateOffice(organization.id, "main", "Main");
 
-    await expect(
-      db.delete(organizations).where(eq(organizations.id, organization.id)),
-    ).rejects.toMatchObject({
+    let deletionError: unknown;
+
+    try {
+      await db.delete(organizations).where(eq(organizations.id, organization.id));
+    } catch (error) {
+      deletionError = error;
+    }
+
+    expect(deletionError).toBeDefined();
+    expect(getPostgresErrorInfo(deletionError)).toEqual({
       code: "23503",
       constraint: "offices_organization_id_fk",
     });

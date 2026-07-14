@@ -188,6 +188,24 @@ clearly test-only database, `npm ci`, and `npm run verify:db`.
 - GitHub Actions execution was not performed locally. The workflow was updated
   to provide the CI execution path.
 
+## Phase 5B Error-Mapping Correction
+
+Status: Phase 5 Implemented but Awaiting PostgreSQL Reverification
+
+The first PostgreSQL CI execution proved that PostgreSQL started, the test
+database safety guard accepted the CI database, the initial migration applied,
+and 8 of 13 integration tests passed. The failing tests exposed a
+Drizzle-wrapper error-classification defect: native PostgreSQL `code` and
+`constraint` metadata can live inside `DrizzleQueryError.cause`.
+
+The correction updates the central tenancy error metadata extractor to inspect a
+small bounded `.cause` chain. It does not change schemas, migrations,
+constraints, tenant-scope predicates, expected public results, authentication,
+memberships, RBAC, or product-domain behavior.
+
+Phase 5 remains awaiting PostgreSQL reverification until `npm run verify:db`
+passes in GitHub Actions or against a safe explicit local test database.
+
 ## Security Boundary
 
 Database-enforced:
