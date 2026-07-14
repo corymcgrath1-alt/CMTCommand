@@ -11,6 +11,10 @@
   - `app.js`
   - `scripts/verify-root.mjs`
   - `.github/workflows/root-static-checks.yml`
+  - `apps/operational/package.json`
+  - `apps/operational/package-lock.json`
+  - `apps/operational/README.md`
+  - `.github/workflows/operational-ci.yml`
 - `tests/`
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
@@ -77,6 +81,29 @@ git diff --check -- app.js styles.css index.html README.md DEVELOPER_NOTES.md de
 
 No root commands found for dependency installation, linting, type checking, formatting, building, or database migration/generation.
 
+Operational vNext commands from `apps/operational/package.json`:
+
+```powershell
+cd apps\operational
+npm ci
+npm run dev
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run verify
+npm run test:e2e
+npm run test:db
+npm run db:generate
+npm run db:migrate
+npm run db:studio
+```
+
+`npm run verify` is the stable operational gate and runs lint, typecheck, unit
+tests, and production build. It must not require a live database, browser
+installation, auth provider credentials, deployment account, or customer data.
+`npm run test:e2e` and `npm run test:db` remain explicit separate checks.
+
 ## Dependency Policy
 
 Current enforced-by-convention policy:
@@ -89,18 +116,20 @@ Pilot V1 operational dependencies must be selected during the guarded architectu
 
 ## Operational vNext Target Standards
 
-Phase 3 selects these target standards for the future operational app only:
+Phase 3 selected these target standards for the operational app. Phase 4
+implemented the app shell and toolchain, but not Pilot V1 business behavior:
 
 - TypeScript end to end.
 - Next.js App Router on Node.js runtime.
-- App-local package boundary under future `apps/operational/`.
+- App-local package boundary under `apps/operational/`.
 - PostgreSQL with Drizzle ORM and Drizzle Kit migrations.
 - Zod validation at API/action/import boundaries.
 - Pure TypeScript readiness engine with no framework/database/auth imports.
 - Vitest for domain and integration tests.
 - Playwright for operational UI/E2E tests.
 
-These are not root static-demo commands or implemented files yet.
+These are operational app commands and files only; they are not root static-demo
+commands.
 
 ## Generated-File Policy
 

@@ -13,6 +13,10 @@
   - `demoControlCenter.js`
   - `tests/pilotIntakeSafety.test.js`
   - `tests/demoShared.test.js`
+  - `apps/operational/.env.example`
+  - `apps/operational/src/lib/env/server.ts`
+  - `apps/operational/src/app/api/ready/route.ts`
+  - `apps/operational/src/server/db/check.ts`
   - `docs/cmtcommand-vnext/review.md`
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
@@ -79,6 +83,17 @@ Authorization must be declared in a central policy module, reused by Server Comp
 
 See [ADR-004 Tenancy Authorization And Audit Model](decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md).
 
+## Phase 4 Scaffold - Confirmed
+
+Operational vNext now has server-side environment validation, blank
+environment placeholders, lazy database connection wiring, and health responses
+that avoid returning database URLs, raw driver errors, hostnames, stack traces,
+or secrets.
+
+Phase 4 did not implement authentication, authorization, organization/office
+scoping, audit events, Decision Log entries, user accounts, invitations, or
+permission enforcement.
+
 ## Pilot V1 Target Roles And Boundaries
 
 | Role | Allowed actions | Denied / constrained actions |
@@ -137,6 +152,7 @@ The demo must continue to use fictional or anonymized data. Pilot import validat
 - Role access exists in UI state, but no auth service makes it enforceable.
 - Browser/CDP security validation is not part of normal CI.
 - Pilot V1 auth, authorization, tenant isolation, audit storage, and secret handling are target requirements, not current implementation.
+- Operational vNext health endpoints exist, but they are not authenticated and do not prove tenant isolation or pilot readiness.
 
 ## Open Questions
 

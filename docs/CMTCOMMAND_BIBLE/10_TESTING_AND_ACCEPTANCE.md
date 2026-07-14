@@ -8,6 +8,11 @@
   - `.github/workflows/root-static-checks.yml`
   - `tests/`
   - `README.md`
+  - `apps/operational/package.json`
+  - `apps/operational/tests/`
+  - `apps/operational/playwright.config.ts`
+  - `apps/operational/vitest.config.ts`
+  - `.github/workflows/operational-ci.yml`
   - `DEVELOPER_NOTES.md`
   - `docs/cmtcommand-vnext/verification.md`
   - `docs/cmtcommand-vnext/status.md`
@@ -75,6 +80,32 @@ Operational vNext should use Vitest for deterministic TypeScript domain/service 
 
 See the layered testing architecture in [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md).
 
+## Operational vNext Scaffold - Confirmed
+
+Phase 4 added app-local testing and verification commands under
+`apps/operational/`:
+
+```powershell
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run verify
+npm run test:e2e
+npm run test:db
+```
+
+`npm run verify` runs lint, typecheck, Vitest unit tests, and a production
+Next.js build. It does not require PostgreSQL, Playwright browser execution,
+auth credentials, deployment credentials, or customer data.
+
+`npm run test:e2e` runs the non-blocking Playwright scaffold smoke. It is
+configured as a single-worker check so it owns one local dev server and avoids
+stale-server reuse.
+
+`npm run test:db` is explicit and requires a safe `TEST_DATABASE_URL`. It is not
+part of the default gate.
+
 ## Practical Testing Matrix
 
 | Change type | Minimum expected verification |
@@ -82,6 +113,7 @@ See the layered testing architecture in [Operational vNext Architecture Blueprin
 | Documentation only | Link validation, `git diff --check`, final diff/status inspection. |
 | Current demo domain logic | Focused utility test plus `node scripts\verify-root.mjs`. |
 | Current demo UI behavior | Root verifier plus browser smoke of affected page; include 390px mobile and visual modes when layout changes. |
+| Operational scaffold/tooling | `npm run verify` from `apps/operational/`; root verifier from repository root. |
 | Pilot Setup/trust boundary | Root verifier plus malformed, hostile, oversized, reload, valid-value, formula-export, and blocked/allowed cases. |
 | Pilot V1 readiness engine | Focused unit tests for each rule, precedence, explanation fields, and recalculation. |
 | Pilot V1 API behavior | Success, validation, unauthorized, forbidden, not-found, conflict/stale snapshot, and persistence-failure tests. |
@@ -120,10 +152,10 @@ If not run, report:
 - No full screen-reader transcript or formal accessibility audit was found.
 - Prototype surfaces have limited direct tests.
 - Pilot V1 operational logic, permissions, persistence, and deployment tests do not exist yet.
+- Operational database connectivity is not verified until a safe `TEST_DATABASE_URL` is available.
 
 ## Open Questions
 
-- [OPEN QUESTION - Medium Impact] Which exact Vitest/Playwright command set should Phase 4 scaffolding expose?
 - [OPEN QUESTION - High Impact] What exact acceptance fixtures represent a TRD-104-equivalent imported customer scenario?
 - [OPEN QUESTION - Medium Impact] Should documentation link validation become a maintained script?
 - [OPEN QUESTION - Medium Impact] What coverage threshold is required before Pilot V1 browser validation can become blocking?

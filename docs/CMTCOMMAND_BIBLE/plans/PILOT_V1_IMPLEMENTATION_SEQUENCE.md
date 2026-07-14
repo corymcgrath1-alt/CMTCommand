@@ -50,6 +50,12 @@ This sequence guards the transition from static trusted demo to operational Pilo
 
 Phase 3 architecture selection produced ADR-002 through ADR-005, the [Operational vNext Architecture Blueprint](OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md), and the [Phase 4 Scaffolding Readiness Checklist](PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md). It selected a full-stack TypeScript modular monolith in future `apps/operational/`, Next.js App Router on Node.js, PostgreSQL, Drizzle, Zod, Vitest, Playwright, managed auth category, server-side app-owned authorization, and database-tracked imports.
 
+Phase 4 scaffolding later created `apps/operational/` with an app-local npm
+manifest, lockfile, Next.js App Router shell, health routes, lazy
+Drizzle/PostgreSQL wiring, Vitest tests, Playwright smoke tests, and scoped CI.
+See [Phase 4 Scaffolding Report](PHASE_4_SCAFFOLDING_REPORT.md). No Pilot V1
+business behavior was implemented.
+
 ## Phase 2 - Operational Data Foundation
 
 | Field | Details |
@@ -165,7 +171,12 @@ Phase 3 architecture selection produced ADR-002 through ADR-005, the [Operationa
 
 ## Next Guarded Phase
 
-The next phase may create only a guarded operational application shell if explicitly requested. It should satisfy [Phase 4 Scaffolding Readiness Checklist](PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md) and implement no Pilot V1 business features.
+The guarded operational application shell now exists. The next smallest
+implementation phase should be the organization and office tenancy foundation:
+persistent organization/office schema, migrations, scoped data-access helpers,
+and isolation tests. Do not add technicians, work orders, imports, readiness
+rules, coverage, Decision Log behavior, or audit events until the tenancy
+boundary is persisted and tested.
 
 ## Remaining Open Questions
 

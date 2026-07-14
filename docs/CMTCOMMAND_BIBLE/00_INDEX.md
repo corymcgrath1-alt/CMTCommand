@@ -14,6 +14,8 @@
   - `styles.css`
   - `scripts/verify-root.mjs`
   - `.github/workflows/root-static-checks.yml`
+  - `apps/operational/`
+  - `.github/workflows/operational-ci.yml`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-13
@@ -74,6 +76,7 @@ Operational vNext architecture:
 - [ADR-005 Import And Readiness Execution Model](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md): governs imports, readiness execution, snapshots, recalculation, and queue threshold.
 - [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md): canonical technical overview.
 - [Phase 4 Scaffolding Readiness Checklist](plans/PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md): gate before creating the operational app shell.
+- [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md): read for the implemented shell, exact package versions, commands, health behavior, and verification results.
 
 Templates:
 
@@ -94,7 +97,7 @@ For any nontrivial work, read:
 
 For Pilot V1 operational work, also read [ADR-001](decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md), the [Pilot V1 spec](specs/PILOT_V1_TOMORROW_READINESS_AND_COVERAGE.md), and the [implementation sequence](plans/PILOT_V1_IMPLEMENTATION_SEQUENCE.md).
 
-For operational app scaffolding or architecture work, also read ADR-002 through ADR-005, the [Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md), and the [Phase 4 Checklist](plans/PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md).
+For operational app scaffolding or architecture work, also read ADR-002 through ADR-005, the [Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md), the [Phase 4 Checklist](plans/PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md), and the [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md).
 
 ## Evidence And Confidence Conventions
 
@@ -121,6 +124,7 @@ Do not treat inferred statements as product commitments. Do not treat founder ta
 
 - Root CMTCommand is a static HTML/CSS/JavaScript app served from the repository root.
 - There is no root `package.json`, package lockfile, backend, database, auth service, deployment config, or migration system found in root scope.
+- Operational vNext now has an app-local scaffold under `apps/operational/` with its own npm manifest, lockfile, Next.js App Router shell, health endpoints, Drizzle/PostgreSQL wiring, Vitest tests, Playwright smoke tests, and scoped CI workflow.
 - `euchre-platform/` and `brackethub/` are unrelated to root CMTCommand scope based on `AGENTS.md`, `MIGRATION_CLEANUP_REPORT.md`, and vNext docs.
 - `node scripts\verify-root.mjs` is the root verification command found in repository evidence.
 
@@ -136,7 +140,7 @@ Do not treat inferred statements as product commitments. Do not treat founder ta
 
 - Operational vNext should be a full-stack TypeScript modular monolith.
 - It should use Next.js App Router on the Node.js runtime.
-- It should live in a future `apps/operational/` directory without moving the root static demo.
+- It lives in `apps/operational/` without moving the root static demo.
 - It should use PostgreSQL or a PostgreSQL-compatible managed relational database.
 - It should use Drizzle ORM and Drizzle Kit migrations.
 - It should isolate readiness logic as pure deterministic TypeScript.

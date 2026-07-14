@@ -11,6 +11,8 @@
   - `demoControlCenter.js`
   - `tests/pilotIntakeSafety.test.js`
   - `tests/operationalImpact.test.js`
+  - `apps/operational/drizzle.config.ts`
+  - `apps/operational/src/server/db/`
   - `README.md`
   - `docs/cmtcommand-vnext/plan.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
@@ -135,6 +137,16 @@ The conceptual data model in [Operational vNext Architecture Blueprint](plans/OP
 
 Internal primary keys should be stable internal identifiers. Customer source-system identifiers and human-readable operational numbers such as `TRD-104` should be stored separately and must not be the sole database primary key.
 
+## Phase 4 Scaffold - Confirmed
+
+`apps/operational/` configures Drizzle Kit and a lazy Drizzle/PostgreSQL client
+using `pg`. The schema path exists at
+`apps/operational/src/server/db/schema.ts`, but it intentionally defines no
+Pilot V1 domain tables in Phase 4.
+
+No database migration, persistent domain schema, import history, readiness
+snapshot table, tenant table, or audit table has been created yet.
+
 ## Derived Data
 
 Current demo derived data:
@@ -174,6 +186,7 @@ External integrations explicitly absent in current root evidence:
 ## Implementation Gaps
 
 - No persistent schema exists for Pilot V1 target records.
+- The Operational vNext scaffold has Drizzle/PostgreSQL wiring only; it has no domain tables or migrations.
 - No XLSX import implementation was found in the current static demo.
 - No import history or durable readiness snapshot exists.
 - No writeback protections exist because no external writeback integration exists.

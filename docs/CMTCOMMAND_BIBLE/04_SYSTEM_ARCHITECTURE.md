@@ -17,6 +17,8 @@
   - `tests/`
   - `scripts/verify-root.mjs`
   - `.github/workflows/root-static-checks.yml`
+  - `apps/operational/`
+  - `.github/workflows/operational-ci.yml`
   - `docs/cmtcommand-vnext/baseline.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
@@ -115,7 +117,7 @@ Target responsibilities for operational vNext:
 
 Phase 3 selects Operational vNext as a full-stack TypeScript modular monolith using Next.js App Router on the Node.js runtime, PostgreSQL, Drizzle ORM/Drizzle Kit, Zod, Vitest, Playwright, managed authentication category, server-side app-owned authorization, and a managed Next.js/PostgreSQL deployment category.
 
-Operational vNext should live in a future `apps/operational/` directory. Do not create that directory until the guarded scaffolding phase.
+Phase 4 created the Operational vNext scaffold in `apps/operational/` without moving the root static demo.
 
 Governing documents:
 
@@ -124,6 +126,23 @@ Governing documents:
 - [ADR-004 Tenancy Authorization And Audit Model](decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md)
 - [ADR-005 Import And Readiness Execution Model](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md)
 - [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md)
+- [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md)
+
+## Operational vNext Scaffold - Confirmed
+
+`apps/operational/` is an independent Next.js App Router application shell with:
+
+- App-local `package.json` and `package-lock.json`.
+- TypeScript, ESLint, Vitest, Playwright, Drizzle Kit, and Next.js configuration.
+- A minimal scaffold page that avoids Pilot V1 business behavior.
+- `GET /api/health` for liveness without PostgreSQL.
+- `GET /api/ready` for PostgreSQL readiness with 503 when unconfigured or unavailable.
+- Lazy Drizzle/PostgreSQL wiring through `pg`.
+- A path-scoped workflow in `.github/workflows/operational-ci.yml`.
+
+This scaffold is implemented technical infrastructure, not proof that Pilot V1
+auth, tenancy, imports, readiness, coverage, Decision Log, audit, deployment, or
+domain persistence exists.
 
 ## Known Constraints
 
@@ -131,7 +150,7 @@ Governing documents:
 - Static architecture makes real auth, persistence, integrations, and server-side validation absent.
 - UI rendering uses HTML strings for many static/demo-controlled surfaces, so user-derived input must use explicit safe sinks.
 - Root CMTCommand shares a Git repository with unrelated `euchre-platform/` files.
-- Operational vNext stack selection is intentionally unmade.
+- Exact managed auth, database, hosting, monitoring, backup, and recovery providers remain checkpoints.
 
 ## Inferred Design Intent
 
@@ -143,8 +162,7 @@ The current architecture favors a low-friction local demo with tested pure utili
 
 ## Implementation Gaps
 
-- No operational app boundary exists yet.
-- No operational app has been scaffolded.
+- Operational app scaffolding exists, but no Pilot V1 business modules or schemas exist.
 - Exact managed auth, database, and hosting providers remain checkpoints.
 - No production-grade organization/office scoping exists.
 - No durable readiness snapshot or Decision Log implementation exists.

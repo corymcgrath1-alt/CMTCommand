@@ -11,6 +11,8 @@
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md`
   - `docs/CMTCOMMAND_BIBLE/plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md`
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_4_SCAFFOLDING_REPORT.md`
+  - `apps/operational/`
 - Last Reviewed: 2026-07-13
 
 ## Purpose
@@ -41,7 +43,7 @@ This checklist is the hard gate before creating any operational application shel
 
 ## Initial Module List
 
-Scaffolding may create empty or skeletal module boundaries only:
+Architecture planning identified these eventual module boundaries:
 
 - identity-access
 - organizations-offices
@@ -58,6 +60,11 @@ Scaffolding may create empty or skeletal module boundaries only:
 
 Do not implement business behavior in the scaffolding phase.
 
+Phase 4 did not create these domain module folders because the execution prompt
+prohibited empty domain placeholders. That is consistent with the scaffold
+boundary: only environment, database, health, app shell, tests, and toolchain
+files were created.
+
 ## Initial Acceptance Criteria For Scaffolding
 
 1. `apps/operational/` exists and the root static demo remains at the repository root.
@@ -70,6 +77,21 @@ Do not implement business behavior in the scaffolding phase.
 8. Health route or equivalent returns app liveness and database connectivity status.
 9. The readiness engine package/module can run a placeholder unit test without importing framework, database, auth, or network code.
 10. No Pilot V1 business feature, schema for real customer entities, auth provider config, deployment config, or production integration is implemented unless a later prompt scopes it.
+
+## Phase 4 Result - 2026-07-13
+
+| Acceptance item | Result |
+| --- | --- |
+| `apps/operational/` exists and root demo remains in place. | Passed. |
+| Root demo verifies with `node scripts\verify-root.mjs`. | Passed before scaffolding. |
+| Operational app has local manifest and lockfile. | Passed. |
+| Operational app can run a local development server. | Passed through Playwright web-server startup. |
+| Typecheck, lint, unit test, and build commands work. | Passed through `npm run verify`. |
+| Lazy PostgreSQL connectivity path exists. | Passed at wiring level; real database smoke remains unrun without `TEST_DATABASE_URL`. |
+| Migration tooling configured without customer data. | Partially passed; Drizzle Kit is configured, but no schema or migration execution exists yet. |
+| Health route returns app liveness and database connectivity status. | Passed through unit and Playwright tests. |
+| Readiness engine placeholder unit test exists. | Intentionally not created; no readiness module exists in Phase 4. |
+| No Pilot V1 business feature or production integration is implemented. | Passed. |
 
 ## Known Open Questions That Block Scaffolding
 

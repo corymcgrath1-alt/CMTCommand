@@ -1,0 +1,32 @@
+name: Operational vNext checks
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/operational-ci.yml"
+      - "apps/operational/**"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/operational-ci.yml"
+      - "apps/operational/**"
+
+jobs:
+  operational-vnext:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/operational
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.2"
+          cache: npm
+          cache-dependency-path: apps/operational/package-lock.json
+      - run: npm ci
+      - run: npm run verify
+      - name: Verify root static demo
+        working-directory: .
+        run: node scripts/verify-root.mjs
