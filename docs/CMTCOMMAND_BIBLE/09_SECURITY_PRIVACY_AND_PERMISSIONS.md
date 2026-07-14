@@ -17,11 +17,16 @@
   - `apps/operational/src/lib/env/server.ts`
   - `apps/operational/src/app/api/ready/route.ts`
   - `apps/operational/src/server/db/check.ts`
+  - `apps/operational/src/server/db/schema/organizations.ts`
+  - `apps/operational/src/server/db/schema/offices.ts`
+  - `apps/operational/src/server/tenancy/scope.ts`
+  - `apps/operational/src/server/tenancy/repository.ts`
+  - `apps/operational/tests/integration/tenancy.integration.test.ts`
   - `docs/cmtcommand-vnext/review.md`
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-13
+- Last Reviewed: 2026-07-14
 
 ## Current Demo - Confirmed
 
@@ -94,6 +99,31 @@ Phase 4 did not implement authentication, authorization, organization/office
 scoping, audit events, Decision Log entries, user accounts, invitations, or
 permission enforcement.
 
+## Phase 5 Tenancy Foundation - Confirmed
+
+Phase 5 implements application-layer organization and office scoping for office
+persistence only:
+
+- Offices require `organization_id`.
+- Office codes are unique within an organization.
+- Cross-organization office lookup returns the same public result as nonexistent
+  lookup: `not_found_or_inaccessible`.
+- Restricted office scopes with an empty office list return no offices and do
+  not broaden to organization-wide access.
+- Office identifiers cannot override the organization id in the supplied scope.
+- PostgreSQL prevents offices from referencing nonexistent organizations.
+- PostgreSQL prevents deleting an organization while it still owns offices.
+
+This is not a complete authorization system:
+
+- Authentication is not implemented.
+- User records, memberships, role assignments, and RBAC are not implemented.
+- Scope objects are constructed by trusted internal callers or tests.
+- Future authentication must derive tenant and office scope server-side.
+- Client-supplied organization ids are not trusted authorization facts.
+- PostgreSQL Row-Level Security is not implemented in Phase 5; ADR-004 leaves it
+  as a defense-in-depth evaluation before pilot production.
+
 ## Pilot V1 Target Roles And Boundaries
 
 | Role | Allowed actions | Denied / constrained actions |
@@ -149,9 +179,10 @@ The demo must continue to use fictional or anonymized data. Pilot import validat
 ## Security-Sensitive Contradictions Or Gaps
 
 - Settings UI copy mentions permissions and future integrations, but no real permission system or integration layer exists.
-- Role access exists in UI state, but no auth service makes it enforceable.
+- Role access exists in root demo UI state, but no auth service makes it enforceable.
 - Browser/CDP security validation is not part of normal CI.
-- Pilot V1 auth, authorization, tenant isolation, audit storage, and secret handling are target requirements, not current implementation.
+- Pilot V1 auth, RBAC, audit storage, and secret handling are target requirements, not current implementation.
+- Phase 5 proves only organization/office persistence isolation for office records, not complete tenant isolation for all future Pilot V1 data.
 - Operational vNext health endpoints exist, but they are not authenticated and do not prove tenant isolation or pilot readiness.
 
 ## Open Questions

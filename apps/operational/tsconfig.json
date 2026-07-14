@@ -35,6 +35,7 @@
     "tests/**/*.ts",
     "scripts/**/*.ts",
     "vitest.config.ts",
+    "vitest.integration.config.ts",
     "playwright.config.ts",
     "drizzle.config.ts",
     ".next/types/**/*.ts",

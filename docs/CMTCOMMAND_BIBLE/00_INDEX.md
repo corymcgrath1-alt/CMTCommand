@@ -16,9 +16,11 @@
   - `.github/workflows/root-static-checks.yml`
   - `apps/operational/`
   - `.github/workflows/operational-ci.yml`
+  - `apps/operational/drizzle/0000_open_giant_girl.sql`
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-13
+- Last Reviewed: 2026-07-14
 
 ## Purpose
 
@@ -77,6 +79,7 @@ Operational vNext architecture:
 - [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md): canonical technical overview.
 - [Phase 4 Scaffolding Readiness Checklist](plans/PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md): gate before creating the operational app shell.
 - [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md): read for the implemented shell, exact package versions, commands, health behavior, and verification results.
+- [Phase 5 Tenancy Foundation Report](plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md): read before adding users, memberships, roles, technicians, work orders, imports, readiness, or coverage.
 
 Templates:
 
@@ -125,6 +128,7 @@ Do not treat inferred statements as product commitments. Do not treat founder ta
 - Root CMTCommand is a static HTML/CSS/JavaScript app served from the repository root.
 - There is no root `package.json`, package lockfile, backend, database, auth service, deployment config, or migration system found in root scope.
 - Operational vNext now has an app-local scaffold under `apps/operational/` with its own npm manifest, lockfile, Next.js App Router shell, health endpoints, Drizzle/PostgreSQL wiring, Vitest tests, Playwright smoke tests, and scoped CI workflow.
+- Phase 5 adds only organization and office persistence, explicit access scopes, scoped office repository functions, the first Drizzle migration, PostgreSQL integration tests, and a separate PostgreSQL CI job. It does not add authentication, memberships, RBAC, product workflows, or tenant-management UI.
 - `euchre-platform/` and `brackethub/` are unrelated to root CMTCommand scope based on `AGENTS.md`, `MIGRATION_CLEANUP_REPORT.md`, and vNext docs.
 - `node scripts\verify-root.mjs` is the root verification command found in repository evidence.
 

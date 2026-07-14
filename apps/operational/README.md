@@ -2,8 +2,8 @@
 
 This directory contains the guarded Operational vNext scaffold for CMTCommand.
 It proves the app boundary, TypeScript/Next.js toolchain, health endpoints,
-environment validation, Drizzle/PostgreSQL wiring, unit testing, and browser
-test configuration.
+environment validation, Drizzle/PostgreSQL wiring, organization/office tenancy
+persistence, unit testing, integration testing, and browser test configuration.
 
 It does not implement Pilot V1 business functionality.
 
@@ -14,16 +14,19 @@ Implemented in this scaffold:
 - Next.js App Router shell.
 - Server-side environment validation with Zod.
 - Lazy PostgreSQL/Drizzle connection wiring.
+- Organization and office schema with explicit tenant-scoped persistence helpers.
 - `/api/health` liveness endpoint.
 - `/api/ready` database-readiness endpoint.
 - Vitest unit tests.
+- PostgreSQL integration-test path for migrations and tenant isolation.
 - Playwright browser smoke test configuration.
 - App-local npm package and lockfile.
 
 Not implemented:
 
 - Authentication, invitations, users, roles, or authorization.
-- Organizations, offices, tenant scoping, or customer schemas.
+- Tenant-management routes or screens.
+- User-derived tenant sessions, organization memberships, office assignments, or RBAC.
 - Imports, work orders, technicians, equipment, readiness rules, coverage, Decision Log, audit events, operational impact, or deployment.
 
 ## Runtime
@@ -53,6 +56,40 @@ TEST_DATABASE_URL=
 
 Leaving database values blank is valid for linting, type checking, unit tests,
 the scaffold home page, and production build.
+
+## Schema And Migrations
+
+The first Drizzle schema is intentionally limited to organizations and offices:
+
+- `src/server/db/schema/organizations.ts`
+- `src/server/db/schema/offices.ts`
+
+Generate migrations after schema changes:
+
+```powershell
+npm run db:generate
+```
+
+Apply migrations to the normal server database:
+
+```powershell
+npm run db:migrate
+```
+
+`npm run db:migrate` uses `DATABASE_URL` through Drizzle Kit. It must not fall
+back to `TEST_DATABASE_URL`.
+
+Apply migrations to an explicit test database:
+
+```powershell
+$env:APP_ENV="test"
+$env:TEST_DATABASE_URL="postgresql://user:password@localhost:5432/cmtcommand_operational_test"
+npm run db:migrate:test
+```
+
+The test path refuses blank values, non-test database names, and unsafe-looking
+production/staging/pilot database names. It does not print the full connection
+string or password.
 
 ## Development
 
@@ -87,11 +124,14 @@ npm run typecheck
 npm run test
 npm run test:watch
 npm run test:db
+npm run test:integration
 npm run test:e2e
 npm run verify
+npm run verify:db
 npm run verify:full
 npm run db:generate
 npm run db:migrate
+npm run db:migrate:test
 npm run db:studio
 ```
 
@@ -102,8 +142,46 @@ auth provider credentials.
 `npm run test:db` requires a safe `TEST_DATABASE_URL`. It is intentionally not
 part of the default gate.
 
+`npm run test:integration` runs PostgreSQL-backed integration tests and requires
+`APP_ENV=test` and a safe `TEST_DATABASE_URL`.
+
+`npm run verify:db` applies test migrations and runs PostgreSQL integration
+tests. It is the database-dependent gate and is intentionally separate from
+`npm run verify`.
+
 `npm run test:e2e` runs Playwright browser smoke tests and is intentionally not
 part of the default gate.
+
+`npm run verify:full` preserves the browser behavior from Phase 4: stable
+verification plus Playwright scaffold smoke tests. It does not include the
+database gate.
+
+## Current Tenancy Boundary
+
+Implemented:
+
+- Stable UUID identifiers for organizations and offices.
+- Globally unique normalized organization slugs.
+- Office ownership through `organization_id`.
+- Office codes unique within an organization.
+- Application-layer access scopes for organization-wide and office-limited
+  office reads.
+- Scoped persistence functions that return inaccessible cross-tenant offices as
+  indistinguishable from nonexistent offices.
+
+Not implemented:
+
+- Authentication.
+- Organization memberships.
+- Role assignments or RBAC.
+- User-derived access scopes.
+- Public organization or office routes.
+- Tenant-management UI.
+- PostgreSQL Row-Level Security.
+
+Access scopes are constructed by trusted internal callers and tests only. A
+future identity layer must derive these scopes server-side; client-supplied
+organization or office identifiers are not trusted authorization facts.
 
 ## Relationship To The Static Demo
 

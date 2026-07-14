@@ -11,7 +11,10 @@
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-003_OPERATIONAL_VNEXT_REPOSITORY_BOUNDARY.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md`
-- Last Reviewed: 2026-07-13
+  - `apps/operational/drizzle/0000_open_giant_girl.sql`
+  - `apps/operational/src/server/tenancy/`
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
+- Last Reviewed: 2026-07-14
 
 ## Architecture Summary
 
@@ -29,7 +32,9 @@ The selected architecture is:
 - Controlled CSV/XLSX imports with database-tracked lifecycle and row outcomes.
 - Managed deployment category with development, staging, and pilot-production environments.
 
-This is target-state architecture. It is not implemented.
+The full blueprint is target-state architecture. Phase 4 implemented the app
+shell. Phase 5 implemented only organization/office tenancy persistence and
+scoped office access helpers.
 
 ## Selected Stack
 
@@ -273,13 +278,15 @@ Do not log forbidden sensitive data, raw imported row payloads, credentials, tok
 ## Implementation Order
 
 1. Phase 4 guarded scaffolding: create app shell, package boundary, TypeScript, tests, database connection pattern, health route, and empty module structure. No business features.
-2. Data foundation: organizations, offices, users, roles, core operational entities.
-3. Import pipeline.
-4. Readiness engine.
-5. Coverage decision workflow.
-6. Pilot user experience.
-7. Security and pilot operations.
-8. Pilot validation and release.
+2. Phase 5 tenancy foundation: organizations, offices, first migration, explicit access scopes, scoped office persistence, PostgreSQL isolation tests, and PostgreSQL CI job. No authentication, memberships, RBAC, or product workflows.
+3. Identity and RBAC foundation: users, organization memberships, office access assignments, server-enforced roles and permission checks.
+4. Data foundation remainder: technicians, certifications, clearances, equipment, calibrations, work orders, projects, job sites, service requirements, assignments.
+5. Import pipeline.
+6. Readiness engine.
+7. Coverage decision workflow.
+8. Pilot user experience.
+9. Security and pilot operations.
+10. Pilot validation and release.
 
 ## Known Risks
 

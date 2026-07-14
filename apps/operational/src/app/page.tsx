@@ -2,11 +2,12 @@ const shellStatus = [
   "Next.js App Router shell is present.",
   "TypeScript, linting, unit tests, and build commands are local to this app.",
   "Database connectivity is checked only by explicit readiness or smoke-test paths.",
+  "Organization and office tenancy persistence exists server-side only.",
 ];
 
 const scaffoldLimitations = [
   "No authentication or user accounts.",
-  "No organization, office, tenant, or customer schema.",
+  "No tenant-management UI, role-based authorization, or authenticated tenant sessions.",
   "No imports, work orders, readiness rules, coverage workflow, Decision Log, or audit events.",
   "No deployment provider or managed database provider is configured.",
 ];

@@ -15,9 +15,12 @@
   - `apps/operational/package-lock.json`
   - `apps/operational/README.md`
   - `.github/workflows/operational-ci.yml`
+  - `apps/operational/src/server/db/schema/`
+  - `apps/operational/src/server/tenancy/`
+  - `apps/operational/drizzle/0000_open_giant_girl.sql`
 - `tests/`
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-13
+- Last Reviewed: 2026-07-14
 
 ## Confirmed
 
@@ -94,15 +97,23 @@ npm run build
 npm run verify
 npm run test:e2e
 npm run test:db
+npm run test:integration
 npm run db:generate
 npm run db:migrate
+npm run db:migrate:test
+npm run verify:db
+npm run verify:full
 npm run db:studio
 ```
 
 `npm run verify` is the stable operational gate and runs lint, typecheck, unit
 tests, and production build. It must not require a live database, browser
 installation, auth provider credentials, deployment account, or customer data.
-`npm run test:e2e` and `npm run test:db` remain explicit separate checks.
+`npm run verify:db` applies test migrations and runs PostgreSQL integration
+tests with explicit `APP_ENV=test` and `TEST_DATABASE_URL`. `npm run verify:full`
+preserves the Phase 4 browser behavior: stable verification plus Playwright
+scaffold smoke tests. `npm run test:e2e`, `npm run test:db`, and
+`npm run test:integration` remain explicit separate checks.
 
 ## Dependency Policy
 
@@ -124,6 +135,7 @@ implemented the app shell and toolchain, but not Pilot V1 business behavior:
 - App-local package boundary under `apps/operational/`.
 - PostgreSQL with Drizzle ORM and Drizzle Kit migrations.
 - Zod validation at API/action/import boundaries.
+- Zod validation for current organization, office, and access-scope inputs.
 - Pure TypeScript readiness engine with no framework/database/auth imports.
 - Vitest for domain and integration tests.
 - Playwright for operational UI/E2E tests.

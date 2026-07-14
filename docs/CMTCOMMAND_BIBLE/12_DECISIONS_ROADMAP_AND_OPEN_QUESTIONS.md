@@ -17,9 +17,12 @@
   - `apps/operational/package.json`
   - `apps/operational/package-lock.json`
   - `.github/workflows/operational-ci.yml`
+  - `apps/operational/drizzle/0000_open_giant_girl.sql`
+  - `apps/operational/src/server/tenancy/`
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-13
+- Last Reviewed: 2026-07-14
 
 ## Confirmed Decisions
 
@@ -60,6 +63,7 @@
 | Auth uses managed identity plus app-owned RBAC, office scope, and audit. | [ADR-004](decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md) | Keeps credentials outside CMTCommand while enforcing product permissions server-side. | Exact auth provider remains checkpoint. | Target |
 | Imports use database-tracked in-app processing, not distributed queue infrastructure by default. | [ADR-005](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md) | Keeps Pilot V1 simple and observable. | Queue may be needed if measured imports exceed platform limits. | Target |
 | Phase 4 operational scaffold lives under `apps/operational/`. | [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md), `apps/operational/package.json`, `.github/workflows/operational-ci.yml` | Future operational work has an app-local Next.js, TypeScript, npm, test, build, health, and Drizzle boundary. | No Pilot V1 business behavior is implemented yet. | Yes |
+| Phase 5 implements only organization/office tenancy persistence before users or product workflows. | [Phase 5 Tenancy Foundation Report](plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md), `apps/operational/drizzle/0000_open_giant_girl.sql`, `apps/operational/src/server/tenancy/` | Tenant-owned office data now has a tested persistence boundary before identities, roles, imports, readiness, or coverage. | Scopes are supplied by trusted internal callers/tests until authentication and memberships exist. | Yes |
 
 ## Resolved Or Partially Resolved Phase 1 Questions
 
@@ -86,6 +90,7 @@ Founder-approved Pilot V1 direction:
 - Use [ADR-001](decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md) as the boundary decision before architecture implementation.
 - Use ADR-002 through ADR-005 and the [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md) before Phase 4 scaffolding.
 - Use the [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md) before changing `apps/operational/`.
+- Use the [Phase 5 Tenancy Foundation Report](plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md) before adding identities, memberships, RBAC, technicians, work orders, imports, readiness, coverage, Decision Log behavior, or audit events.
 
 Repository-supported candidate slices recorded in `docs/cmtcommand-vnext/plan.md` remain historical planning evidence:
 
@@ -133,7 +138,9 @@ Do not treat old candidate slices as committed roadmap unless they align with th
 ### Security
 
 - [OPEN QUESTION - High Impact] What approval threshold distinguishes ordinary coverage decisions from significant operational changes?
+- [OPEN QUESTION - High Impact] Which identity, membership, office-access-assignment, and RBAC schema should derive trusted access scopes in the next phase?
 - [OPEN QUESTION - Medium Impact] What safe logging policy applies to pilot data and import failures?
+- [OPEN QUESTION - Medium Impact] Should PostgreSQL RLS be enabled before pilot production as defense in depth after the app-owned authorization model exists?
 
 ### Operations
 

@@ -19,10 +19,15 @@
   - `.github/workflows/root-static-checks.yml`
   - `apps/operational/`
   - `.github/workflows/operational-ci.yml`
+  - `apps/operational/src/server/db/schema/`
+  - `apps/operational/src/server/tenancy/`
+  - `apps/operational/drizzle/0000_open_giant_girl.sql`
+  - `apps/operational/tests/integration/tenancy.integration.test.ts`
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
   - `docs/cmtcommand-vnext/baseline.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-13
+- Last Reviewed: 2026-07-14
 
 ## Current Architecture - Confirmed
 
@@ -144,6 +149,25 @@ This scaffold is implemented technical infrastructure, not proof that Pilot V1
 auth, tenancy, imports, readiness, coverage, Decision Log, audit, deployment, or
 domain persistence exists.
 
+## Phase 5 Tenancy Foundation - Confirmed
+
+Operational vNext now has a first durable persistence boundary for
+organizations and offices only:
+
+- `apps/operational/src/server/db/schema/organizations.ts`
+- `apps/operational/src/server/db/schema/offices.ts`
+- `apps/operational/src/server/tenancy/scope.ts`
+- `apps/operational/src/server/tenancy/repository.ts`
+- `apps/operational/drizzle/0000_open_giant_girl.sql`
+
+Office reads go through explicit organization-wide or office-limited access
+scopes. Setup-level organization and office creation functions are internal
+persistence operations, not public HTTP endpoints.
+
+This is application-layer tenancy scoping and PostgreSQL referential integrity.
+It is not authentication, user membership resolution, RBAC, audit-event storage,
+readiness workflow behavior, or tenant-management UI.
+
 ## Known Constraints
 
 - `app.js` is large and highly coupled to page rendering/state.
@@ -162,9 +186,9 @@ The current architecture favors a low-friction local demo with tested pure utili
 
 ## Implementation Gaps
 
-- Operational app scaffolding exists, but no Pilot V1 business modules or schemas exist.
+- Operational app scaffolding exists, plus organization/office tenancy schema and scoped persistence. No Pilot V1 business modules beyond this foundation exist.
 - Exact managed auth, database, and hosting providers remain checkpoints.
-- No production-grade organization/office scoping exists.
+- Organization/office application-layer scoping exists for office persistence, but production-grade authenticated tenancy and RBAC do not exist.
 - No durable readiness snapshot or Decision Log implementation exists.
 
 ## Open Questions

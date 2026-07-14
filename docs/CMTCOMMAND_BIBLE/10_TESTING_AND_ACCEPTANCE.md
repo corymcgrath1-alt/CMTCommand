@@ -12,13 +12,15 @@
   - `apps/operational/tests/`
   - `apps/operational/playwright.config.ts`
   - `apps/operational/vitest.config.ts`
+  - `apps/operational/vitest.integration.config.ts`
+  - `apps/operational/tests/integration/tenancy.integration.test.ts`
   - `.github/workflows/operational-ci.yml`
   - `DEVELOPER_NOTES.md`
   - `docs/cmtcommand-vnext/verification.md`
   - `docs/cmtcommand-vnext/status.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-13
+- Last Reviewed: 2026-07-14
 
 ## Current Demo - Confirmed
 
@@ -93,6 +95,8 @@ npm run build
 npm run verify
 npm run test:e2e
 npm run test:db
+npm run test:integration
+npm run verify:db
 ```
 
 `npm run verify` runs lint, typecheck, Vitest unit tests, and a production
@@ -106,6 +110,40 @@ stale-server reuse.
 `npm run test:db` is explicit and requires a safe `TEST_DATABASE_URL`. It is not
 part of the default gate.
 
+## Operational vNext Tenancy Tests - Confirmed
+
+Phase 5 adds database-independent unit tests for:
+
+- Organization input validation.
+- Office input validation.
+- Slug and office-code normalization.
+- IANA time-zone validation.
+- Access-scope parsing.
+- Empty restricted-scope behavior.
+- Test database safety checks.
+- Safe database-error mapping.
+
+Phase 5 adds PostgreSQL integration tests for:
+
+- Migration presence.
+- Organization creation.
+- Organization slug uniqueness.
+- Office creation.
+- Foreign-key enforcement.
+- Office-code uniqueness within an organization.
+- Duplicate office codes across organizations.
+- Organization-wide office listing.
+- Cross-organization listing and lookup isolation.
+- Restricted office-scope listing and lookup.
+- Empty restricted scopes.
+- Inaccessible/nonexistent lookup equivalence.
+- Organization deletion restriction while offices exist.
+- Safe public mapping for predictable database errors.
+
+`npm run verify:db` is the database-dependent gate. It applies test migrations
+and runs PostgreSQL integration tests. It requires `APP_ENV=test` and
+`TEST_DATABASE_URL`; it must not fall back to `DATABASE_URL`.
+
 ## Practical Testing Matrix
 
 | Change type | Minimum expected verification |
@@ -114,6 +152,7 @@ part of the default gate.
 | Current demo domain logic | Focused utility test plus `node scripts\verify-root.mjs`. |
 | Current demo UI behavior | Root verifier plus browser smoke of affected page; include 390px mobile and visual modes when layout changes. |
 | Operational scaffold/tooling | `npm run verify` from `apps/operational/`; root verifier from repository root. |
+| Operational tenancy persistence | `npm run verify`, `npm run verify:db`, root verifier, and database isolation tests against PostgreSQL. |
 | Pilot Setup/trust boundary | Root verifier plus malformed, hostile, oversized, reload, valid-value, formula-export, and blocked/allowed cases. |
 | Pilot V1 readiness engine | Focused unit tests for each rule, precedence, explanation fields, and recalculation. |
 | Pilot V1 API behavior | Success, validation, unauthorized, forbidden, not-found, conflict/stale snapshot, and persistence-failure tests. |
@@ -152,7 +191,7 @@ If not run, report:
 - No full screen-reader transcript or formal accessibility audit was found.
 - Prototype surfaces have limited direct tests.
 - Pilot V1 operational logic, permissions, persistence, and deployment tests do not exist yet.
-- Operational database connectivity is not verified until a safe `TEST_DATABASE_URL` is available.
+- Operational database connectivity and migration behavior require a safe `TEST_DATABASE_URL` or the PostgreSQL CI service-container job.
 
 ## Open Questions
 

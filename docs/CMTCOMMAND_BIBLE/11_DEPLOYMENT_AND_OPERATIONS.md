@@ -13,12 +13,15 @@
   - `apps/operational/.env.example`
   - `apps/operational/src/app/api/health/route.ts`
   - `apps/operational/src/app/api/ready/route.ts`
+  - `apps/operational/drizzle/0000_open_giant_girl.sql`
+  - `apps/operational/scripts/db-migrate-test.ts`
+  - `apps/operational/src/server/db/test-safety.ts`
   - `.gitignore`
   - `MIGRATION_CLEANUP_REPORT.md`
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-13
+- Last Reviewed: 2026-07-14
 
 ## Current Demo - Confirmed
 
@@ -110,6 +113,28 @@ Phase 4 added a local operational shell and scoped CI proof:
 
 This is not a managed deployment configuration.
 
+## Phase 5 Database Operations - Confirmed
+
+Phase 5 adds the first database migration and a test-only database verification
+path:
+
+- `apps/operational/drizzle/0000_open_giant_girl.sql` creates only
+  `organizations`, `offices`, their status enums, and required constraints.
+- `npm run db:migrate` uses normal `DATABASE_URL` through Drizzle Kit.
+- `npm run db:migrate:test` requires `APP_ENV=test` and `TEST_DATABASE_URL`.
+- `npm run verify:db` runs test migration application and PostgreSQL integration
+  tests.
+- Test database safety logic rejects blank test URLs, non-test database names,
+  and unsafe-looking production/staging/pilot names, and redacts credentials in
+  output.
+
+The operational CI workflow now has a separate PostgreSQL service-container job
+for the database gate. It uses Node `22.22.2` and requires no external secrets or
+managed provider account.
+
+This is still not a production database provider, backup, recovery, monitoring,
+or deployment configuration.
+
 ## Pilot V1 Operational Gaps
 
 - No exact selected hosting provider.
@@ -117,7 +142,7 @@ This is not a managed deployment configuration.
 - No selected auth provider.
 - No deployment pipeline.
 - No production environment-variable contract beyond the Phase 4 scaffold placeholders.
-- No database backup/recovery procedure.
+- No production database backup/recovery procedure.
 - No deployed health-check monitor or provider-level health integration.
 - No structured logging or monitoring configuration.
 

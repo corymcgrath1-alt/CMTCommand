@@ -5,15 +5,17 @@ on:
     paths:
       - ".github/workflows/operational-ci.yml"
       - "apps/operational/**"
+      - "docs/CMTCOMMAND_BIBLE/**"
   push:
     branches:
       - master
     paths:
       - ".github/workflows/operational-ci.yml"
       - "apps/operational/**"
+      - "docs/CMTCOMMAND_BIBLE/**"
 
 jobs:
-  operational-vnext:
+  operational-vnext-stable:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,3 +32,35 @@ jobs:
       - name: Verify root static demo
         working-directory: .
         run: node scripts/verify-root.mjs
+
+  operational-vnext-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cmtcommand_test
+          POSTGRES_PASSWORD: cmtcommand_test_password
+          POSTGRES_DB: cmtcommand_operational_test
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U cmtcommand_test -d cmtcommand_operational_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: apps/operational
+    env:
+      APP_ENV: test
+      TEST_DATABASE_URL: postgresql://cmtcommand_test:cmtcommand_test_password@localhost:5432/cmtcommand_operational_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.2"
+          cache: npm
+          cache-dependency-path: apps/operational/package-lock.json
+      - run: npm ci
+      - run: npm run verify:db

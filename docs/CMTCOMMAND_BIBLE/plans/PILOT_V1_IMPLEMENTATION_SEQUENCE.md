@@ -12,7 +12,8 @@
   - `docs/CMTCOMMAND_BIBLE/specs/PILOT_V1_TOMORROW_READINESS_AND_COVERAGE.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md`
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-13
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
+- Last Reviewed: 2026-07-14
 
 ## Purpose
 
@@ -70,6 +71,16 @@ business behavior was implemented.
 | Exit criteria | Persistent model supports Pilot V1 required inputs with organization/office scoping. |
 | Verification requirements | Migration tests, model tests, permission scoping tests, data-minimization review. |
 | Stop conditions | Schema requires forbidden sensitive data or lacks organization/office scoping. |
+
+Phase 5 completed the first slice of this phase only: organizations, offices,
+the initial migration, explicit office access scopes, scoped office persistence,
+PostgreSQL isolation tests, and a PostgreSQL CI job. It did not implement users,
+memberships, roles, technicians, work orders, imports, readiness, coverage,
+Decision Log, audit events, or operational-impact data.
+
+The next smallest slice should add identity records, organization memberships,
+office access assignments, and server-enforced RBAC before any technician or
+readiness workflow data is introduced.
 
 ## Phase 3 - Controlled Import Pipeline
 
