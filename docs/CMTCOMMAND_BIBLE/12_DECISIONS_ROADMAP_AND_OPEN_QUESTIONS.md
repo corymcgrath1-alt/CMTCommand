@@ -20,9 +20,11 @@
   - `apps/operational/drizzle/0000_open_giant_girl.sql`
   - `apps/operational/src/server/tenancy/`
   - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
+  - `docs/CMTCOMMAND_BIBLE/13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md`
+  - `docs/CMTCOMMAND_BIBLE/decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-14
+- Last Reviewed: 2026-07-15
 
 ## Confirmed Decisions
 
@@ -46,7 +48,7 @@
 | Pilot V1 is a 90-day, single-office pilot. | Founder decision, 2026-07-13 | Scope should not expand into enterprise rollout or deep integrations. | Limits broader market proof. | Target |
 | Customer systems remain source of truth for underlying operational records. | Founder decision, 2026-07-13 | CMTCommand should import, evaluate, and record decisions without silent writeback. | Requires explicit source-boundary messaging. | Target |
 | Readiness rules are deterministic, explainable, and use Not Ready > At Risk > Ready precedence. | Founder decision, 2026-07-13 | Operational logic must be test-first and rule-backed. | Thresholds and ranking weights remain open. | Target |
-| Pilot V1 is invite-only, organization-scoped, role-based, and auditable. | Founder decision, 2026-07-13 | Auth, RBAC, tenant scoping, and audit tests become core requirements. | Provider and implementation are unresolved. | Target |
+| Pilot V1 is invite-only, organization-scoped, role-based, and auditable. | Founder decision, 2026-07-13 | Auth, RBAC, tenant scoping, and audit tests become core requirements. | Identity/RBAC foundation exists; production provider, invitation delivery, and audit persistence remain unresolved. | Target |
 | Pilot V1 uses minimum business-operational data and forbids sensitive categories. | Founder decision, 2026-07-13 | Imports must detect prohibited/unexpected sensitive columns. | Exact retention/deletion policy remains open. | Target |
 | Pilot V1 needs managed deployment, backups, rollback, health, logging, and monitoring. | Founder decision, 2026-07-13 | Architecture selection must include operations, not just framework choice. | Vendor remains unresolved. | Target |
 | Browser validation becomes blocking only after stabilization; ten clean runs is the proposed threshold. | Founder decision, 2026-07-13 | Avoids turning flaky browser checks into merge gates. | Requires reliability tracking before enforcement. | Target policy |
@@ -64,6 +66,19 @@
 | Imports use database-tracked in-app processing, not distributed queue infrastructure by default. | [ADR-005](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md) | Keeps Pilot V1 simple and observable. | Queue may be needed if measured imports exceed platform limits. | Target |
 | Phase 4 operational scaffold lives under `apps/operational/`. | [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md), `apps/operational/package.json`, `.github/workflows/operational-ci.yml` | Future operational work has an app-local Next.js, TypeScript, npm, test, build, health, and Drizzle boundary. | No Pilot V1 business behavior is implemented yet. | Yes |
 | Phase 5 implements only organization/office tenancy persistence before users or product workflows. | [Phase 5 Tenancy Foundation Report](plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md), `apps/operational/drizzle/0000_open_giant_girl.sql`, `apps/operational/src/server/tenancy/` | Tenant-owned office data now has a tested persistence boundary before identities, roles, imports, readiness, or coverage. | Scopes are supplied by trusted internal callers/tests until authentication and memberships exist. | Yes |
+| Authorization scope is derived server-side from verified identity and active membership. | [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md), [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md) | Protected requests revalidate application user, membership, organization, office scope, and permissions; browser claims are untrusted. | Production auth provider and persistent audit events remain checkpoints. | Yes |
+
+## Field Operations Architecture Direction - 2026-07-15
+
+This is a future-workstream architecture direction, not a change to the founder-approved Pilot V1 scope.
+
+| Decision | Evidence | Consequence | Known tradeoff | Appears current |
+| --- | --- | --- | --- | --- |
+| Field Operations is positioned after the initial Tomorrow Readiness and Coverage pilot unless a later founder decision changes scope. | [Field Operations chapter](13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md) | Prevents a major field-reporting expansion from silently replacing the first operational wedge. | Delays field workflow implementation until shared foundations and pilot sequencing are resolved. | Target |
+| Original field evidence is immutable; derivatives are separate. | [ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md) | Preserves source integrity and allows safe previews/transcodes. | Higher storage, processing, and retention complexity. | Target |
+| AI extraction is advisory and every accepted value requires human review with provenance. | [ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md) | AI cannot attest, approve, finalize, or submit professional reports. | More review-state and UI complexity. | Target |
+| Approved reports and amendments are immutable versions. | [ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md) | Exports and external sync can reference exactly what was approved. | Requires atomic finalization/version/audit transactions. | Target |
+| FR-1 is blocked until production identity, assignments, audit persistence, and private storage exist. | [Field Operations plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md), [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md) | Identity/RBAC is acceptance-complete for its bounded local/test scope; field-reporting tables/UI still cannot begin. | Production provider and remaining shared foundations are unresolved. | Yes |
 
 ## Resolved Or Partially Resolved Phase 1 Questions
 
@@ -91,6 +106,10 @@ Founder-approved Pilot V1 direction:
 - Use ADR-002 through ADR-005 and the [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md) before Phase 4 scaffolding.
 - Use the [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md) before changing `apps/operational/`.
 - Use the [Phase 5 Tenancy Foundation Report](plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md) before adding identities, memberships, RBAC, technicians, work orders, imports, readiness, coverage, Decision Log behavior, or audit events.
+- Use [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md) and
+  the [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md) for every
+  protected request, membership mutation, office access, and production auth
+  provider decision.
 
 Repository-supported candidate slices recorded in `docs/cmtcommand-vnext/plan.md` remain historical planning evidence:
 
@@ -101,11 +120,22 @@ Repository-supported candidate slices recorded in `docs/cmtcommand-vnext/plan.md
 
 Do not treat old candidate slices as committed roadmap unless they align with the founder-approved Pilot V1 sequence.
 
+Future Field Operations direction:
+
+- Complete the remaining shared Operational vNext prerequisites first:
+  production authentication, durable assignments/work orders, audit events, and
+  private storage/upload authorization. The local identity/RBAC foundation is
+  implemented.
+- Treat [FR-0](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md) as documentation/architecture complete only.
+- Do not begin the concrete-inspection FR-1 vertical slice until every prerequisite gate and organization-specific report requirement is verified.
+- Keep FR-2 offline/media resilience, FR-3 additional templates, FR-4 email/Procore adapters, FR-5 plan-location intelligence, and FR-6 advanced analytics deferred.
+
 ## Open Questions
 
 ### Product
 
 - [OPEN QUESTION - High Impact] What exact operational-impact and time-saved formulas should Pilot V1 use?
+- [OPEN QUESTION - High Impact] Should Field Operations become the next major workstream after Pilot V1, or a later controlled extension?
 - [OPEN QUESTION - Medium Impact] Which current static-demo prototype surfaces should remain visible while Pilot V1 is built?
 
 ### Domain
@@ -120,8 +150,9 @@ Do not treat old candidate slices as committed roadmap unless they align with th
 ### Architecture
 
 - [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should be selected before pilot deployment configuration?
-- [OPEN QUESTION - High Impact] Which exact managed authentication provider should be selected before auth scaffolding?
+- [OPEN QUESTION - High Impact] Which exact managed authentication provider should replace the disabled production boundary before pilot deployment?
 - [OPEN QUESTION - High Impact] Which exact managed Next.js hosting provider should be selected before pilot deployment configuration?
+- [OPEN QUESTION - High Impact] Which private object-storage and media-inspection approach should Field Operations use after identity and assignment foundations exist?
 - [OPEN QUESTION - Medium Impact] When should current demo logic be extracted or shared with operational vNext, if ever?
 
 ### Data
@@ -138,7 +169,8 @@ Do not treat old candidate slices as committed roadmap unless they align with th
 ### Security
 
 - [OPEN QUESTION - High Impact] What approval threshold distinguishes ordinary coverage decisions from significant operational changes?
-- [OPEN QUESTION - High Impact] Which identity, membership, office-access-assignment, and RBAC schema should derive trusted access scopes in the next phase?
+- [OPEN QUESTION - High Impact] Which persistent security audit-event schema and
+  retention policy should receive the structured Phase 5D mutation metadata?
 - [OPEN QUESTION - Medium Impact] What safe logging policy applies to pilot data and import failures?
 - [OPEN QUESTION - Medium Impact] Should PostgreSQL RLS be enabled before pilot production as defense in depth after the app-owned authorization model exists?
 

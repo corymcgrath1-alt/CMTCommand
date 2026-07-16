@@ -14,7 +14,7 @@
   - `demoControlCenter.js`
   - `tests/`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
-- Last Reviewed: 2026-07-13
+- Last Reviewed: 2026-07-15
 
 Allowed status values in this document: Implemented, Partially Implemented, Prototype, Disabled, Incomplete, Deprecated, Unclear. Pilot V1 target features that are authorized but not built are marked Incomplete with scope `Pilot V1 Target`.
 
@@ -52,8 +52,23 @@ Allowed status values in this document: Implemented, Partially Implemented, Prot
 | Pilot V1 Target | Cascading-impact calculation | Incomplete | Show downstream readiness effects of coverage changes. | Not implemented | Not implemented | Recalculation required after approval. |
 | Pilot V1 Target | Coverage approval workflow | Incomplete | Approve ordinary coverage changes and route significant changes. | Not implemented | Not implemented | Significant-change threshold unresolved. |
 | Pilot V1 Target | Auditable Decision Log | Incomplete | Preserve decisions and correcting entries. | Not implemented | Not implemented | Current demo log is local/session-only. |
-| Pilot V1 Target | Role-based access control | Incomplete | Enforce allowed and denied actions by organization, office, and role. | Not implemented | Not implemented | Current role selector is UI-only. |
+| Pilot V1 Target | Authenticated identity boundary | Partially Implemented | Resolve a verified external identity to a provider-independent CMTCommand user. | `apps/operational/src/server/auth/`, `users`, `external_identities` | Unit and PostgreSQL integration tests | Production provider is not selected; development/test adapter only and production fails closed. |
+| Pilot V1 Target | Organization memberships | Partially Implemented | Require an active organization relationship and support multiple organizations. | `organization_memberships`, auth resolver, `/app` | Unit, PostgreSQL integration, and browser acceptance passed for the bounded local/test scope. | Invitation acceptance/delivery remains deferred. |
+| Pilot V1 Target | Office access assignments | Implemented | Derive all-office or assigned-office scope with cross-organization protection. | `office_assignments`, auth resolver, office APIs | Unit, integration, and browser tests | Composite foreign keys enforce same-organization assignment. |
+| Pilot V1 Target | Role-based access control | Partially Implemented | Enforce identity-foundation reads and member administration by organization, office, and role. | `apps/operational/src/server/auth/permissions.ts`, protected pages/actions/APIs | Unit, integration, and browser tests | Central RBAC is implemented for current surfaces; future readiness/coverage permissions await those modules. |
+| Pilot V1 Target | Membership administration | Implemented | List, prepare, role/status-manage, and office-scope members. | `/app/admin/members`, `src/server/members/service.ts` | Integration and authorization tests | No invitation email; full audit persistence deferred. |
 | Pilot V1 Target | Pilot operations and health | Incomplete | Support deployment, backups, rollback, logs, and health checks. | Not implemented | Not implemented | Provider unresolved. |
+
+## Future Workstream Feature Inventory
+
+| Scope | Feature | Status | User-visible purpose | Main implementation | Tests | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Future Field Operations | Concrete inspection capture and reporting | Incomplete | Connect an authorized assignment to field evidence, human-reviewed report, sample handoff, and internal export. | Architecture/docs only | Runtime tests not implemented | Does not change Pilot V1; see [Field Operations V1](specs/FIELD_OPERATIONS_V1.md). |
+| Future Field Operations | Immutable evidence and derivatives | Incomplete | Preserve original media and provide usable private previews. | ADR-006 only | Not implemented | Identity foundation exists; still blocked by assignments, audit persistence, and storage. |
+| Future Field Operations | Advisory truck-ticket extraction | Incomplete | Suggest evidence-linked ticket values for human review. | Contract only | Not implemented | Manual/no-provider workflow is mandatory. |
+| Future Field Operations | Report review and immutable versioning | Incomplete | Attest, technically review when required, preserve approvals/amendments. | Contract only | Not implemented | AI cannot attest, approve, or submit. |
+| Future Field Operations | Cylinder/sample handoff | Incomplete | Show pickup, transit, receipt, and exception state to operations. | Contract only | Not implemented | Not a full LIMS. |
+| Future Field Operations | Procore and email adapters | Incomplete | Exchange approved versions/evidence through confirmed mappings and retries. | Roadmap only | Not implemented | Deferred beyond FR-1. |
 
 ## Inferred
 
@@ -75,3 +90,4 @@ TRD-104 and Maria Lopez remain canonical demo story records. Pilot production lo
 - [OPEN QUESTION - High Impact] What exact coverage-candidate ranking weights should be used?
 - [OPEN QUESTION - High Impact] What exact operational-impact and time-saved formulas should be used?
 - [OPEN QUESTION - Medium Impact] Which current prototype surfaces should remain visible while operational vNext is built?
+- [OPEN QUESTION - High Impact] When should the Future Field Operations workstream enter the executable roadmap without displacing Pilot V1?

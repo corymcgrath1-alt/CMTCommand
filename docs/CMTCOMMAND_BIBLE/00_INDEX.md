@@ -18,9 +18,10 @@
   - `.github/workflows/operational-ci.yml`
   - `apps/operational/drizzle/0000_open_giant_girl.sql`
   - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
+  - `docs/CMTCOMMAND_BIBLE/13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-14
+- Last Reviewed: 2026-07-15
 
 ## Purpose
 
@@ -63,6 +64,7 @@ Founder decisions dated 2026-07-13 are authoritative product-direction evidence,
 | Testing and acceptance | [10_TESTING_AND_ACCEPTANCE](10_TESTING_AND_ACCEPTANCE.md) |
 | Deployment and operations | [11_DEPLOYMENT_AND_OPERATIONS](11_DEPLOYMENT_AND_OPERATIONS.md) |
 | Decisions, roadmap, questions | [12_DECISIONS_ROADMAP_AND_OPEN_QUESTIONS](12_DECISIONS_ROADMAP_AND_OPEN_QUESTIONS.md) |
+| Future field operations capture and reporting | [13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING](13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md) |
 
 Pilot V1 additions:
 
@@ -76,10 +78,21 @@ Operational vNext architecture:
 - [ADR-003 Operational vNext Repository Boundary](decisions/ADR-003_OPERATIONAL_VNEXT_REPOSITORY_BOUNDARY.md): governs where the operational app will live and how the static demo stays isolated.
 - [ADR-004 Tenancy Authorization And Audit Model](decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md): governs auth, membership, RBAC, office scope, Decision Log distinction, and audit model.
 - [ADR-005 Import And Readiness Execution Model](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md): governs imports, readiness execution, snapshots, recalculation, and queue threshold.
+- [ADR-007 Server-Derived Authorization Scope](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md): governs verified identity mapping, active membership, office scope, permissions, development sessions, and untrusted browser claims.
 - [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md): canonical technical overview.
 - [Phase 4 Scaffolding Readiness Checklist](plans/PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md): gate before creating the operational app shell.
 - [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md): read for the implemented shell, exact package versions, commands, health behavior, and verification results.
 - [Phase 5 Tenancy Foundation Report](plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md): read before adding users, memberships, roles, technicians, work orders, imports, readiness, or coverage.
+- [Phase 5D Identity And RBAC Report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md): read for the implemented user, external identity, membership, office-assignment, protected-shell, and authorization boundary.
+
+Field Operations future workstream:
+
+- [Field Operations Capture And Reporting](13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md): product, domain, evidence, human-review, privacy, sample, and integration boundaries.
+- [Field Operations V1 Specification](specs/FIELD_OPERATIONS_V1.md): target concrete-placement requirements, states, permissions, API contracts, provider-neutral interfaces, and acceptance criteria.
+- [ADR-006 Field Evidence Is Immutable And AI Extraction Is Advisory](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md): governs original evidence, derivatives, suggestion provenance, human review, and immutable report versions.
+- [Field Operations Implementation Plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md): Path B prerequisite gates and FR-0 through FR-6 sequencing.
+
+These documents do not change the founder-approved 90-day Tomorrow Readiness and Coverage pilot. Field Operations is a future workstream and has no runtime implementation.
 
 Templates:
 
@@ -128,7 +141,12 @@ Do not treat inferred statements as product commitments. Do not treat founder ta
 - Root CMTCommand is a static HTML/CSS/JavaScript app served from the repository root.
 - There is no root `package.json`, package lockfile, backend, database, auth service, deployment config, or migration system found in root scope.
 - Operational vNext now has an app-local scaffold under `apps/operational/` with its own npm manifest, lockfile, Next.js App Router shell, health endpoints, Drizzle/PostgreSQL wiring, Vitest tests, Playwright smoke tests, and scoped CI workflow.
-- Phase 5 adds only organization and office persistence, explicit access scopes, scoped office repository functions, the first Drizzle migration, PostgreSQL integration tests, and a separate PostgreSQL CI job. It does not add authentication, memberships, RBAC, product workflows, or tenant-management UI.
+- Phase 5 tenancy adds organization and office persistence, scoped repositories,
+  and the first migration. Phase 5D adds application users, provider identity
+  mappings, organization memberships, office assignments, centralized RBAC,
+  protected Operational vNext pages/APIs, and a production-forbidden development
+  identity adapter. No production auth provider, product workflow, invitation
+  delivery, or general audit-event table exists.
 - `euchre-platform/` and `brackethub/` are unrelated to root CMTCommand scope based on `AGENTS.md`, `MIGRATION_CLEANUP_REPORT.md`, and vNext docs.
 - `node scripts\verify-root.mjs` is the root verification command found in repository evidence.
 
@@ -183,7 +201,8 @@ The founder decisions resolved the previous highest-impact questions about stati
 
 ## High-Impact Open Questions
 
-- [OPEN QUESTION - High Impact] Which exact managed authentication provider should be selected before auth scaffolding?
+- [OPEN QUESTION - High Impact] Which exact managed authentication provider should replace the disabled production boundary before pilot deployment?
 - [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should be selected before pilot deployment configuration?
 - [OPEN QUESTION - High Impact] Which exact managed Next.js hosting provider should be selected before pilot deployment configuration?
 - [OPEN QUESTION - High Impact] Should Pilot V1 imports replace complete source snapshots or support incremental updates?
+- [OPEN QUESTION - High Impact] Should Field Operations become the next major workstream after Pilot V1, or a later controlled extension after additional pilot learning?

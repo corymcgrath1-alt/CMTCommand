@@ -22,12 +22,19 @@
   - `apps/operational/src/server/db/schema/`
   - `apps/operational/src/server/tenancy/`
   - `apps/operational/drizzle/0000_open_giant_girl.sql`
+  - `apps/operational/drizzle/0001_office-composite-key.sql`
+  - `apps/operational/drizzle/0002_identity-membership-rbac.sql`
+  - `apps/operational/src/server/auth/`
+  - `apps/operational/src/server/members/`
+  - `docs/CMTCOMMAND_BIBLE/decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md`
   - `apps/operational/tests/integration/tenancy.integration.test.ts`
   - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
+  - `docs/CMTCOMMAND_BIBLE/13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md`
+  - `docs/CMTCOMMAND_BIBLE/decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md`
   - `docs/cmtcommand-vnext/baseline.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-14
+- Last Reviewed: 2026-07-15
 
 ## Current Architecture - Confirmed
 
@@ -145,9 +152,10 @@ Governing documents:
 - Lazy Drizzle/PostgreSQL wiring through `pg`.
 - A path-scoped workflow in `.github/workflows/operational-ci.yml`.
 
-This scaffold is implemented technical infrastructure, not proof that Pilot V1
-auth, tenancy, imports, readiness, coverage, Decision Log, audit, deployment, or
-domain persistence exists.
+That Phase 4 scaffold alone was technical infrastructure, not proof that Pilot
+V1 auth, tenancy, imports, readiness, coverage, Decision Log, audit, deployment,
+or domain persistence existed. Later sections record the implemented Phase 5
+and Phase 5D foundations.
 
 ## Phase 5 Tenancy Foundation - Confirmed
 
@@ -164,9 +172,78 @@ Office reads go through explicit organization-wide or office-limited access
 scopes. Setup-level organization and office creation functions are internal
 persistence operations, not public HTTP endpoints.
 
-This is application-layer tenancy scoping and PostgreSQL referential integrity.
-It is not authentication, user membership resolution, RBAC, audit-event storage,
-readiness workflow behavior, or tenant-management UI.
+This remains the setup-level organization/office boundary. Protected callers now
+receive its scopes from the Phase 5D request authorization path rather than from
+browser input.
+
+## Phase 5D Identity And RBAC Foundation - Confirmed
+
+Operational vNext now implements the provider-neutral request path:
+
+```text
+Verified provider identity
+    -> CMTCommand application user
+    -> active organization membership
+    -> authorized office scope
+    -> derived permissions
+    -> tenant-scoped service/repository operation
+```
+
+Primary runtime boundaries:
+
+- `src/server/auth/runtime-config.ts` keeps production auth disabled until a
+  provider is selected and makes the development adapter impossible in a
+  production runtime.
+- `src/server/auth/session.ts` signs allowlisted development identities without
+  accepting trusted identity headers.
+- `src/server/auth/repository.ts` maps provider/subject to application user and
+  current membership/office facts.
+- `src/server/auth/resolver.ts` fails closed for unknown, disabled, suspended,
+  invited, revoked, unaffiliated, inactive-organization, and invalid-policy states.
+- `src/server/auth/permissions.ts` is the centralized role policy.
+- `src/server/members/service.ts` owns scoped, actor-revalidated, transactional
+  membership and office-access mutations.
+- `/app` and `/app/admin/members` are protected Server Component surfaces;
+  Server Actions re-enforce authorization for writes.
+- `/api/auth/context` and `/api/offices` are thin, no-store route handlers over
+  the same server-derived context.
+
+Multiple organization memberships are supported. The active organization is an
+optional signed session selection and is validated against active membership on
+every request. Role, organization, office scope, and permissions are never read
+from browser claims.
+
+No production identity provider, invitation delivery, general audit-event table,
+readiness workflow, coverage workflow, or Field Operations runtime is implied.
+See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md) and the
+[Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md).
+
+## Future Field Operations Architecture - Path B
+
+Field Operations Capture & Report Intelligence is documented as a future
+Operational vNext workstream. It does not change the founder-approved 90-day
+Tomorrow Readiness and Coverage pilot and has no current runtime implementation.
+
+The future module boundary connects existing authorized assignments to:
+
+- Field sessions.
+- Private immutable evidence and separate derivatives.
+- Provider-neutral advisory extraction.
+- Human-reviewed report drafts and immutable report versions.
+- Sample/cylinder status events.
+- Dispatcher field-status projections.
+- Version-specific exports and external synchronization receipts.
+
+The identity, membership, office access, and RBAC prerequisite is now implemented
+as a local foundation. Field Operations remains blocked on a production identity
+provider, durable projects/work orders/assignments/technicians, general
+audit-event persistence, and a private object-storage/upload boundary. It still
+must not begin as field-reporting tables or UI.
+
+See [Field Operations Capture And Reporting](13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md),
+[Field Operations V1](specs/FIELD_OPERATIONS_V1.md),
+[ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md),
+and the [Field Operations Implementation Plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md).
 
 ## Known Constraints
 
@@ -186,15 +263,21 @@ The current architecture favors a low-friction local demo with tested pure utili
 
 ## Implementation Gaps
 
-- Operational app scaffolding exists, plus organization/office tenancy schema and scoped persistence. No Pilot V1 business modules beyond this foundation exist.
+- Operational app scaffolding, tenancy persistence, provider-neutral identity,
+  memberships, office assignments, protected shell, and centralized RBAC exist.
+  No Tomorrow Readiness or Coverage business module exists.
 - Exact managed auth, database, and hosting providers remain checkpoints.
-- Organization/office application-layer scoping exists for office persistence, but production-grade authenticated tenancy and RBAC do not exist.
+- Production authentication remains fail-closed until a provider is selected;
+  the current signed adapter is development/test only.
+- General persistent security audit events and PostgreSQL RLS remain deferred.
 - No durable readiness snapshot or Decision Log implementation exists.
+- Field Operations is architecture-only; no field session, evidence, report, sample, media, extraction, export, or field UI implementation exists.
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Which exact managed authentication provider should be selected before auth scaffolding?
+- [OPEN QUESTION - High Impact] Which exact managed authentication provider should replace the disabled production boundary before pilot deployment?
 - [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should be selected before pilot deployment configuration?
 - [OPEN QUESTION - High Impact] Which exact managed Next.js hosting provider should be selected before pilot deployment configuration?
 - [OPEN QUESTION - Medium Impact] When should current demo logic be extracted or shared with operational vNext, if ever?
 - [OPEN QUESTION - Medium Impact] Should unrelated nested projects be split out before operational architecture work begins?
+- [OPEN QUESTION - High Impact] Which private storage, media-inspection, retention, and technical-review decisions must be approved before Field Operations FR-1?
