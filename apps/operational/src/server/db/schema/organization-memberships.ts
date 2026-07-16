@@ -106,6 +106,11 @@ export const organizationMemberships = pgTable(
       table.id,
       table.organizationId,
     ),
+    unique("organization_memberships_id_organization_user_unique").on(
+      table.id,
+      table.organizationId,
+      table.userId,
+    ),
     index("organization_memberships_user_status_idx").on(
       table.userId,
       table.status,

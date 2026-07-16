@@ -11,6 +11,7 @@ export function OperationalNav({ context }: { context: AuthorizationContext }) {
       {hasPermission(context, "technician.read") ? <Link href="/app/technicians">Technicians</Link> : null}
       {hasPermission(context, "dispatch_assignment.read") ? <Link href="/app/dispatch">Dispatch</Link> : null}
       {hasPermission(context, "dispatch_assignment.read_own") ? <Link href="/app/my-assignments">My Assignments</Link> : null}
+      {hasPermission(context, "audit.read") ? <Link href="/app/audit">Audit</Link> : null}
     </nav>
   );
 }

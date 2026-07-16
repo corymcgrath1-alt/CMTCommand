@@ -270,6 +270,29 @@ Phase 5E still does not implement imports, readiness, coverage, Decision Log,
 general audit-event persistence, production authentication, or any Field
 Operations field session/evidence/report runtime.
 
+## Phase 5F General Audit Architecture - Confirmed
+
+The operational modular monolith now has a server-only `src/server/audit/`
+boundary for taxonomy, request context, validation, explicit serializers,
+transactional writes, and scoped queries. Existing membership and operational
+services call the writer inside their source-record transaction. Dispatch
+services keep assignment events and general events in the same boundary.
+
+`audit_events` is the shared persistence model. Composite foreign keys bind its
+optional office and actor membership to the event organization. PostgreSQL
+triggers reject update and delete. The protected `/api/audit` Route Handler and
+`/app/audit` Server Component call one bounded query service; neither accepts a
+client organization or actor-role claim.
+
+This architecture intentionally separates four concerns:
+
+1. Assignment events: domain lifecycle history.
+2. General audit events: cross-domain accountability facts.
+3. Application logs: runtime diagnostics.
+4. Future observability/SIEM: external operational export, not yet implemented.
+
+See [ADR-009](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md).
+
 ## Future Field Operations Architecture - Path B
 
 Field Operations Capture & Report Intelligence is documented as a future
@@ -290,8 +313,9 @@ The identity, membership, office access, and RBAC prerequisite is implemented as
 a local foundation. Phase 5E closes the durable-record portion of P2 with
 Project, Work Order, Assignment, Service Type, and Technician records, plus the
 assignment lifecycle and own-assignment handoff. Field Operations remains
-blocked on pilot-ready production identity, general audit-event persistence, a
-private object-storage/upload boundary, and approved report/retention policy.
+blocked on pilot-ready production identity, a private object-storage/upload
+boundary, and approved report/retention policy. Phase 5F closes only the local
+general audit-event prerequisite.
 It still must not begin as field-reporting tables or UI.
 
 See [Field Operations Capture And Reporting](13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md),
@@ -324,7 +348,9 @@ The current architecture favors a low-friction local demo with tested pure utili
 - Exact managed auth, database, and hosting providers remain checkpoints.
 - Production authentication remains fail-closed until a provider is selected;
   the current signed adapter is development/test only.
-- General persistent security audit events and PostgreSQL RLS remain deferred.
+- General append-only audit events now cover existing material Phase 5D/5E
+  mutations. PostgreSQL RLS, production database-role grants, audit archival,
+  legal hold, controlled purge, read auditing, and SIEM export remain deferred.
 - Import, availability, certification, clearance, equipment, calibration, and
   service-requirement foundations remain absent.
 - No durable readiness snapshot or Decision Log implementation exists.

@@ -154,6 +154,25 @@ managed provider account.
 This is still not a production database provider, backup, recovery, monitoring,
 or deployment configuration.
 
+## Phase 5F Audit Operations - Confirmed
+
+Migrations `0008` and `0009` add the audit schema and PostgreSQL append-only
+trigger. Apply them with the existing Drizzle migration command; do not run
+audit DDL from application startup and do not seed audit rows from migrations.
+
+The current local/test database user can create schema objects and execute the
+integration cleanup. Production roles are not defined yet. Before pilot
+deployment, define separate migration/application responsibilities and verify
+that the application role has only required insert and authorized select access,
+without ordinary audit update/delete privileges. The trigger remains defense in
+depth, not a substitute for least-privilege grants.
+
+No final retention duration is approved. Backups must retain audit/source
+transaction consistency. Legal hold, archive tiers, controlled purge, privacy
+request handling, audit-read monitoring, and external observability/SIEM export
+need approved runbooks before production use. Test cleanup remains limited to
+the exact loopback database guard and explicitly lists `audit_events` first.
+
 ## Phase 5D Authentication Operations - Confirmed
 
 No production identity provider is selected. Operational vNext defaults to
@@ -203,6 +222,8 @@ and manual authorized-request verification.
 - No production database backup/recovery procedure.
 - No deployed health-check monitor or provider-level health integration.
 - No structured logging or monitoring configuration.
+- No approved audit retention/archive/legal-hold/purge runbook or production
+  database-role grant model.
 
 ## Artifact Policy
 

@@ -42,6 +42,8 @@ describe("centralized permissions", () => {
       "dispatch_assignment.assign",
       "dispatch_assignment.transition",
       "dispatch_assignment.conflict_override",
+      "audit.read",
+      "audit.read_security",
     ]);
   });
 
@@ -54,6 +56,7 @@ describe("centralized permissions", () => {
       "dispatch_assignment.assign",
       "dispatch_assignment.transition",
       "dispatch_assignment.conflict_override",
+      "audit.read",
     ]);
   });
 
@@ -104,6 +107,25 @@ describe("centralized permissions", () => {
     expect(permissionsForRole("dispatcher")).not.toContain(
       "dispatch_assignment.conflict_override",
     );
+  });
+
+  it("limits general and security audit history to the designated roles", () => {
+    expect(permissionsForRole("organization_admin")).toEqual(
+      expect.arrayContaining(["audit.read", "audit.read_security"]),
+    );
+    expect(permissionsForRole("operations_manager")).toContain("audit.read");
+    expect(permissionsForRole("operations_manager")).not.toContain(
+      "audit.read_security",
+    );
+    for (const role of [
+      "dispatcher",
+      "technical_reviewer",
+      "field_technician",
+      "viewer",
+    ] as const) {
+      expect(permissionsForRole(role)).not.toContain("audit.read");
+      expect(permissionsForRole(role)).not.toContain("audit.read_security");
+    }
   });
 
   it("preserves organization-admin membership and office-access permissions", () => {

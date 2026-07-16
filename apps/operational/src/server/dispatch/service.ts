@@ -8,6 +8,9 @@ import {
 } from "drizzle-orm";
 import { canAccessOffice, hasPermission } from "@/server/auth/permissions";
 import type { AuthorizationContext } from "@/server/auth/types";
+import { createAuditRequestContext, type AuditRequestContext } from "@/server/audit/request-context";
+import { assignmentAuditState, workOrderAuditState } from "@/server/audit/serializers";
+import { appendAuditEvent, appendDeniedAuditEvent } from "@/server/audit/writer";
 import type { OperationalDatabase } from "@/server/db/client";
 import {
   assignmentEvents,
@@ -18,6 +21,7 @@ import {
   technicians,
   workOrders,
   type AssignmentEventRecord,
+  type AuditEventRecord,
   type DispatchAssignmentRecord,
   type DispatchAssignmentStatus,
   type WorkOrderRecord,
@@ -252,6 +256,7 @@ export async function transitionWorkOrder(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordMutationResult<WorkOrderRecord>> {
   if (!hasPermission(context, "work_order.manage")) return forbidden();
   const parsed = workOrderTransitionInputSchema.safeParse(input);
@@ -298,15 +303,6 @@ export async function transitionWorkOrder(
         };
       }
 
-      if (parsed.data.toStatus === "cancelled") {
-        await cancelWorkOrderAssignments(
-          transaction,
-          context,
-          current.id,
-          parsed.data.reason ?? "Work order cancelled",
-        );
-      }
-
       const [value] = await transaction
         .update(workOrders)
         .set({
@@ -326,7 +322,29 @@ export async function transitionWorkOrder(
         )
         .returning();
       if (!value) return { status: "stale_update" };
-      return okResult(value, context, "work_order.transitioned");
+      if (parsed.data.toStatus === "cancelled") {
+        await cancelWorkOrderAssignments(
+          transaction,
+          context,
+          current.id,
+          parsed.data.reason ?? "Work order cancelled",
+          auditRequestContext,
+        );
+      }
+      const action = parsed.data.toStatus === "cancelled"
+        ? "work_order.cancelled" as const
+        : "work_order.status_changed" as const;
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action,
+        outcome: "succeeded",
+        target: { type: "work_order", id: value.id },
+        requestContext: auditRequestContext,
+        reason: parsed.data.reason,
+        previousState: workOrderAuditState(current),
+        resultingState: workOrderAuditState(value),
+      });
+      return okResult(value, "work_order.transitioned", auditEvent);
     });
   } catch {
     return persistenceFailure();
@@ -337,16 +355,18 @@ export async function assignPrimaryTechnician(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<DispatchWorkflowMutationResult<DispatchAssignmentRecord>> {
-  return assignTechnician(db, context, input, "primary");
+  return assignTechnician(db, context, input, "primary", auditRequestContext);
 }
 
 export async function addSupportTechnician(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<DispatchWorkflowMutationResult<DispatchAssignmentRecord>> {
-  return assignTechnician(db, context, input, "support");
+  return assignTechnician(db, context, input, "support", auditRequestContext);
 }
 
 async function assignTechnician(
@@ -354,6 +374,7 @@ async function assignTechnician(
   context: AuthorizationContext,
   input: unknown,
   role: "primary" | "support",
+  auditRequestContext: AuditRequestContext,
 ): Promise<DispatchWorkflowMutationResult<DispatchAssignmentRecord>> {
   if (!hasPermission(context, "dispatch_assignment.assign")) return forbidden();
   const parsed = assignTechnicianInputSchema.safeParse(input);
@@ -361,8 +382,13 @@ async function assignTechnician(
     return { status: "validation_error", issues: validationIssues(parsed.error) };
   }
 
+  const conflictOverrideDenied: {
+    value: { assignmentId: string; officeId: string } | null;
+  } = { value: null };
   try {
-    return await db.transaction(async (transaction) => {
+    const result = await db.transaction<
+      DispatchWorkflowMutationResult<DispatchAssignmentRecord>
+    >(async (transaction) => {
       await lockOperationalOrganization(transaction, context.membership.organizationId);
       const current = await findAssignmentForMutation(
         transaction,
@@ -427,9 +453,15 @@ async function assignTechnician(
         current.assignmentEndAt,
       );
       const overrideFailure = validateConflictOverride(context, parsed.data, conflicts);
-      if (overrideFailure) return overrideFailure;
+      if (overrideFailure) {
+        if (overrideFailure.status === "forbidden" && parsed.data.overrideConflicts) {
+          conflictOverrideDenied.value = { assignmentId: current.id, officeId: current.officeId };
+        }
+        return overrideFailure;
+      }
 
       const previousTechnicianId = role === "primary" ? current.technicianId : null;
+      const previousSupportIds = await activeSupportTechnicianIds(transaction, current.id);
       if (role === "primary" && previousTechnicianId) {
         await transaction
           .update(assignmentTechnicians)
@@ -509,14 +541,62 @@ async function assignTechnician(
         });
       }
 
+      const resultingSupportIds = await activeSupportTechnicianIds(transaction, current.id);
+      const action = role === "support"
+        ? "dispatch_assignment.support_added" as const
+        : previousTechnicianId
+          ? "dispatch_assignment.primary_reassigned" as const
+          : "dispatch_assignment.primary_assigned" as const;
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action,
+        outcome: "succeeded",
+        target: { type: "dispatch_assignment", id: value.id },
+        secondaryTarget: { type: "technician", id: technician.id },
+        requestContext: auditRequestContext,
+        previousState: assignmentAuditState(current, previousSupportIds),
+        resultingState: assignmentAuditState(value, resultingSupportIds, conflicts.length > 0),
+        metadata: previousTechnicianId
+          ? { previousTechnicianId, newTechnicianId: technician.id }
+          : { technicianId: technician.id },
+      });
+      if (conflicts.length > 0) {
+        const visibleConflict = conflicts.find((conflict) => !conflict.redacted);
+        await appendAuditEvent(transaction, context, {
+          officeId: value.officeId,
+          action: "dispatch_assignment.conflict_overridden",
+          outcome: "succeeded",
+          target: { type: "dispatch_assignment", id: value.id },
+          secondaryTarget: visibleConflict && !visibleConflict.redacted
+            ? { type: "dispatch_assignment", id: visibleConflict.assignmentId }
+            : undefined,
+          requestContext: auditRequestContext,
+          reason: parsed.data.overrideReason,
+          previousState: assignmentAuditState(current, previousSupportIds),
+          resultingState: assignmentAuditState(value, resultingSupportIds, true),
+          metadata: { conflictCount: conflicts.length, resultingVersion: value.version },
+        });
+      }
+
       return okResult(
         value,
-        context,
         role === "primary"
           ? "dispatch_assignment.primary_assigned"
           : "dispatch_assignment.support_added",
+        auditEvent,
       );
     });
+    if (conflictOverrideDenied.value) {
+      await appendDeniedAuditEvent(db, context, {
+        officeId: conflictOverrideDenied.value.officeId,
+        action: "authorization.conflict_override_denied",
+        outcome: "denied",
+        target: { type: "dispatch_assignment", id: conflictOverrideDenied.value.assignmentId },
+        requestContext: auditRequestContext,
+        metadata: { requestedOperation: role === "primary" ? "assign_primary" : "add_support" },
+      });
+    }
+    return result;
   } catch {
     return persistenceFailure();
   }
@@ -526,6 +606,7 @@ export async function removeAssignmentTechnician(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordMutationResult<DispatchAssignmentRecord>> {
   if (!hasPermission(context, "dispatch_assignment.assign")) return forbidden();
   const parsed = removeAssignmentTechnicianInputSchema.safeParse(input);
@@ -566,6 +647,8 @@ export async function removeAssignmentTechnician(
         )
         .limit(1);
       if (!relationship) return notFoundOrInaccessible();
+
+      const previousSupportIds = await activeSupportTechnicianIds(transaction, current.id);
 
       await transaction
         .update(assignmentTechnicians)
@@ -609,8 +692,27 @@ export async function removeAssignmentTechnician(
         actedByUserId: context.user.id,
         assignmentVersion: value.version,
       });
-      await reconcileWorkOrder(transaction, context, current.workOrderId);
-      return okResult(value, context, "dispatch_assignment.technician_removed");
+      await reconcileWorkOrder(
+        transaction,
+        context,
+        current.workOrderId,
+        auditRequestContext,
+      );
+      const resultingSupportIds = await activeSupportTechnicianIds(transaction, current.id);
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: relationship.role === "primary"
+          ? "dispatch_assignment.primary_removed"
+          : "dispatch_assignment.support_removed",
+        outcome: "succeeded",
+        target: { type: "dispatch_assignment", id: value.id },
+        secondaryTarget: { type: "technician", id: relationship.technicianId },
+        requestContext: auditRequestContext,
+        reason: parsed.data.reason,
+        previousState: assignmentAuditState(current, previousSupportIds),
+        resultingState: assignmentAuditState(value, resultingSupportIds),
+      });
+      return okResult(value, "dispatch_assignment.technician_removed", auditEvent);
     });
   } catch {
     return persistenceFailure();
@@ -621,18 +723,29 @@ export async function transitionAssignment(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordMutationResult<DispatchAssignmentRecord>> {
   if (!hasPermission(context, "dispatch_assignment.transition")) return forbidden();
-  return transitionAssignmentWithPermission(db, context, input, false);
+  return transitionAssignmentWithPermission(db, context, input, false, auditRequestContext);
 }
 
 export async function acknowledgeOwnAssignment(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordMutationResult<DispatchAssignmentRecord>> {
-  if (!hasPermission(context, "dispatch_assignment.acknowledge_own")) return forbidden();
-  return transitionAssignmentWithPermission(db, context, input, true);
+  if (!hasPermission(context, "dispatch_assignment.acknowledge_own")) {
+    await appendDeniedAuditEvent(db, context, {
+      action: "authorization.own_assignment_access_denied",
+      outcome: "denied",
+      target: { type: "organization", id: context.membership.organizationId },
+      requestContext: auditRequestContext,
+      metadata: { requestedOperation: "acknowledge_assignment" },
+    });
+    return forbidden();
+  }
+  return transitionAssignmentWithPermission(db, context, input, true, auditRequestContext);
 }
 
 async function transitionAssignmentWithPermission(
@@ -640,6 +753,7 @@ async function transitionAssignmentWithPermission(
   context: AuthorizationContext,
   input: unknown,
   ownAcknowledgment: boolean,
+  auditRequestContext: AuditRequestContext,
 ): Promise<OperationalRecordMutationResult<DispatchAssignmentRecord>> {
   const parsed = assignmentTransitionInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -649,8 +763,13 @@ async function transitionAssignmentWithPermission(
     return { status: "invalid_transition" };
   }
 
+  const ownAccessDenied: {
+    value: { assignmentId: string; officeId: string } | null;
+  } = { value: null };
   try {
-    return await db.transaction(async (transaction) => {
+    const result = await db.transaction<
+      OperationalRecordMutationResult<DispatchAssignmentRecord>
+    >(async (transaction) => {
       await lockOperationalOrganization(transaction, context.membership.organizationId);
       const current = await findAssignmentForMutation(
         transaction,
@@ -698,8 +817,13 @@ async function transitionAssignmentWithPermission(
             ),
           )
           .limit(1);
-        if (!ownedPrimary) return notFoundOrInaccessible();
+        if (!ownedPrimary) {
+          ownAccessDenied.value = { assignmentId: current.id, officeId: current.officeId };
+          return notFoundOrInaccessible();
+        }
       }
+
+      const previousSupportIds = await activeSupportTechnicianIds(transaction, current.id);
 
       const [value] = await transaction
         .update(dispatchAssignments)
@@ -743,15 +867,58 @@ async function transitionAssignmentWithPermission(
           parsed.data.reason ?? `Assignment ${parsed.data.toStatus}`,
         );
       }
-      await reconcileWorkOrder(transaction, context, current.workOrderId);
+      await reconcileWorkOrder(
+        transaction,
+        context,
+        current.workOrderId,
+        auditRequestContext,
+      );
+      const resultingSupportIds = await activeSupportTechnicianIds(transaction, current.id);
+      const action = auditActionForAssignmentTransition(parsed.data.toStatus);
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action,
+        outcome: "succeeded",
+        target: { type: "dispatch_assignment", id: value.id },
+        secondaryTarget: value.technicianId
+          ? { type: "technician", id: value.technicianId }
+          : undefined,
+        requestContext: auditRequestContext,
+        reason: parsed.data.reason,
+        previousState: assignmentAuditState(current, previousSupportIds),
+        resultingState: assignmentAuditState(value, resultingSupportIds),
+      });
       return okResult(
         value,
-        context,
         ownAcknowledgment
           ? "dispatch_assignment.acknowledged"
           : "dispatch_assignment.transitioned",
+        auditEvent,
       );
     });
+    if (ownAccessDenied.value) {
+      await appendDeniedAuditEvent(db, context, {
+        officeId: ownAccessDenied.value.officeId,
+        action: "authorization.own_assignment_access_denied",
+        outcome: "denied",
+        target: { type: "dispatch_assignment", id: ownAccessDenied.value.assignmentId },
+        requestContext: auditRequestContext,
+        metadata: { requestedOperation: "acknowledge_assignment" },
+      });
+    }
+    if (
+      !ownAcknowledgment &&
+      result.status === "not_found_or_inaccessible"
+    ) {
+      await recordCrossOfficeAssignmentDenialIfApplicable(
+        db,
+        context,
+        parsed.data.assignmentId,
+        auditRequestContext,
+        "transition_assignment",
+      );
+    }
+    return result;
   } catch {
     return persistenceFailure();
   }
@@ -761,6 +928,7 @@ export async function updateAssignmentSchedule(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<DispatchWorkflowMutationResult<DispatchAssignmentRecord>> {
   if (!hasPermission(context, "dispatch_assignment.manage")) return forbidden();
   const parsed = updateAssignmentScheduleInputSchema.safeParse(input);
@@ -768,8 +936,13 @@ export async function updateAssignmentSchedule(
     return { status: "validation_error", issues: validationIssues(parsed.error) };
   }
 
+  const conflictOverrideDenied: {
+    value: { assignmentId: string; officeId: string } | null;
+  } = { value: null };
   try {
-    return await db.transaction(async (transaction) => {
+    const result = await db.transaction<
+      DispatchWorkflowMutationResult<DispatchAssignmentRecord>
+    >(async (transaction) => {
       await lockOperationalOrganization(transaction, context.membership.organizationId);
       const current = await findAssignmentForMutation(
         transaction,
@@ -813,7 +986,12 @@ export async function updateAssignmentSchedule(
         )
       ).flat();
       const overrideFailure = validateConflictOverride(context, parsed.data, conflicts);
-      if (overrideFailure) return overrideFailure;
+      if (overrideFailure) {
+        if (overrideFailure.status === "forbidden" && parsed.data.overrideConflicts) {
+          conflictOverrideDenied.value = { assignmentId: current.id, officeId: current.officeId };
+        }
+        return overrideFailure;
+      }
 
       const [value] = await transaction
         .update(dispatchAssignments)
@@ -858,8 +1036,48 @@ export async function updateAssignmentSchedule(
           assignmentVersion: value.version,
         });
       }
-      return okResult(value, context, "dispatch_assignment.schedule_updated");
+      const supportIds = activeTechnicians
+        .map((relationship) => relationship.technicianId)
+        .filter((technicianId) => technicianId !== current.technicianId);
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: "dispatch_assignment.schedule_changed",
+        outcome: "succeeded",
+        target: { type: "dispatch_assignment", id: value.id },
+        requestContext: auditRequestContext,
+        previousState: assignmentAuditState(current, supportIds),
+        resultingState: assignmentAuditState(value, supportIds, conflicts.length > 0),
+      });
+      if (conflicts.length > 0) {
+        const visibleConflict = conflicts.find((conflict) => !conflict.redacted);
+        await appendAuditEvent(transaction, context, {
+          officeId: value.officeId,
+          action: "dispatch_assignment.conflict_overridden",
+          outcome: "succeeded",
+          target: { type: "dispatch_assignment", id: value.id },
+          secondaryTarget: visibleConflict && !visibleConflict.redacted
+            ? { type: "dispatch_assignment", id: visibleConflict.assignmentId }
+            : undefined,
+          requestContext: auditRequestContext,
+          reason: parsed.data.overrideReason,
+          previousState: assignmentAuditState(current, supportIds),
+          resultingState: assignmentAuditState(value, supportIds, true),
+          metadata: { conflictCount: conflicts.length, resultingVersion: value.version },
+        });
+      }
+      return okResult(value, "dispatch_assignment.schedule_updated", auditEvent);
     });
+    if (conflictOverrideDenied.value) {
+      await appendDeniedAuditEvent(db, context, {
+        officeId: conflictOverrideDenied.value.officeId,
+        action: "authorization.conflict_override_denied",
+        outcome: "denied",
+        target: { type: "dispatch_assignment", id: conflictOverrideDenied.value.assignmentId },
+        requestContext: auditRequestContext,
+        metadata: { requestedOperation: "change_schedule" },
+      });
+    }
+    return result;
   } catch {
     return persistenceFailure();
   }
@@ -933,6 +1151,40 @@ async function findScheduleConflicts(
   );
 }
 
+async function recordCrossOfficeAssignmentDenialIfApplicable(
+  db: OperationalDatabase,
+  context: AuthorizationContext,
+  assignmentId: string,
+  auditRequestContext: AuditRequestContext,
+  requestedOperation: string,
+): Promise<void> {
+  const [sameOrganizationAssignment] = await db
+    .select({ id: dispatchAssignments.id, officeId: dispatchAssignments.officeId })
+    .from(dispatchAssignments)
+    .where(
+      and(
+        eq(dispatchAssignments.id, assignmentId),
+        eq(dispatchAssignments.organizationId, context.membership.organizationId),
+      ),
+    )
+    .limit(1);
+  if (
+    !sameOrganizationAssignment ||
+    canAccessOffice(context, sameOrganizationAssignment.officeId)
+  ) {
+    return;
+  }
+
+  await appendDeniedAuditEvent(db, context, {
+    officeId: sameOrganizationAssignment.officeId,
+    action: "authorization.cross_office_mutation_denied",
+    outcome: "denied",
+    target: { type: "dispatch_assignment", id: sameOrganizationAssignment.id },
+    requestContext: auditRequestContext,
+    metadata: { requestedOperation },
+  });
+}
+
 function validateConflictOverride(
   context: AuthorizationContext,
   input: { overrideConflicts: boolean; overrideReason?: string },
@@ -954,6 +1206,7 @@ async function reconcileWorkOrder(
   transaction: OperationalTransaction,
   context: AuthorizationContext,
   workOrderId: string,
+  auditRequestContext: AuditRequestContext,
 ): Promise<void> {
   const [workOrder] = await transaction
     .select()
@@ -980,7 +1233,7 @@ async function reconcileWorkOrder(
     statuses.map((row) => row.status),
   );
   if (nextStatus === workOrder.status) return;
-  await transaction
+  const [resultingWorkOrder] = await transaction
     .update(workOrders)
     .set({
       status: nextStatus,
@@ -993,7 +1246,19 @@ async function reconcileWorkOrder(
         eq(workOrders.id, workOrder.id),
         eq(workOrders.organizationId, context.membership.organizationId),
       ),
-    );
+    )
+    .returning();
+  if (!resultingWorkOrder) throw new Error("work_order_reconciliation_failed");
+  await appendAuditEvent(transaction, context, {
+    officeId: resultingWorkOrder.officeId,
+    action: "work_order.status_changed",
+    outcome: "succeeded",
+    target: { type: "work_order", id: resultingWorkOrder.id },
+    requestContext: auditRequestContext,
+    previousState: workOrderAuditState(workOrder),
+    resultingState: workOrderAuditState(resultingWorkOrder),
+    metadata: { source: "assignment_reconciliation" },
+  });
 }
 
 async function cancelWorkOrderAssignments(
@@ -1001,6 +1266,7 @@ async function cancelWorkOrderAssignments(
   context: AuthorizationContext,
   workOrderId: string,
   reason: string,
+  auditRequestContext: AuditRequestContext,
 ): Promise<void> {
   const activeAssignments = await transaction
     .select()
@@ -1013,6 +1279,7 @@ async function cancelWorkOrderAssignments(
       ),
     );
   for (const assignment of activeAssignments) {
+    const supportIds = await activeSupportTechnicianIds(transaction, assignment.id);
     const [updated] = await transaction
       .update(dispatchAssignments)
       .set({
@@ -1025,6 +1292,7 @@ async function cancelWorkOrderAssignments(
       })
       .where(eq(dispatchAssignments.id, assignment.id))
       .returning();
+    if (!updated) throw new Error("assignment_cancellation_failed");
     await transaction.insert(assignmentEvents).values({
       organizationId: context.membership.organizationId,
       officeId: assignment.officeId,
@@ -1043,6 +1311,18 @@ async function cancelWorkOrderAssignments(
       context.user.id,
       reason,
     );
+    await appendAuditEvent(transaction, context, {
+      officeId: updated.officeId,
+      action: "dispatch_assignment.cancelled",
+      outcome: "succeeded",
+      target: { type: "dispatch_assignment", id: updated.id },
+      secondaryTarget: { type: "work_order", id: workOrderId },
+      requestContext: auditRequestContext,
+      reason,
+      previousState: assignmentAuditState(assignment, supportIds),
+      resultingState: assignmentAuditState(updated, []),
+      metadata: { source: "work_order_cancellation" },
+    });
   }
 }
 
@@ -1066,6 +1346,23 @@ async function endActiveRelationships(
         eq(assignmentTechnicians.status, "active"),
       ),
     );
+}
+
+async function activeSupportTechnicianIds(
+  transaction: OperationalTransaction,
+  assignmentId: string,
+): Promise<string[]> {
+  const rows = await transaction
+    .select({ technicianId: assignmentTechnicians.technicianId })
+    .from(assignmentTechnicians)
+    .where(
+      and(
+        eq(assignmentTechnicians.dispatchAssignmentId, assignmentId),
+        eq(assignmentTechnicians.role, "support"),
+        eq(assignmentTechnicians.status, "active"),
+      ),
+    );
+  return rows.map((row) => row.technicianId);
 }
 
 async function addTechnicianRelationships(
@@ -1117,12 +1414,27 @@ async function addTechnicianRelationships(
 
 function okResult<T extends { id: string }>(
   value: T,
-  context: AuthorizationContext,
   action: Parameters<typeof createMutationMetadata>[0],
+  auditEvent: AuditEventRecord,
 ): OperationalRecordMutationResult<T> {
   return {
     status: "ok",
     value,
-    mutation: createMutationMetadata(action, context, value.id),
+    mutation: createMutationMetadata(action, value.id, auditEvent),
   };
+}
+
+function auditActionForAssignmentTransition(
+  toStatus: DispatchAssignmentStatus,
+) {
+  const actionByStatus = {
+    draft: "dispatch_assignment.created",
+    unassigned: "dispatch_assignment.primary_removed",
+    assigned: "dispatch_assignment.primary_assigned",
+    acknowledged: "dispatch_assignment.acknowledged",
+    in_progress: "dispatch_assignment.started",
+    completed: "dispatch_assignment.completed",
+    cancelled: "dispatch_assignment.cancelled",
+  } as const;
+  return actionByStatus[toStatus];
 }

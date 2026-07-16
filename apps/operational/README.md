@@ -4,8 +4,9 @@ This directory contains the guarded Operational vNext foundation for CMTCommand.
 It proves the app boundary, TypeScript/Next.js toolchain, health endpoints,
 environment validation, Drizzle/PostgreSQL wiring, organization/office tenancy
 persistence, provider-neutral identity, memberships, office assignments,
-server-enforced RBAC, a durable operational dispatch workflow, unit testing,
-PostgreSQL integration testing, and browser acceptance coverage.
+server-enforced RBAC, a durable operational dispatch workflow, transactional
+append-only general audit history, unit testing, PostgreSQL integration testing,
+and browser acceptance coverage.
 
 It does not implement the end-to-end Pilot V1 business workflow.
 
@@ -30,8 +31,11 @@ Implemented in this scaffold:
 - Permission- and office-scoped create/list/update/transition services with
   optimistic concurrency, transactional actor revalidation, schedule conflict
   detection, work-order reconciliation, and own-assignment authorization.
-- Protected Projects, Work Orders, Technicians, Dispatch, and My Assignments
-  pages plus thin protected JSON APIs.
+- Protected Projects, Work Orders, Technicians, Dispatch, My Assignments, and
+  Audit pages plus thin protected JSON APIs.
+- Typed, privacy-bounded general audit events for existing material membership,
+  office-access, project, service-type, technician, work-order, and dispatch
+  mutations, with server request correlation and PostgreSQL immutability.
 - `/api/health` liveness endpoint.
 - `/api/ready` database-readiness endpoint.
 - Vitest unit tests.
@@ -44,8 +48,6 @@ Not implemented:
 - A production authentication provider or production sign-in flow.
 - Invitation acceptance or email delivery. The administrator can prepare an
   invited membership only.
-- Persistent general audit events. Security mutations return structured,
-  actor-attributed metadata for a future audit sink.
 - Imports, equipment/certification/clearance records, readiness rules, coverage,
   Decision Log, operational impact, Field Operations, or deployment.
 
@@ -133,6 +135,9 @@ foundation:
 - `src/server/db/schema/technicians.ts`
 - `src/server/db/schema/work-orders.ts`
 - `src/server/db/schema/dispatch-assignments.ts`
+- `src/server/db/schema/assignment-technicians.ts`
+- `src/server/db/schema/assignment-events.ts`
+- `src/server/db/schema/audit-events.ts`
 
 Generate migrations after schema changes:
 
@@ -281,15 +286,20 @@ Implemented:
   only own-assignment read and acknowledgment.
 - Operational mutation services lock the organization and revalidate active user,
   organization, membership, current role permission, and office access inside
-  the transaction. Assignment events are durable domain history, not the general
-  audit platform.
+  the transaction. Assignment events are durable domain history; separate
+  general audit events capture cross-domain accountability in the same source
+  transaction.
+- General audit reads require `audit.read`; security categories additionally
+  require `audit.read_security`. Query filters cannot override server-derived
+  organization or restricted-office scope.
 
 Not implemented:
 
 - Production authentication provider integration.
 - Invitation acceptance and delivery.
-- Persistent general audit-event storage.
 - PostgreSQL Row-Level Security.
+- Production audit retention, archival, legal hold, controlled purge,
+  database-role grants, read auditing, and SIEM export.
 - Import, readiness, coverage, Decision Log, Field Operations, and remaining
   readiness-data domains.
 
@@ -310,6 +320,9 @@ With the local development setup running:
 4. As `alpha-admin`, open `/app/admin/members`, prepare a membership, and verify
    the UI says no email was sent.
 5. As `beta-admin`, verify Alpha offices and members are inaccessible.
+6. As `alpha-admin`, open `/app/audit`; as `alpha-operations`, verify only
+   Alexandria operational events are visible; as `alpha-dispatcher`, verify
+   `/api/audit` returns a safe forbidden result.
 
 Common controlled failures:
 
@@ -341,8 +354,9 @@ Start with the CMTCommand Bible:
 - [Phase 4 scaffolding report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_4_SCAFFOLDING_REPORT.md)
 - [Phase 5D identity/RBAC report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_5D_IDENTITY_RBAC_REPORT.md)
 - [Phase 5E durable operational-records report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md)
+- [Phase 5F general audit-persistence report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_5F_GENERAL_AUDIT_PERSISTENCE_REPORT.md)
 
 This scaffold is not ready for pilot use until later guarded phases add the
 remaining operational data domains, imports, readiness engine, coverage
-workflow, persistent general audit events, production identity provider, and
-pilot operations.
+workflow, production identity provider, approved audit retention operations,
+private storage, and pilot operations.

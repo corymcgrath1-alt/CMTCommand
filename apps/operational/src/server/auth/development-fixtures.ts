@@ -68,7 +68,9 @@ type DevelopmentIdentityFixture = {
 
 export const developmentIdentityFixtures: DevelopmentIdentityFixture[] = [
   fixture(1, "alpha-admin", "Alpha Admin", "organization_admin", "all"),
-  fixture(2, "alpha-operations", "Alpha Operations", "operations_manager", "all"),
+  fixture(2, "alpha-operations", "Alpha Operations", "operations_manager", "restricted", [
+    developmentOffices[0].id,
+  ]),
   fixture(3, "alpha-dispatcher", "Alpha Dispatcher", "dispatcher", "restricted", [
     developmentOffices[0].id,
   ]),

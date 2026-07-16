@@ -23,6 +23,7 @@ export default async function globalSetup() {
         },
         async () => {
           await transaction.execute(sql`truncate table
+            "audit_events",
             "assignment_events",
             "assignment_technicians",
             "dispatch_assignments",

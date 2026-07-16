@@ -70,6 +70,27 @@ boundaries do not conflict. Active relationships on non-cancelled assignments
 are checked; an override is blocked by default and requires explicit permission,
 an explicit reason, actor attribution, and a durable `conflict_overridden` event.
 
+## Phase 5F Audit Domain - Confirmed
+
+- **Audit Event**: an immutable general operational or security fact recording
+  verified actor context, taxonomy, outcome, target, bounded state, request
+  correlation, office context, and server time.
+- **Assignment Event**: append-only domain history for dispatch assignment
+  lifecycle and technician relationships. It is not the general audit record.
+- **Application Log**: diagnostic runtime output. Logs may be rotated or sampled
+  and are not the authoritative accountability record.
+- **Security Audit Event**: a membership, authorization, organization, office,
+  authentication, or system category that requires the stronger
+  `audit.read_security` permission.
+- **Actor Role Snapshot**: the persisted role at event time. It explains the
+  historical context and does not grant current access.
+- **Correlation ID**: a server-generated identifier shared by related events
+  from one material operation. It is not a session or credential.
+
+Audit state is a minimal allowlisted explanation of material changes, not a
+copy of a source row. Contact details, credentials, documents, media,
+transcripts, and report contents are outside the audit-state contract.
+
 ## Readiness Status Rules - Pilot V1 Target
 
 Status precedence:

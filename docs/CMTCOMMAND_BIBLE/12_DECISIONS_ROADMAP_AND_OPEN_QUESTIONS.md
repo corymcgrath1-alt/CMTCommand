@@ -49,7 +49,7 @@
 | Pilot V1 is a 90-day, single-office pilot. | Founder decision, 2026-07-13 | Scope should not expand into enterprise rollout or deep integrations. | Limits broader market proof. | Target |
 | Customer systems remain source of truth for underlying operational records. | Founder decision, 2026-07-13 | CMTCommand should import, evaluate, and record decisions without silent writeback. | Requires explicit source-boundary messaging. | Target |
 | Readiness rules are deterministic, explainable, and use Not Ready > At Risk > Ready precedence. | Founder decision, 2026-07-13 | Operational logic must be test-first and rule-backed. | Thresholds and ranking weights remain open. | Target |
-| Pilot V1 is invite-only, organization-scoped, role-based, and auditable. | Founder decision, 2026-07-13 | Auth, RBAC, tenant scoping, and audit tests become core requirements. | Identity/RBAC foundation exists; production provider, invitation delivery, and audit persistence remain unresolved. | Target |
+| Pilot V1 is invite-only, organization-scoped, role-based, and auditable. | Founder decision, 2026-07-13 | Auth, RBAC, tenant scoping, and audit tests become core requirements. | Identity/RBAC and general audit persistence exist for local/test scope; production provider, invitation delivery, and retention operations remain unresolved. | Target |
 | Pilot V1 uses minimum business-operational data and forbids sensitive categories. | Founder decision, 2026-07-13 | Imports must detect prohibited/unexpected sensitive columns. | Exact retention/deletion policy remains open. | Target |
 | Pilot V1 needs managed deployment, backups, rollback, health, logging, and monitoring. | Founder decision, 2026-07-13 | Architecture selection must include operations, not just framework choice. | Vendor remains unresolved. | Target |
 | Browser validation becomes blocking only after stabilization; ten clean runs is the proposed threshold. | Founder decision, 2026-07-13 | Avoids turning flaky browser checks into merge gates. | Requires reliability tracking before enforcement. | Target policy |
@@ -67,8 +67,9 @@
 | Imports use database-tracked in-app processing, not distributed queue infrastructure by default. | [ADR-005](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md) | Keeps Pilot V1 simple and observable. | Queue may be needed if measured imports exceed platform limits. | Target |
 | Phase 4 operational scaffold lives under `apps/operational/`. | [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md), `apps/operational/package.json`, `.github/workflows/operational-ci.yml` | Future operational work has an app-local Next.js, TypeScript, npm, test, build, health, and Drizzle boundary. | No Pilot V1 business behavior is implemented yet. | Yes |
 | Phase 5 implements only organization/office tenancy persistence before users or product workflows. | [Phase 5 Tenancy Foundation Report](plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md), `apps/operational/drizzle/0000_open_giant_girl.sql`, `apps/operational/src/server/tenancy/` | Tenant-owned office data now has a tested persistence boundary before identities, roles, imports, readiness, or coverage. | Scopes are supplied by trusted internal callers/tests until authentication and memberships exist. | Yes |
-| Authorization scope is derived server-side from verified identity and active membership. | [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md), [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md) | Protected requests revalidate application user, membership, organization, office scope, and permissions; browser claims are untrusted. | Production auth provider and persistent audit events remain checkpoints. | Yes |
+| Authorization scope is derived server-side from verified identity and active membership. | [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md), [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md) | Protected requests revalidate application user, membership, organization, office scope, and permissions; browser claims are untrusted. | Production auth provider remains a checkpoint; Phase 5F supplies bounded local/test audit persistence. | Yes |
 | Dispatch assignments and append-only assignment events are the durable operational handoff into future Field Operations. | [ADR-008](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md), [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md) | Phase 5E owns durable service types, primary/support relationships, lifecycle transitions, conflict policy, own-assignment access, and work-order reconciliation. | Assignment events are domain history, not the general audit platform; Field Operations remains unimplemented. | Yes |
+| Material mutations write transactional append-only general audit events. | [ADR-009](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md), [Phase 5F report](plans/PHASE_5F_GENERAL_AUDIT_PERSISTENCE_REPORT.md) | Existing Phase 5D/5E material mutations persist verified actor, taxonomy, bounded state, and request correlation atomically; scoped history is available to authorized roles. | Production retention, archival, database-role grants, read auditing, and SIEM remain unresolved. | Yes |
 
 ## Field Operations Architecture Direction - 2026-07-15
 
@@ -129,9 +130,9 @@ Do not treat old candidate slices as committed roadmap unless they align with th
 Future Field Operations direction:
 
 - Complete the remaining shared Operational vNext prerequisites first:
-  production authentication, general audit events, private storage/upload
-  authorization, and approved report/retention policy. The local identity/RBAC
-  foundation and durable-record P2 gate are implemented.
+  production authentication, private storage/upload authorization, and approved
+  report/retention policy. The local identity/RBAC, durable-record P2, and
+  bounded local/test general-audit P3 gates are implemented.
 - Treat [FR-0](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md) as documentation/architecture complete only.
 - Do not begin the concrete-inspection FR-1 vertical slice until every prerequisite gate and organization-specific report requirement is verified.
 - Keep FR-2 offline/media resilience, FR-3 additional templates, FR-4 email/Procore adapters, FR-5 plan-location intelligence, and FR-6 advanced analytics deferred.
@@ -175,8 +176,8 @@ Future Field Operations direction:
 ### Security
 
 - [OPEN QUESTION - High Impact] What approval threshold distinguishes ordinary coverage decisions from significant operational changes?
-- [OPEN QUESTION - High Impact] Which persistent security audit-event schema and
-  retention policy should receive the structured Phase 5D mutation metadata?
+- [OPEN QUESTION - High Impact] What approved retention, archival, legal-hold,
+  controlled-purge, and privacy-request policy applies to general audit events?
 - [OPEN QUESTION - Medium Impact] What safe logging policy applies to pilot data and import failures?
 - [OPEN QUESTION - Medium Impact] Should PostgreSQL RLS be enabled before pilot production as defense in depth after the app-owned authorization model exists?
 

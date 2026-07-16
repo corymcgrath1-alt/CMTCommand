@@ -304,9 +304,39 @@ Mutations serialize on the organization and revalidate the actor, membership,
 role permission, and office access inside the transaction.
 
 Assignment events persist operational history and actor attribution, but they
-are not a general audit-event implementation. Phase 5E has no import path,
+are not the general audit-event implementation. Phase 5E has no import path,
 hard-delete operation, readiness, coverage, Decision Log, field session,
 evidence, report, sample, or integration record.
+
+## Phase 5F General Audit Persistence - Confirmed
+
+`audit_events` is an organization-owned append-only accountability table. It
+stores a nullable same-organization office, verified actor user and optional
+composite actor membership, historical actor role, typed category/action/outcome,
+primary and optional secondary target, server-generated request/correlation/
+transaction identifiers, bounded reason/state/metadata, and server timestamp.
+
+PostgreSQL integrity includes:
+
+- composite office/organization and actor membership/organization/user foreign
+  keys;
+- paired secondary target columns and bounded nonblank reason checks;
+- JSON object-shape limits of 4,096 bytes for previous/resulting state and 8,192
+  bytes for metadata;
+- indexes for organization/time, office, actor, target, taxonomy, request, and
+  correlation lookups; and
+- one trigger that rejects both ordinary update and delete with SQLSTATE 55000.
+
+The server writer revalidates the current active actor in the source mutation
+transaction and derives category from the typed action. Explicit serializers
+persist status, version, schedule, relationship, and identifier facts only.
+They exclude full rows, contact details, credentials, documents, transcripts,
+media, and report contents. Query input defaults to 30 days and 25 rows, limits
+date ranges to 90 days and pages to 100 rows, uses `(occurred_at, id)` stable
+pagination, and always applies server organization and office scope before
+caller filters.
+
+See [ADR-009](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md).
 
 ## Derived Data
 
@@ -351,7 +381,7 @@ External integrations explicitly absent in current root evidence:
   dispatch-assignment, assignment-technician, and assignment-event schemas
   exist. The remaining Pilot V1 records do not.
 - Operational vNext still has no import, readiness, coverage, Decision Log,
-  general audit-event, equipment, availability, certification, clearance,
+  equipment, availability, certification, clearance,
   calibration, service-requirement, or readiness-snapshot tables.
 - Phase 5E pages and APIs expose only bounded operational dispatch workflows;
   they do not expose deferred readiness, coverage, or Field Operations behavior.

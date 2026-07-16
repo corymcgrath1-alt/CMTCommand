@@ -1,11 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
+import { appendAuditEvent } from "../../src/server/audit/writer";
+import { createAuditRequestContext } from "../../src/server/audit/request-context";
+import { listAuditEvents } from "../../src/server/audit/query-service";
+import type { AuditAction } from "../../src/server/audit/taxonomy";
 import { createAuthorizationRepository } from "../../src/server/auth/repository";
 import { resolveAuthorizationState } from "../../src/server/auth/resolver";
 import type { AuthorizationContext } from "../../src/server/auth/types";
 import { closeDatabasePool, getDatabase, type OperationalDatabase } from "../../src/server/db/client";
 import {
+  assignmentEvents,
+  auditEvents,
   dispatchAssignments,
   externalIdentities,
   officeAssignments,
@@ -22,6 +28,9 @@ import {
   type TechnicianRecord,
   type WorkOrderRecord,
 } from "../../src/server/db/schema";
+import {
+  updateProject,
+} from "../../src/server/operational-records/catalog-service";
 import {
   getAuthorizedTestDatabaseCleanupConfig,
   runAuthorizedTestDatabaseCleanup,
@@ -1381,6 +1390,428 @@ describe("durable operational records", () => {
   });
 });
 
+describe("Phase 5F append-only audit persistence", () => {
+  it("installs the audit table, indexes, and append-only trigger", async () => {
+    const result = await db.execute<{
+      table_name: string | null;
+      trigger_count: string;
+      index_count: string;
+    }>(sql`
+      select
+        to_regclass('public.audit_events')::text as table_name,
+        (select count(*)::text from pg_trigger
+          where tgrelid = 'public.audit_events'::regclass and not tgisinternal) as trigger_count,
+        (select count(*)::text from pg_indexes
+          where schemaname = 'public' and tablename = 'audit_events') as index_count
+    `);
+
+    expect(result.rows[0]).toEqual({
+      table_name: "audit_events",
+      trigger_count: "1",
+      index_count: "8",
+    });
+  });
+
+  it("persists a valid event with the trusted actor snapshot", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const event = await appendTestAudit(db, admin, fixture.alphaOffice.id);
+
+    expect(event).toMatchObject({
+      organizationId: fixture.organizationA.id,
+      officeId: fixture.alphaOffice.id,
+      actorUserId: fixture.alphaAdmin.id,
+      actorMembershipId: fixture.alphaAdminMembership.id,
+      actorRole: "organization_admin",
+      category: "project",
+      action: "project.created",
+      outcome: "succeeded",
+    });
+  });
+
+  it.each(["update", "delete"] as const)(
+    "rejects direct audit-event %s in PostgreSQL",
+    async (operation) => {
+      const fixture = await seedAuthorizationFixture(db);
+      const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+      const event = await appendTestAudit(db, admin, fixture.alphaOffice.id);
+      const error = await captureDatabaseError(() =>
+        operation === "update"
+          ? db.update(auditEvents).set({ reason: "tampered" }).where(eq(auditEvents.id, event.id))
+          : db.delete(auditEvents).where(eq(auditEvents.id, event.id)),
+      );
+
+      expect(getPostgresErrorInfo(error).code).toBe("55000");
+      expect(await db.select().from(auditEvents).where(eq(auditEvents.id, event.id)))
+        .toHaveLength(1);
+    },
+  );
+
+  it("rejects a cross-organization office reference", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const error = await captureDatabaseError(() =>
+      appendTestAudit(db, admin, fixture.betaOffice.id),
+    );
+
+    expect(getPostgresErrorInfo(error)).toMatchObject({
+      code: "23503",
+      constraint: "audit_events_office_organization_fk",
+    });
+  });
+
+  it("rejects an actor membership that does not match organization and user", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const error = await captureDatabaseError(() =>
+      db.insert(auditEvents).values(auditRowValues(fixture, {
+        actorMembershipId: fixture.betaAdminMembership.id,
+      })),
+    );
+
+    expect(getPostgresErrorInfo(error)).toMatchObject({
+      code: "23503",
+      constraint: "audit_events_actor_membership_organization_user_fk",
+    });
+  });
+
+  it("rejects excessive or prohibited metadata before persistence", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+
+    await expect(
+      db.transaction((transaction) =>
+        appendAuditEvent(transaction, admin, {
+          officeId: fixture.alphaOffice.id,
+          action: "project.created",
+          outcome: "succeeded",
+          target: { type: "project", id: randomUUID() },
+          requestContext: createAuditRequestContext(),
+          metadata: { accessToken: "must-not-persist" },
+        }),
+      ),
+    ).rejects.toThrow(/prohibited audit field/);
+    await expect(
+      db.insert(auditEvents).values(auditRowValues(fixture, {
+        metadata: { note: "x".repeat(9_000) },
+      })),
+    ).rejects.toSatisfy((error: unknown) =>
+      getPostgresErrorInfo(error).constraint === "audit_events_metadata_shape_size_check",
+    );
+    expect(await db.select().from(auditEvents)).toEqual([]);
+  });
+
+  it("commits a project mutation and its general audit event together", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const manager = await authorizedContext(
+      db,
+      "alpha-operations-manager",
+      fixture.organizationA.id,
+    );
+    const result = mustBeCreated(
+      await createProject(db, manager, projectInput(fixture.alphaOffice.id, "atomic-success")),
+    );
+    const events = await db.select().from(auditEvents)
+      .where(eq(auditEvents.targetId, result.value.id));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ action: "project.created", outcome: "succeeded" });
+    expect(result.mutation.mutationId).toBe(events[0]?.id);
+    expect(result.mutation.requestId).toBe(events[0]?.requestId);
+  });
+
+  it("rolls back a controlled source mutation when audit insertion fails", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+
+    await expect(db.transaction(async (transaction) => {
+      const [project] = await transaction.insert(projects).values({
+        organizationId: fixture.organizationA.id,
+        officeId: fixture.alphaOffice.id,
+        sourceSystem: "audit-rollback",
+        sourceProjectId: "rollback-project",
+        projectNumber: "ROLLBACK-1",
+        name: "Rollback project",
+      }).returning();
+      await appendAuditEvent(transaction, admin, {
+        officeId: fixture.alphaOffice.id,
+        action: "project.created",
+        outcome: "succeeded",
+        target: { type: "project", id: project.id },
+        requestContext: createAuditRequestContext(),
+        metadata: { password: "invalid" },
+      });
+    })).rejects.toThrow(/prohibited audit field/);
+
+    expect(await db.select().from(projects)).toEqual([]);
+    expect(await db.select().from(auditEvents)).toEqual([]);
+  });
+
+  it("does not write another success event when a source mutation conflicts", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const input = projectInput(fixture.alphaOffice.id, "duplicate-no-audit");
+    expect((await createProject(db, admin, input)).status).toBe("created");
+    expect((await createProject(db, admin, input)).status).toBe("conflict");
+
+    expect(await db.select().from(auditEvents)).toHaveLength(1);
+  });
+
+  it("commits assignment-domain and general audit history together", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const chain = await createOperationalChain(
+      db,
+      admin,
+      fixture.alphaOffice.id,
+      "dual-history",
+    );
+    const domainEvents = await db.select().from(assignmentEvents)
+      .where(eq(assignmentEvents.dispatchAssignmentId, chain.assignment.id));
+    const generalEvents = await db.select().from(auditEvents)
+      .where(eq(auditEvents.targetId, chain.assignment.id));
+
+    expect(domainEvents.map((event) => event.eventType)).toEqual(
+      expect.arrayContaining(["created", "primary_assigned"]),
+    );
+    expect(generalEvents.map((event) => event.action)).toEqual(
+      expect.arrayContaining([
+        "dispatch_assignment.created",
+        "dispatch_assignment.primary_assigned",
+      ]),
+    );
+  });
+
+  it("records the previous and new primary technician on reassignment", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const chain = await createOperationalChain(
+      db,
+      admin,
+      fixture.alphaOffice.id,
+      "reassignment-audit",
+    );
+    const replacement = mustBeCreated(await createTechnician(
+      db,
+      admin,
+      technicianInput(fixture.alphaOffice.id, "replacement-audit"),
+    )).value;
+    const result = await assignPrimaryTechnician(db, admin, {
+      assignmentId: chain.assignment.id,
+      technicianId: replacement.id,
+      expectedVersion: chain.assignment.version,
+    });
+    expect(result.status).toBe("ok");
+    const [event] = await db.select().from(auditEvents)
+      .where(eq(auditEvents.action, "dispatch_assignment.primary_reassigned"));
+
+    expect(event?.metadata).toEqual({
+      previousTechnicianId: chain.technician.id,
+      newTechnicianId: replacement.id,
+    });
+  });
+
+  it("creates no success-change event for a stale project version", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const project = mustBeCreated(await createProject(
+      db,
+      admin,
+      projectInput(fixture.alphaOffice.id, "stale-audit"),
+    )).value;
+    const result = await updateProject(db, admin, {
+      projectId: project.id,
+      officeId: project.officeId,
+      expectedVersion: project.version + 1,
+      projectNumber: project.projectNumber,
+      name: project.name,
+      address: project.address,
+      status: project.status,
+    });
+
+    expect(result).toEqual({ status: "stale_update" });
+    expect(await db.select().from(auditEvents)).toHaveLength(1);
+  });
+
+  it("retains the original event after a source-record status change", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const project = mustBeCreated(await createProject(
+      db,
+      admin,
+      projectInput(fixture.alphaOffice.id, "survives-change"),
+    )).value;
+    const original = (await db.select().from(auditEvents))[0];
+    const updated = await updateProject(db, admin, {
+      projectId: project.id,
+      officeId: project.officeId,
+      expectedVersion: project.version,
+      projectNumber: project.projectNumber,
+      name: project.name,
+      address: project.address,
+      status: "inactive",
+    });
+
+    expect(updated.status).toBe("ok");
+    expect(await db.select().from(auditEvents).where(eq(auditEvents.id, original.id)))
+      .toHaveLength(1);
+  });
+
+  it("enforces general and security audit permissions", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const manager = await authorizedContext(
+      db,
+      "alpha-operations-manager",
+      fixture.organizationA.id,
+    );
+    const dispatcher = await authorizedContext(
+      db,
+      "alpha-dispatcher",
+      fixture.organizationA.id,
+    );
+    const field = await authorizedContext(
+      db,
+      "alpha-field-technician",
+      fixture.organizationA.id,
+    );
+    await appendTestAudit(db, admin, fixture.alphaOffice.id);
+    await appendTestAudit(
+      db,
+      admin,
+      null,
+      "membership.prepared",
+      fixture.alphaDispatcherMembership.id,
+    );
+
+    expect((await listAuditEvents(db, admin, {})).status).toBe("ok");
+    expect(await listAuditEvents(db, manager, { category: "membership" })).toEqual({
+      status: "forbidden",
+      reason: "missing_permission",
+    });
+    expect(await listAuditEvents(db, dispatcher, {})).toEqual({
+      status: "forbidden",
+      reason: "missing_permission",
+    });
+    expect(await listAuditEvents(db, field, {})).toEqual({
+      status: "forbidden",
+      reason: "missing_permission",
+    });
+  });
+
+  it("strictly scopes a restricted manager to an authorized office", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const manager = await authorizedContext(
+      db,
+      "alpha-operations-manager",
+      fixture.organizationA.id,
+    );
+    const allowed = await appendTestAudit(db, admin, fixture.alphaOffice.id);
+    const organizationWide = await appendTestAudit(
+      db,
+      admin,
+      null,
+      "service_type.created",
+    );
+    await appendTestAudit(db, admin, fixture.alphaSecondOffice.id);
+    const result = await listAuditEvents(db, manager, {});
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.values.map((event) => event.id).sort()).toEqual(
+        [allowed.id, organizationWide.id].sort(),
+      );
+    }
+    expect(await listAuditEvents(db, manager, {
+      officeId: fixture.alphaSecondOffice.id,
+    })).toEqual({ status: "not_found_or_inaccessible" });
+  });
+
+  it("never returns another organization's events", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const alphaAdmin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const betaAdmin = await authorizedContext(db, "beta-admin", fixture.organizationB.id);
+    const alphaEvent = await appendTestAudit(db, alphaAdmin, fixture.alphaOffice.id);
+    const betaEvent = await appendTestAudit(db, betaAdmin, fixture.betaOffice.id);
+    const result = await listAuditEvents(db, alphaAdmin, {});
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.values.map((event) => event.id)).toContain(alphaEvent.id);
+      expect(result.values.map((event) => event.id)).not.toContain(betaEvent.id);
+    }
+  });
+
+  it("applies category, actor, target, request, correlation, and date filters", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const requestContext = createAuditRequestContext();
+    const targetId = randomUUID();
+    const event = await appendTestAudit(
+      db,
+      admin,
+      fixture.alphaOffice.id,
+      "project.created",
+      targetId,
+      requestContext,
+    );
+    await appendTestAudit(db, admin, fixture.alphaOffice.id, "work_order.created");
+    const filtered = await listAuditEvents(db, admin, {
+      from: new Date(event.occurredAt.getTime() - 1_000).toISOString(),
+      to: new Date(event.occurredAt.getTime() + 1_000).toISOString(),
+      category: "project",
+      actorId: admin.user.id,
+      targetType: "project",
+      targetId,
+      requestId: requestContext.requestId,
+      correlationId: requestContext.correlationId,
+    });
+
+    expect(filtered.status).toBe("ok");
+    if (filtered.status === "ok") expect(filtered.values.map((value) => value.id)).toEqual([event.id]);
+  });
+
+  it("paginates stably and rejects excessive page sizes", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    for (let index = 0; index < 5; index += 1) {
+      await appendTestAudit(db, admin, fixture.alphaOffice.id);
+    }
+    const first = await listAuditEvents(db, admin, { pageSize: 2 });
+    expect(first.status).toBe("ok");
+    if (first.status !== "ok" || !first.nextCursor) throw new Error("Expected first audit page");
+    const second = await listAuditEvents(db, admin, {
+      pageSize: 2,
+      cursorOccurredAt: first.nextCursor.occurredAt,
+      cursorId: first.nextCursor.id,
+    });
+    expect(second.status).toBe("ok");
+    if (second.status === "ok") {
+      expect(second.values).toHaveLength(2);
+      expect(second.values.map((event) => event.id)).not.toEqual(
+        expect.arrayContaining(first.values.map((event) => event.id)),
+      );
+    }
+    expect((await listAuditEvents(db, admin, { pageSize: 101 })).status)
+      .toBe("validation_error");
+  });
+
+  it("does not return unsafe metadata even if a privileged direct insert bypasses the writer", async () => {
+    const fixture = await seedAuthorizationFixture(db);
+    const admin = await authorizedContext(db, "alpha-admin", fixture.organizationA.id);
+    const [inserted] = await db.insert(auditEvents).values(auditRowValues(fixture, {
+      metadata: { nested: { password: "must-not-return" } },
+    })).returning();
+    const result = await listAuditEvents(db, admin, {
+      targetType: inserted.targetType,
+      targetId: inserted.targetId,
+    });
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") expect(result.values[0]?.metadata).toBeNull();
+  });
+});
+
 function projectInput(
   officeId: string,
   key: string,
@@ -1958,6 +2389,53 @@ function identityValues(userId: string, providerSubject: string) {
   };
 }
 
+async function appendTestAudit(
+  database: OperationalDatabase,
+  context: AuthorizationContext,
+  officeId: string | null,
+  action: AuditAction = "project.created",
+  targetId: string = randomUUID(),
+  requestContext = createAuditRequestContext(),
+) {
+  const targetType = action.startsWith("membership.") ? "membership" as const
+    : action.startsWith("work_order.") ? "work_order" as const
+      : action.startsWith("service_type.") ? "service_type" as const
+      : "project" as const;
+  return database.transaction((transaction) =>
+    appendAuditEvent(transaction, context, {
+      officeId,
+      action,
+      outcome: "succeeded",
+      target: { type: targetType, id: targetId },
+      requestContext,
+      resultingState: { status: "active", version: 1 },
+    }),
+  );
+}
+
+function auditRowValues(
+  fixture: Awaited<ReturnType<typeof seedAuthorizationFixture>>,
+  overrides: Partial<typeof auditEvents.$inferInsert> = {},
+): typeof auditEvents.$inferInsert {
+  const requestContext = createAuditRequestContext();
+  return {
+    organizationId: fixture.organizationA.id,
+    officeId: fixture.alphaOffice.id,
+    actorUserId: fixture.alphaAdmin.id,
+    actorMembershipId: fixture.alphaAdminMembership.id,
+    actorRole: "organization_admin",
+    category: "project",
+    action: "project.created",
+    outcome: "succeeded",
+    targetType: "project",
+    targetId: randomUUID(),
+    requestId: requestContext.requestId,
+    correlationId: requestContext.correlationId,
+    transactionId: requestContext.transactionId,
+    ...overrides,
+  };
+}
+
 async function authorizedContext(
   database: OperationalDatabase,
   subject: string,
@@ -1995,6 +2473,7 @@ async function cleanupTestRows(database: OperationalDatabase): Promise<void> {
       async () => {
         await transaction.execute(
           sql`truncate table
+            "audit_events",
             "assignment_events",
             "assignment_technicians",
             "dispatch_assignments",

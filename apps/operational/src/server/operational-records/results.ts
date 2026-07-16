@@ -1,3 +1,5 @@
+import type { AuditEventRecord } from "@/server/db/schema";
+
 export type OperationalRecordConflictReason =
   | "project_source_already_exists"
   | "service_type_key_already_exists"
@@ -28,6 +30,8 @@ export type OperationalRecordMutationAction =
 
 export type OperationalRecordMutationMetadata = {
   mutationId: string;
+  requestId: string;
+  correlationId: string;
   action: OperationalRecordMutationAction;
   actorUserId: string;
   organizationId: string;
@@ -110,17 +114,17 @@ export function persistenceFailure(): OperationalRecordFailure {
 
 export function createMutationMetadata(
   action: OperationalRecordMutationAction,
-  context: AuthorizationContext,
   subjectId: string,
+  event: AuditEventRecord,
 ): OperationalRecordMutationMetadata {
   return {
-    mutationId: randomUUID(),
+    mutationId: event.id,
+    requestId: event.requestId ?? event.id,
+    correlationId: event.correlationId ?? event.id,
     action,
-    actorUserId: context.user.id,
-    organizationId: context.membership.organizationId,
+    actorUserId: event.actorUserId,
+    organizationId: event.organizationId,
     subjectId,
-    occurredAt: new Date().toISOString(),
+    occurredAt: event.occurredAt.toISOString(),
   };
 }
-import { randomUUID } from "node:crypto";
-import type { AuthorizationContext } from "@/server/auth/types";

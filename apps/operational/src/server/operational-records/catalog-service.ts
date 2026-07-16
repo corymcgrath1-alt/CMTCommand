@@ -18,6 +18,15 @@ import {
 } from "@/server/db/schema";
 import { hasPermission } from "@/server/auth/permissions";
 import type { AuthorizationContext } from "@/server/auth/types";
+import { createAuditRequestContext, type AuditRequestContext } from "@/server/audit/request-context";
+import {
+  projectAuditState,
+  serviceTypeAuditState,
+  technicianAuditState,
+  technicianEligibilityAuditState,
+  workOrderAuditState,
+} from "@/server/audit/serializers";
+import { appendAuditEvent } from "@/server/audit/writer";
 import { getPostgresErrorInfo } from "@/server/tenancy/errors";
 import { canTransitionProject } from "@/server/dispatch/domain";
 import {
@@ -68,6 +77,7 @@ export async function createServiceType(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordCreateResult<ServiceTypeRecord>> {
   if (!hasPermission(context, "service_type.manage")) {
     return forbidden();
@@ -105,10 +115,19 @@ export async function createServiceType(
         })
         .returning();
 
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: "service_type.created",
+        outcome: "succeeded",
+        target: { type: "service_type", id: value.id },
+        requestContext: auditRequestContext,
+        resultingState: serviceTypeAuditState(value),
+      });
+
       return {
         status: "created" as const,
         value,
-        mutation: createMutationMetadata("service_type.created", context, value.id),
+        mutation: createMutationMetadata("service_type.created", value.id, auditEvent),
       };
     });
   } catch (error) {
@@ -124,6 +143,7 @@ export async function updateServiceType(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordMutationResult<ServiceTypeRecord>> {
   if (!hasPermission(context, "service_type.manage")) return forbidden();
   const parsed = updateServiceTypeInputSchema.safeParse(input);
@@ -183,10 +203,31 @@ export async function updateServiceType(
         .returning();
       if (!value) return { status: "stale_update" };
 
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: "service_type.updated",
+        outcome: "succeeded",
+        target: { type: "service_type", id: value.id },
+        requestContext: auditRequestContext,
+        previousState: serviceTypeAuditState(current),
+        resultingState: serviceTypeAuditState(value),
+      });
+      if (current.status !== value.status) {
+        await appendAuditEvent(transaction, context, {
+          officeId: value.officeId,
+          action: "service_type.status_changed",
+          outcome: "succeeded",
+          target: { type: "service_type", id: value.id },
+          requestContext: auditRequestContext,
+          previousState: serviceTypeAuditState(current),
+          resultingState: serviceTypeAuditState(value),
+        });
+      }
+
       return {
         status: "ok",
         value,
-        mutation: createMutationMetadata("service_type.updated", context, value.id),
+        mutation: createMutationMetadata("service_type.updated", value.id, auditEvent),
       };
     });
   } catch {
@@ -198,6 +239,7 @@ export async function updateProject(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordMutationResult<ProjectRecord>> {
   if (!hasPermission(context, "project.manage")) return forbidden();
   const parsed = updateProjectInputSchema.safeParse(input);
@@ -258,10 +300,25 @@ export async function updateProject(
         .returning();
       if (!value) return { status: "stale_update" };
 
+      const primaryAction = value.status === "archived" && current.status !== "archived"
+        ? "project.archived" as const
+        : current.status !== value.status
+          ? "project.status_changed" as const
+          : "project.updated" as const;
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: primaryAction,
+        outcome: "succeeded",
+        target: { type: "project", id: value.id },
+        requestContext: auditRequestContext,
+        previousState: projectAuditState(current),
+        resultingState: projectAuditState(value),
+      });
+
       return {
         status: "ok",
         value,
-        mutation: createMutationMetadata("project.updated", context, value.id),
+        mutation: createMutationMetadata("project.updated", value.id, auditEvent),
       };
     });
   } catch {
@@ -273,6 +330,7 @@ export async function updateTechnician(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordMutationResult<TechnicianRecord>> {
   if (!hasPermission(context, "technician.manage")) return forbidden();
   const parsed = updateTechnicianInputSchema.safeParse(input);
@@ -351,7 +409,7 @@ export async function updateTechnician(
         .returning();
       if (!value) return { status: "stale_update" };
 
-      await transaction
+      const [addedHomeEligibility] = await transaction
         .insert(technicianOfficeEligibilities)
         .values({
           organizationId: context.membership.organizationId,
@@ -359,12 +417,81 @@ export async function updateTechnician(
           technicianId: current.id,
           createdByUserId: context.user.id,
         })
-        .onConflictDoNothing();
+        .onConflictDoNothing()
+        .returning();
+
+      const previousEligibilities = await transaction
+        .select({ officeId: technicianOfficeEligibilities.officeId })
+        .from(technicianOfficeEligibilities)
+        .where(
+          and(
+            eq(technicianOfficeEligibilities.organizationId, context.membership.organizationId),
+            eq(technicianOfficeEligibilities.technicianId, value.id),
+          ),
+        );
+      const eligibleOfficeIds = previousEligibilities.map((eligibility) => eligibility.officeId);
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.homeOfficeId,
+        action: "technician.updated",
+        outcome: "succeeded",
+        target: { type: "technician", id: value.id },
+        requestContext: auditRequestContext,
+        previousState: technicianAuditState(current),
+        resultingState: technicianAuditState(value, eligibleOfficeIds),
+      });
+      if (current.status !== value.status) {
+        await appendAuditEvent(transaction, context, {
+          officeId: value.homeOfficeId,
+          action: "technician.status_changed",
+          outcome: "succeeded",
+          target: { type: "technician", id: value.id },
+          requestContext: auditRequestContext,
+          previousState: technicianAuditState(current),
+          resultingState: technicianAuditState(value, eligibleOfficeIds),
+        });
+      }
+      if (current.organizationMembershipId !== value.organizationMembershipId) {
+        if (current.organizationMembershipId) {
+          await appendAuditEvent(transaction, context, {
+            officeId: value.homeOfficeId,
+            action: "technician.membership_unlinked",
+            outcome: "succeeded",
+            target: { type: "technician", id: value.id },
+            secondaryTarget: { type: "membership", id: current.organizationMembershipId },
+            requestContext: auditRequestContext,
+            previousState: technicianAuditState(current),
+            resultingState: technicianAuditState(value, eligibleOfficeIds),
+          });
+        }
+        if (value.organizationMembershipId) {
+          await appendAuditEvent(transaction, context, {
+            officeId: value.homeOfficeId,
+            action: "technician.membership_linked",
+            outcome: "succeeded",
+            target: { type: "technician", id: value.id },
+            secondaryTarget: { type: "membership", id: value.organizationMembershipId },
+            requestContext: auditRequestContext,
+            previousState: technicianAuditState(current),
+            resultingState: technicianAuditState(value, eligibleOfficeIds),
+          });
+        }
+      }
+      if (addedHomeEligibility) {
+        await appendAuditEvent(transaction, context, {
+          officeId: addedHomeEligibility.officeId,
+          action: "technician.office_eligibility_added",
+          outcome: "succeeded",
+          target: { type: "technician", id: value.id },
+          secondaryTarget: { type: "office", id: addedHomeEligibility.officeId },
+          requestContext: auditRequestContext,
+          resultingState: technicianEligibilityAuditState(addedHomeEligibility),
+        });
+      }
 
       return {
         status: "ok",
         value,
-        mutation: createMutationMetadata("technician.updated", context, value.id),
+        mutation: createMutationMetadata("technician.updated", value.id, auditEvent),
       };
     });
   } catch {
@@ -376,6 +503,7 @@ export async function updateWorkOrder(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordMutationResult<WorkOrderRecord>> {
   if (!hasPermission(context, "work_order.manage")) return forbidden();
   const parsed = updateWorkOrderInputSchema.safeParse(input);
@@ -472,10 +600,20 @@ export async function updateWorkOrder(
         )
         .returning();
       if (!value) return { status: "stale_update" };
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: "work_order.updated",
+        outcome: "succeeded",
+        target: { type: "work_order", id: value.id },
+        secondaryTarget: { type: "project", id: value.projectId },
+        requestContext: auditRequestContext,
+        previousState: workOrderAuditState(current),
+        resultingState: workOrderAuditState(value),
+      });
       return {
         status: "ok",
         value,
-        mutation: createMutationMetadata("work_order.updated", context, value.id),
+        mutation: createMutationMetadata("work_order.updated", value.id, auditEvent),
       };
     });
   } catch {
@@ -518,6 +656,7 @@ export async function addTechnicianEligibility(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordCreateResult<TechnicianOfficeEligibilityRecord>> {
   if (!hasPermission(context, "technician.manage")) return forbidden();
   const parsed = technicianEligibilityInputSchema.safeParse(input);
@@ -556,14 +695,19 @@ export async function addTechnicianEligibility(
           createdByUserId: context.user.id,
         })
         .returning();
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: "technician.office_eligibility_added",
+        outcome: "succeeded",
+        target: { type: "technician", id: value.technicianId },
+        secondaryTarget: { type: "office", id: value.officeId },
+        requestContext: auditRequestContext,
+        resultingState: technicianEligibilityAuditState(value),
+      });
       return {
         status: "created" as const,
         value,
-        mutation: createMutationMetadata(
-          "technician.eligibility_added",
-          context,
-          value.id,
-        ),
+        mutation: createMutationMetadata("technician.eligibility_added", value.id, auditEvent),
       };
     });
   } catch (error) {
@@ -578,6 +722,7 @@ export async function removeTechnicianEligibility(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordMutationResult<TechnicianOfficeEligibilityRecord>> {
   if (!hasPermission(context, "technician.manage")) return forbidden();
   const parsed = technicianEligibilityInputSchema.safeParse(input);
@@ -647,14 +792,21 @@ export async function removeTechnicianEligibility(
         .returning();
       if (!value) return notFoundOrInaccessible();
 
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: "technician.office_eligibility_removed",
+        outcome: "succeeded",
+        target: { type: "technician", id: value.technicianId },
+        secondaryTarget: { type: "office", id: value.officeId },
+        requestContext: auditRequestContext,
+        previousState: technicianEligibilityAuditState(value),
+        resultingState: { technicianId: value.technicianId, officeId: value.officeId, eligible: false },
+      });
+
       return {
         status: "ok",
         value,
-        mutation: createMutationMetadata(
-          "technician.eligibility_removed",
-          context,
-          value.id,
-        ),
+        mutation: createMutationMetadata("technician.eligibility_removed", value.id, auditEvent),
       };
     });
   } catch {

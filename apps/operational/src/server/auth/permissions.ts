@@ -23,6 +23,8 @@ export const permissionValues = [
   "dispatch_assignment.conflict_override",
   "dispatch_assignment.read_own",
   "dispatch_assignment.acknowledge_own",
+  "audit.read",
+  "audit.read_security",
 ] as const;
 
 export type Permission = (typeof permissionValues)[number];
@@ -61,12 +63,15 @@ const rolePermissions: Record<OrganizationRole, Permission[]> = {
     ...domainReadPermissions,
     ...domainManagePermissions,
     ...dispatchWorkflowManagePermissions,
+    "audit.read",
+    "audit.read_security",
   ],
   operations_manager: [
     ...readPermissions,
     ...domainReadPermissions,
     ...domainManagePermissions,
     ...dispatchWorkflowManagePermissions,
+    "audit.read",
   ],
   dispatcher: [
     ...readPermissions,

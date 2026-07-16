@@ -205,8 +205,9 @@ disabled user, no membership, one-office and multi-office scope, a second
 organization, and a multi-organization user. They are seeded separately from
 production migrations.
 
-PostgreSQL RLS and persistent general audit events are not implemented. Mutation
-metadata is preparation for a future audit sink, not an audit-history claim.
+PostgreSQL RLS is not implemented. Phase 5F now persists general audit events
+for existing material Phase 5D and Phase 5E mutations; returned mutation
+metadata identifies the committed audit row and request correlation.
 See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md).
 
 ## Phase 5E Operational Dispatch Authorization - Confirmed
@@ -253,9 +254,37 @@ user/membership/office checks succeed.
 Assignment events durably record assignment creation, scheduling, primary and
 support changes, lifecycle transitions, and authorized conflict overrides. A
 database trigger makes those domain events append-only. They do not replace a
-general audit platform: denied actions, membership changes, authentication
-events, request identifiers, and retention policy still require the future
-security audit-event boundary.
+general audit platform; Phase 5F supplies that separate boundary.
+
+## Phase 5F Audit Authorization And Privacy - Confirmed
+
+The centralized policy adds `audit.read` and `audit.read_security`:
+
+| Role | General audit capability |
+| --- | --- |
+| Organization admin | Read organization-scoped operational and security audit categories. |
+| Operations manager | Read operational categories only, constrained to current authorized offices. |
+| Dispatcher, technical reviewer, viewer, field technician | No general audit-history permission. |
+
+Every read starts with the active server-derived organization. Restricted office
+scope is mandatory and cannot be widened by office, target, actor, request, or
+correlation filters. Security categories require the stronger permission.
+Inaccessible and nonexistent filters do not reveal cross-tenant rows.
+
+Successful material writes revalidate the active actor and append audit history
+inside the source transaction. Selected verified denials cover membership
+administration, conflict override, own-assignment access, and same-organization
+cross-office transition probes. A denied event never authorizes the request and
+does not disclose an unverified target.
+
+Audit JSON uses explicit allowlist serializers and bounded validation. Passwords,
+credentials, cookies, tokens, contact fields, documents, transcripts, photos,
+audio/video, and report contents are prohibited. Actor identity and historical
+role are retained for accountability. No ordinary user deletion exists. A final
+legal retention period, legal hold, archive, controlled purge, audit-read
+auditing, and SIEM export remain future policy/operations decisions.
+
+See [ADR-009](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md).
 
 ## Pilot V1 Target Roles And Boundaries
 
@@ -317,8 +346,8 @@ The demo must continue to use fictional or anonymized data. Pilot import validat
 - Root demo Settings copy and role state remain non-authoritative demo behavior;
   the Operational vNext permission module is the enforced server boundary.
 - Browser/CDP security validation is not part of normal CI.
-- Production authentication, invitation delivery, audit storage, and provider
-  secret operations remain target requirements. Current RBAC covers the
+- Production authentication, invitation delivery, audit retention/archival,
+  production database-role grants, and provider secret operations remain target requirements. Current RBAC covers the
   identity/member/office surfaces and bounded Phase 5E dispatch workflow only.
 - Phase 5D proves isolation for identity and membership behavior. Phase 5E adds
   bounded organization/office/role isolation for projects, service types,

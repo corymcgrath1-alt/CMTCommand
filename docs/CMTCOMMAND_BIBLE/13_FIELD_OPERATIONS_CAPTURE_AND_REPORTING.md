@@ -43,18 +43,22 @@ Confirmed foundations:
   browser tests.
 - Linked field-technician own-assignment read and acknowledgment, without any
   field-session, evidence, report, or sample behavior.
+- General append-only audit persistence for existing material membership,
+  office-access, project, service-type, technician, work-order, and dispatch
+  mutations, with tenant/office-scoped history and local PostgreSQL/browser
+  evidence.
 - Zod, Vitest, Playwright, health routes, and a PostgreSQL integration-test lane.
 
 Missing foundations that block the concrete-inspection vertical slice:
 
 - A production identity provider and pilot-ready authentication verification.
-- General audit-event persistence.
 - A private object-storage abstraction and authorized upload lifecycle.
 - Approved report/template, retention, and technical-review requirements.
 
-Phase 5E closes the durable-record P2 gate and establishes the assignment/event
-handoff described by ADR-008. These are shared prerequisites, not Field
-Operations behavior. No
+Phase 5E closes the durable-record P2 gate and Phase 5F closes the bounded
+local/test P3 audit gate. These are shared prerequisites, not Field Operations
+behavior. Production identity, private storage, and approved report/retention
+policy still block FR-1. No
 field-reporting runtime, schema, route, upload, extraction, UI, or browser-local
 substitute is implemented.
 

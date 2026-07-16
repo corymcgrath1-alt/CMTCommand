@@ -57,6 +57,20 @@
       "when": 1784215451154,
       "tag": "0007_deep_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784224068589,
+      "tag": "0008_fast_rage",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784224094962,
+      "tag": "0009_audit_append_only_guards",
+      "breakpoints": true
     }
   ]
 }

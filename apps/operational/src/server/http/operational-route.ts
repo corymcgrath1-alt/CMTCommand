@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { loadRequestAuthorization } from "@/server/auth/request-context";
 
@@ -7,7 +8,9 @@ export async function loadOperationalRequest() {
   return { context: request.state.context, db: request.db };
 }
 
-export function operationalJson(result: { status: string }) {
+export function operationalJson(
+  result: { status: string; mutation?: { requestId?: string } },
+) {
   const statusByResult: Record<string, number> = {
     created: 201,
     ok: 200,
@@ -22,7 +25,17 @@ export function operationalJson(result: { status: string }) {
     inactive_reference: 409,
     persistence_error: 503,
   };
-  return NextResponse.json(result, { status: statusByResult[result.status] ?? 500 });
+  const requestId = result.mutation?.requestId ?? randomUUID();
+  return NextResponse.json(
+    { ...result, requestId },
+    {
+      status: statusByResult[result.status] ?? 500,
+      headers: {
+        "cache-control": "no-store",
+        "x-request-id": requestId,
+      },
+    },
+  );
 }
 
 export async function readJson(request: Request): Promise<unknown> {
@@ -34,5 +47,12 @@ export async function readJson(request: Request): Promise<unknown> {
 }
 
 export function unauthorizedJson() {
-  return NextResponse.json({ status: "unauthenticated" }, { status: 401 });
+  const requestId = randomUUID();
+  return NextResponse.json(
+    { status: "unauthenticated", requestId },
+    {
+      status: 401,
+      headers: { "cache-control": "no-store", "x-request-id": requestId },
+    },
+  );
 }

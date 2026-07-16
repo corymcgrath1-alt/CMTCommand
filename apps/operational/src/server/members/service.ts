@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import type { OperationalDatabase } from "@/server/db/client";
 import {
@@ -10,7 +9,11 @@ import {
   type MembershipStatus,
   type OfficeAccessPolicy,
   type OrganizationRole,
+  type AuditEventRecord,
 } from "@/server/db/schema";
+import { createAuditRequestContext, type AuditRequestContext } from "@/server/audit/request-context";
+import { membershipAuditState } from "@/server/audit/serializers";
+import { appendAuditEvent, appendDeniedAuditEvent } from "@/server/audit/writer";
 import {
   hasPermission,
   permissionsForRole,
@@ -31,12 +34,16 @@ export type SecurityMutationAction =
   | "membership.prepared"
   | "membership.role_changed"
   | "membership.status_changed"
-  | "membership.office_access_changed"
-  | "office_assignment.created"
-  | "office_assignment.removed";
+  | "membership.suspended"
+  | "membership.revoked"
+  | "membership.office_policy_changed"
+  | "office_access.assigned"
+  | "office_access.removed";
 
 export type SecurityMutationMetadata = {
   mutationId: string;
+  requestId: string;
+  correlationId: string;
   action: SecurityMutationAction;
   actorUserId: string;
   organizationId: string;
@@ -142,8 +149,10 @@ export async function prepareOrganizationMembership(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<MembershipMutationResult> {
   if (!allows(context, "organization.members.manage", "organization.roles.manage")) {
+    await recordMembershipAdministrationDenial(db, context, auditRequestContext, "prepare_membership");
     return forbidden();
   }
 
@@ -247,10 +256,30 @@ export async function prepareOrganizationMembership(
         );
       }
 
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        action: "membership.prepared",
+        outcome: "succeeded",
+        target: { type: "membership", id: membership.id },
+        secondaryTarget: { type: "user", id: user.id },
+        requestContext: auditRequestContext,
+        resultingState: membershipAuditState(membership, officeIds),
+      });
+      for (const officeId of officeIds) {
+        await appendAuditEvent(transaction, context, {
+          officeId,
+          action: "office_access.assigned",
+          outcome: "succeeded",
+          target: { type: "membership", id: membership.id },
+          secondaryTarget: { type: "office", id: officeId },
+          requestContext: auditRequestContext,
+          resultingState: membershipAuditState(membership, officeIds),
+        });
+      }
+
       return success(
         "membership.prepared",
-        context,
         membership.id,
+        auditEvent,
         membership.version,
       );
     });
@@ -263,8 +292,10 @@ export async function changeMembershipRole(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<MembershipMutationResult> {
   if (!allows(context, "organization.roles.manage")) {
+    await recordMembershipAdministrationDenial(db, context, auditRequestContext, "change_role");
     return forbidden();
   }
 
@@ -317,9 +348,17 @@ export async function changeMembershipRole(
       )
       .returning({ version: organizationMemberships.version });
 
-    return updated
-      ? success("membership.role_changed", context, target.id, updated.version)
-      : stale();
+    if (!updated) return stale();
+    const resulting = { ...target, role: parsed.data.role, version: updated.version };
+    const auditEvent = await appendAuditEvent(transaction, context, {
+      action: "membership.role_changed",
+      outcome: "succeeded",
+      target: { type: "membership", id: target.id },
+      requestContext: auditRequestContext,
+      previousState: membershipAuditState(target),
+      resultingState: membershipAuditState(resulting),
+    });
+    return success("membership.role_changed", target.id, auditEvent, updated.version);
     },
   );
 }
@@ -328,8 +367,10 @@ export async function changeMembershipStatus(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<MembershipMutationResult> {
   if (!allows(context, "organization.members.manage")) {
+    await recordMembershipAdministrationDenial(db, context, auditRequestContext, "change_status");
     return forbidden();
   }
 
@@ -382,9 +423,22 @@ export async function changeMembershipStatus(
       )
       .returning({ version: organizationMemberships.version });
 
-    return updated
-      ? success("membership.status_changed", context, target.id, updated.version)
-      : stale();
+    if (!updated) return stale();
+    const action = parsed.data.status === "suspended"
+      ? "membership.suspended" as const
+      : parsed.data.status === "revoked"
+        ? "membership.revoked" as const
+        : "membership.status_changed" as const;
+    const resulting = { ...target, status: parsed.data.status, version: updated.version };
+    const auditEvent = await appendAuditEvent(transaction, context, {
+      action,
+      outcome: "succeeded",
+      target: { type: "membership", id: target.id },
+      requestContext: auditRequestContext,
+      previousState: membershipAuditState(target),
+      resultingState: membershipAuditState(resulting),
+    });
+    return success(action, target.id, auditEvent, updated.version);
     },
   );
 }
@@ -393,8 +447,10 @@ export async function changeOfficeAccessPolicy(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<MembershipMutationResult> {
   if (!allows(context, "office.assignments.manage")) {
+    await recordMembershipAdministrationDenial(db, context, auditRequestContext, "change_office_policy");
     return forbidden();
   }
 
@@ -434,14 +490,17 @@ export async function changeOfficeAccessPolicy(
       )
       .returning({ version: organizationMemberships.version });
 
-    return updated
-      ? success(
-          "membership.office_access_changed",
-          context,
-          target.id,
-          updated.version,
-        )
-      : stale();
+    if (!updated) return stale();
+    const resulting = { ...target, officeAccess: parsed.data.officeAccess, version: updated.version };
+    const auditEvent = await appendAuditEvent(transaction, context, {
+      action: "membership.office_policy_changed",
+      outcome: "succeeded",
+      target: { type: "membership", id: target.id },
+      requestContext: auditRequestContext,
+      previousState: membershipAuditState(target),
+      resultingState: membershipAuditState(resulting),
+    });
+    return success("membership.office_policy_changed", target.id, auditEvent, updated.version);
     },
   );
 }
@@ -450,8 +509,10 @@ export async function assignOfficeToMembership(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<MembershipMutationResult> {
   if (!allows(context, "office.assignments.manage")) {
+    await recordMembershipAdministrationDenial(db, context, auditRequestContext, "assign_office");
     return forbidden();
   }
 
@@ -527,9 +588,18 @@ export async function assignOfficeToMembership(
         })
         .returning({ id: officeAssignments.id });
 
-      return assignment
-        ? success("office_assignment.created", context, target.id)
-        : conflict("office_assignment_already_exists");
+      if (!assignment) return conflict("office_assignment_already_exists");
+      const officeIds = await membershipOfficeIds(transaction, target.id);
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: office.id,
+        action: "office_access.assigned",
+        outcome: "succeeded",
+        target: { type: "membership", id: target.id },
+        secondaryTarget: { type: "office", id: office.id },
+        requestContext: auditRequestContext,
+        resultingState: membershipAuditState(target, officeIds),
+      });
+      return success("office_access.assigned", target.id, auditEvent);
     });
   } catch {
     return persistenceFailure();
@@ -540,8 +610,10 @@ export async function removeOfficeFromMembership(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<MembershipMutationResult> {
   if (!allows(context, "office.assignments.manage")) {
+    await recordMembershipAdministrationDenial(db, context, auditRequestContext, "remove_office");
     return forbidden();
   }
 
@@ -584,9 +656,25 @@ export async function removeOfficeFromMembership(
           membershipId: officeAssignments.organizationMembershipId,
         });
 
-      return removed
-        ? success("office_assignment.removed", context, removed.membershipId)
-        : inaccessible();
+      if (!removed) return inaccessible();
+      const [target] = await transaction
+        .select()
+        .from(organizationMemberships)
+        .where(eq(organizationMemberships.id, removed.membershipId))
+        .limit(1);
+      if (!target) throw new Error("removed_membership_missing");
+      const officeIds = await membershipOfficeIds(transaction, removed.membershipId);
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: parsed.data.officeId,
+        action: "office_access.removed",
+        outcome: "succeeded",
+        target: { type: "membership", id: removed.membershipId },
+        secondaryTarget: { type: "office", id: parsed.data.officeId },
+        requestContext: auditRequestContext,
+        previousState: membershipAuditState(target, [...officeIds, parsed.data.officeId]),
+        resultingState: membershipAuditState(target, officeIds),
+      });
+      return success("office_access.removed", removed.membershipId, auditEvent);
     });
   } catch {
     return persistenceFailure();
@@ -751,8 +839,8 @@ function allows(context: AuthorizationContext, ...permissions: Permission[]): bo
 
 function success(
   action: SecurityMutationAction,
-  context: AuthorizationContext,
   subjectId: string,
+  event: AuditEventRecord,
   version?: number,
 ): MembershipMutationResult {
   return {
@@ -760,14 +848,42 @@ function success(
     membershipId: subjectId,
     version,
     mutation: {
-      mutationId: randomUUID(),
+      mutationId: event.id,
+      requestId: event.requestId ?? event.id,
+      correlationId: event.correlationId ?? event.id,
       action,
-      actorUserId: context.user.id,
-      organizationId: context.membership.organizationId,
+      actorUserId: event.actorUserId,
+      organizationId: event.organizationId,
       subjectId,
-      occurredAt: new Date().toISOString(),
+      occurredAt: event.occurredAt.toISOString(),
     },
   };
+}
+
+async function membershipOfficeIds(
+  transaction: Transaction,
+  membershipId: string,
+): Promise<string[]> {
+  const rows = await transaction
+    .select({ officeId: officeAssignments.officeId })
+    .from(officeAssignments)
+    .where(eq(officeAssignments.organizationMembershipId, membershipId));
+  return rows.map((row) => row.officeId);
+}
+
+async function recordMembershipAdministrationDenial(
+  db: OperationalDatabase,
+  context: AuthorizationContext,
+  requestContext: AuditRequestContext,
+  requestedOperation: string,
+): Promise<void> {
+  await appendDeniedAuditEvent(db, context, {
+    action: "authorization.membership_administration_denied",
+    outcome: "denied",
+    target: { type: "organization", id: context.membership.organizationId },
+    requestContext,
+    metadata: { requestedOperation },
+  });
 }
 
 function forbidden(reason = "missing_permission"): MembershipMutationResult {

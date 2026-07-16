@@ -80,12 +80,14 @@ Operational vNext architecture:
 - [ADR-005 Import And Readiness Execution Model](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md): governs imports, readiness execution, snapshots, recalculation, and queue threshold.
 - [ADR-007 Server-Derived Authorization Scope](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md): governs verified identity mapping, active membership, office scope, permissions, development sessions, and untrusted browser claims.
 - [ADR-008 Dispatch Assignments Are The Field Operations Handoff](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md): governs durable service types, assignment technician relationships, lifecycle events, conflict handling, and the Field Operations handoff boundary.
+- [ADR-009 Material Mutations Write Transactional Append-Only Audit Events](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md): governs the general audit taxonomy, atomic source/audit writes, privacy bounds, append-only enforcement, and authorized history reads.
 - [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md): canonical technical overview.
 - [Phase 4 Scaffolding Readiness Checklist](plans/PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md): gate before creating the operational app shell.
 - [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md): read for the implemented shell, exact package versions, commands, health behavior, and verification results.
 - [Phase 5 Tenancy Foundation Report](plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md): read before adding users, memberships, roles, technicians, work orders, imports, readiness, or coverage.
 - [Phase 5D Identity And RBAC Report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md): read for the implemented user, external identity, membership, office-assignment, protected-shell, and authorization boundary.
 - [Phase 5E Durable Operational Records Report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md): read for the bounded project, technician, work-order, dispatch-assignment, source-identifier, scoped-service, and authorization foundation.
+- [Phase 5F General Audit Persistence Report](plans/PHASE_5F_GENERAL_AUDIT_PERSISTENCE_REPORT.md): read for PostgreSQL-backed material-mutation audit coverage, immutability, tenant/office query scope, privacy limits, and acceptance evidence.
 
 Field Operations future workstream:
 
@@ -150,9 +152,11 @@ Do not treat inferred statements as product commitments. Do not treat founder ta
   identity adapter. Phase 5E adds durable projects, technicians, service types,
   work orders, dispatch assignments, primary/support relationships, and
   append-only assignment events, with protected APIs and operational workflow
-  pages. No production auth provider, import/readiness/coverage workflow,
-  invitation delivery, field-reporting runtime, or general audit-event table
-  exists.
+  pages. Phase 5F adds general append-only audit events for existing material
+  membership, office-access, project, service-type, technician, work-order, and
+  dispatch mutations, plus protected tenant/office-scoped history API and UI.
+  No production auth provider, import/readiness/coverage workflow, invitation
+  delivery, private object storage, or field-reporting runtime exists.
 - `euchre-platform/` and `brackethub/` are unrelated to root CMTCommand scope based on `AGENTS.md`, `MIGRATION_CLEANUP_REPORT.md`, and vNext docs.
 - `node scripts\verify-root.mjs` is the root verification command found in repository evidence.
 

@@ -5,6 +5,7 @@ import type { AuthorizationContext } from "../../src/server/auth/types";
 import {
   assignmentEvents,
   assignmentTechnicians,
+  auditEvents,
   dispatchAssignments,
   officeAssignments,
   offices,
@@ -291,6 +292,14 @@ describe("Phase 5E-B dispatch workflow", () => {
         toStatus: "acknowledged",
       }),
     );
+    const [acknowledgmentAudit] = await db.select().from(auditEvents)
+      .where(eq(auditEvents.action, "dispatch_assignment.acknowledged"));
+    expect(acknowledgmentAudit).toMatchObject({
+      actorUserId: fixture.fieldContext.user.id,
+      actorMembershipId: fixture.fieldContext.membership.id,
+      targetId: assignment.id,
+      outcome: "succeeded",
+    });
     expect(
       await transitionAssignment(db, fixture.managerContext, {
         assignmentId: assignment.id,
@@ -441,6 +450,85 @@ describe("Phase 5E-B dispatch workflow", () => {
     ).toEqual({ status: "invalid_transition" });
   });
 
+  it("rolls back assignment creation when work-order scheduling updates no row", async () => {
+    const workOrder = await makeReadyWorkOrder("schedule-zero-row");
+    const historyBefore = await db.select().from(assignmentEvents);
+    const auditBefore = await db.select().from(auditEvents);
+    await db.execute(sql`
+      create function skip_phase_5f_schedule_update() returns trigger language plpgsql as $$
+      begin
+        if new.status = 'scheduled' then return null; end if;
+        return new;
+      end $$
+    `);
+    await db.execute(sql`
+      create trigger skip_phase_5f_schedule_update
+      before update on work_orders
+      for each row execute function skip_phase_5f_schedule_update()
+    `);
+    try {
+      expect(
+        await createDispatchAssignment(
+          db,
+          fixture.managerContext,
+          assignmentInput(workOrder.id, "schedule-zero-row"),
+        ),
+      ).toEqual({ status: "persistence_error", reason: "database_error" });
+    } finally {
+      await db.execute(sql`drop trigger skip_phase_5f_schedule_update on work_orders`);
+      await db.execute(sql`drop function skip_phase_5f_schedule_update()`);
+    }
+
+    expect(await db.select().from(dispatchAssignments)).toEqual([]);
+    expect(await db.select().from(assignmentEvents)).toEqual(historyBefore);
+    expect(await db.select().from(auditEvents)).toEqual(auditBefore);
+    const [unchangedWorkOrder] = await db.select().from(workOrders)
+      .where(eq(workOrders.id, workOrder.id));
+    expect(unchangedWorkOrder.status).toBe("ready_for_dispatch");
+  });
+
+  it("does not partially cancel assignments when the guarded work-order update loses", async () => {
+    const assignment = await makeUnassignedAssignment("cancel-zero-row");
+    const historyBefore = await assignmentHistory(assignment.id);
+    const auditBefore = await db.select().from(auditEvents);
+    const [workOrder] = await db.select().from(workOrders)
+      .where(eq(workOrders.id, assignment.workOrderId));
+    await db.execute(sql`
+      create function skip_phase_5f_work_order_cancel() returns trigger language plpgsql as $$
+      begin
+        if new.status = 'cancelled' then return null; end if;
+        return new;
+      end $$
+    `);
+    await db.execute(sql`
+      create trigger skip_phase_5f_work_order_cancel
+      before update on work_orders
+      for each row execute function skip_phase_5f_work_order_cancel()
+    `);
+    try {
+      expect(
+        await transitionWorkOrder(db, fixture.managerContext, {
+          workOrderId: workOrder.id,
+          expectedVersion: workOrder.version,
+          toStatus: "cancelled",
+          reason: "Controlled zero-row cancellation",
+        }),
+      ).toEqual({ status: "stale_update" });
+    } finally {
+      await db.execute(sql`drop trigger skip_phase_5f_work_order_cancel on work_orders`);
+      await db.execute(sql`drop function skip_phase_5f_work_order_cancel()`);
+    }
+
+    const [unchangedAssignment] = await db.select().from(dispatchAssignments)
+      .where(eq(dispatchAssignments.id, assignment.id));
+    expect(unchangedAssignment).toMatchObject({
+      status: assignment.status,
+      version: assignment.version,
+    });
+    expect(await assignmentHistory(assignment.id)).toEqual(historyBefore);
+    expect(await db.select().from(auditEvents)).toEqual(auditBefore);
+  });
+
   it("rolls back assignment transition and history when work-order reconciliation fails", async () => {
     const primary = await makeTechnician("reconciliation-rollback");
     let assignment = await makeUnassignedAssignment("reconciliation-rollback");
@@ -526,6 +614,13 @@ describe("Phase 5E-B dispatch workflow", () => {
         overrideReason: "Dispatcher override attempt",
       }),
     ).toEqual({ status: "forbidden", reason: "missing_permission" });
+    const [overrideDenial] = await db.select().from(auditEvents)
+      .where(eq(auditEvents.action, "authorization.conflict_override_denied"));
+    expect(overrideDenial).toMatchObject({
+      actorUserId: fixture.dispatcherContext.user.id,
+      targetId: overlapping.id,
+      outcome: "denied",
+    });
     expect(
       await assignPrimaryTechnician(db, fixture.managerContext, {
         assignmentId: overlapping.id,
@@ -545,6 +640,14 @@ describe("Phase 5E-B dispatch workflow", () => {
     expect((await assignmentHistory(overlapping.id)).map((event) => event.eventType)).toContain(
       "conflict_overridden",
     );
+    const [overrideAudit] = await db.select().from(auditEvents)
+      .where(eq(auditEvents.action, "dispatch_assignment.conflict_overridden"));
+    expect(overrideAudit).toMatchObject({
+      actorUserId: fixture.managerContext.user.id,
+      targetId: overlapping.id,
+      outcome: "succeeded",
+      reason: "Coverage approved by operations",
+    });
 
     const cancelledTechnician = await makeTechnician("cancelled-conflict");
     const cancellableAssignment = await makeUnassignedAssignment("cancelled-conflict-one");
@@ -610,6 +713,50 @@ describe("Phase 5E-B dispatch workflow", () => {
         reason: "Crafted cross-tenant request",
       }),
     ).toEqual({ status: "not_found_or_inaccessible" });
+  });
+
+  it("records a verified same-tenant cross-office transition denial without leaking the record", async () => {
+    const project = mustCreated(await createProject(db, fixture.managerContext, {
+      officeId: fixture.alphaSecondOffice.id,
+      sourceSystem: "phase5f.test",
+      sourceProjectId: "cross-office-denial-project",
+      projectNumber: "P-CROSS-OFFICE-DENIAL",
+      name: "Richmond protected project",
+    }));
+    const workOrder = mustCreated(await createWorkOrder(db, fixture.managerContext, {
+      ...workOrderInput(project.id, fixture.concreteServiceType.id, "cross-office-denial"),
+      officeId: fixture.alphaSecondOffice.id,
+    }));
+    const ready = mustOk(await transitionWorkOrder(db, fixture.managerContext, {
+      workOrderId: workOrder.id,
+      expectedVersion: workOrder.version,
+      toStatus: "ready_for_dispatch",
+    }));
+    const assignment = mustCreated(await createDispatchAssignment(
+      db,
+      fixture.managerContext,
+      {
+        ...assignmentInput(ready.id, "cross-office-denial"),
+        officeId: fixture.alphaSecondOffice.id,
+      },
+    ));
+
+    expect(await transitionAssignment(db, fixture.dispatcherContext, {
+      assignmentId: assignment.id,
+      expectedVersion: assignment.version,
+      toStatus: "cancelled",
+      reason: "Crafted restricted-office request",
+    })).toEqual({ status: "not_found_or_inaccessible" });
+    const [denial] = await db.select().from(auditEvents)
+      .where(eq(auditEvents.action, "authorization.cross_office_mutation_denied"));
+    expect(denial).toMatchObject({
+      organizationId: fixture.alphaOrganization.id,
+      officeId: fixture.alphaSecondOffice.id,
+      actorUserId: fixture.dispatcherContext.user.id,
+      targetId: assignment.id,
+      outcome: "denied",
+      metadata: { requestedOperation: "transition_assignment" },
+    });
   });
 });
 
@@ -987,6 +1134,7 @@ async function cleanup(database: OperationalDatabase) {
       },
       async () => {
         await transaction.execute(sql`truncate table
+          "audit_events",
           "assignment_events",
           "assignment_technicians",
           "dispatch_assignments",

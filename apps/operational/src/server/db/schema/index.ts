@@ -1,5 +1,6 @@
 export * from "./assignment-events";
 export * from "./assignment-technicians";
+export * from "./audit-events";
 export * from "./dispatch-assignments";
 export * from "./external-identities";
 export * from "./office-assignments";

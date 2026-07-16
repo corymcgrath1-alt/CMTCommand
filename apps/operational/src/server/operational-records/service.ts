@@ -17,6 +17,14 @@ import {
 } from "@/server/db/schema";
 import { hasPermission } from "@/server/auth/permissions";
 import type { AuthorizationContext } from "@/server/auth/types";
+import { createAuditRequestContext, type AuditRequestContext } from "@/server/audit/request-context";
+import {
+  assignmentAuditState,
+  projectAuditState,
+  technicianAuditState,
+  workOrderAuditState,
+} from "@/server/audit/serializers";
+import { appendAuditEvent } from "@/server/audit/writer";
 import { getPostgresErrorInfo } from "@/server/tenancy/errors";
 import { uuidInputSchema, validationIssues } from "@/server/tenancy/validation";
 import {
@@ -302,6 +310,7 @@ export async function createProject(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordCreateResult<ProjectRecord>> {
   if (!hasPermission(context, "project.manage")) {
     return forbidden();
@@ -335,7 +344,15 @@ export async function createProject(
         })
         .returning();
 
-      return created(value, context, "project.created");
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: "project.created",
+        outcome: "succeeded",
+        target: { type: "project", id: value.id },
+        requestContext: auditRequestContext,
+        resultingState: projectAuditState(value),
+      });
+      return created(value, "project.created", auditEvent);
     });
   } catch (error) {
     return failureForDatabaseError(
@@ -351,6 +368,7 @@ export async function createTechnician(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordCreateResult<TechnicianRecord>> {
   if (!hasPermission(context, "technician.manage")) {
     return forbidden();
@@ -411,7 +429,15 @@ export async function createTechnician(
         createdByUserId: context.user.id,
       });
 
-      return created(value, context, "technician.created");
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: "technician.created",
+        outcome: "succeeded",
+        target: { type: "technician", id: value.id },
+        requestContext: auditRequestContext,
+        resultingState: technicianAuditState(value, [value.homeOfficeId]),
+      });
+      return created(value, "technician.created", auditEvent);
     });
   } catch (error) {
     return failureForDatabaseError(
@@ -427,6 +453,7 @@ export async function createWorkOrder(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordCreateResult<WorkOrderRecord>> {
   if (!hasPermission(context, "work_order.manage")) {
     return forbidden();
@@ -516,7 +543,16 @@ export async function createWorkOrder(
         })
         .returning();
 
-      return created(value, context, "work_order.created");
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: "work_order.created",
+        outcome: "succeeded",
+        target: { type: "work_order", id: value.id },
+        secondaryTarget: { type: "project", id: value.projectId },
+        requestContext: auditRequestContext,
+        resultingState: workOrderAuditState(value),
+      });
+      return created(value, "work_order.created", auditEvent);
     });
   } catch (error) {
     return failureForDatabaseError(
@@ -536,6 +572,7 @@ export async function createDispatchAssignment(
   db: OperationalDatabase,
   context: AuthorizationContext,
   input: unknown,
+  auditRequestContext: AuditRequestContext = createAuditRequestContext(),
 ): Promise<OperationalRecordCreateResult<DispatchAssignmentRecord>> {
   if (!hasPermission(context, "dispatch_assignment.manage")) {
     return forbidden();
@@ -585,11 +622,7 @@ export async function createDispatchAssignment(
       }
 
       const [workOrder] = await transaction
-        .select({
-          id: workOrders.id,
-          status: workOrders.status,
-          timeZone: workOrders.timeZone,
-        })
+        .select()
         .from(workOrders)
         .where(
           and(
@@ -632,7 +665,7 @@ export async function createDispatchAssignment(
         assignmentVersion: value.version,
       });
 
-      await transaction
+      const [scheduledWorkOrder] = await transaction
         .update(workOrders)
         .set({
           status: "scheduled",
@@ -645,9 +678,35 @@ export async function createDispatchAssignment(
             eq(workOrders.organizationId, context.membership.organizationId),
             eq(workOrders.status, "ready_for_dispatch"),
           ),
-        );
+        )
+        .returning();
 
-      return created(value, context, "dispatch_assignment.created");
+      if (!scheduledWorkOrder) {
+        throw new Error("work_order_schedule_reconciliation_failed");
+      }
+
+      await appendAuditEvent(transaction, context, {
+        officeId: scheduledWorkOrder.officeId,
+        action: "work_order.status_changed",
+        outcome: "succeeded",
+        target: { type: "work_order", id: scheduledWorkOrder.id },
+        secondaryTarget: { type: "dispatch_assignment", id: value.id },
+        requestContext: auditRequestContext,
+        previousState: workOrderAuditState(workOrder),
+        resultingState: workOrderAuditState(scheduledWorkOrder),
+        metadata: { source: "assignment_creation" },
+      });
+
+      const auditEvent = await appendAuditEvent(transaction, context, {
+        officeId: value.officeId,
+        action: "dispatch_assignment.created",
+        outcome: "succeeded",
+        target: { type: "dispatch_assignment", id: value.id },
+        secondaryTarget: { type: "work_order", id: value.workOrderId },
+        requestContext: auditRequestContext,
+        resultingState: assignmentAuditState(value),
+      });
+      return created(value, "dispatch_assignment.created", auditEvent);
     });
   } catch (error) {
     return failureForDatabaseError(
@@ -681,13 +740,13 @@ function parseRecordId(
 
 function created<T extends { id: string }>(
   value: T,
-  context: AuthorizationContext,
   action: OperationalRecordMutationAction,
+  auditEvent: import("@/server/db/schema").AuditEventRecord,
 ): OperationalRecordCreateResult<T> {
   return {
     status: "created",
     value,
-    mutation: createMutationMetadata(action, context, value.id),
+    mutation: createMutationMetadata(action, value.id, auditEvent),
   };
 }
 

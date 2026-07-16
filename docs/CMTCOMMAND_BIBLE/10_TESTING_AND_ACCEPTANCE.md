@@ -151,10 +151,10 @@ and runs PostgreSQL integration tests. It requires `APP_ENV=test`,
 explicit destructive-cleanup authorization; it must not fall back to
 `DATABASE_URL`. Cleanup verifies live `current_database()` identity immediately
 before explicitly enumerated `TRUNCATE ... RESTRICT` SQL. The Phase 5E cleanup
-list now names all ten current tables in dependency-first order:
-`dispatch_assignments`, `work_orders`, `technicians`, `projects`,
-`office_assignments`, `external_identities`, `organization_memberships`,
-`users`, `offices`, and `organizations`.
+list now names all fifteen current tables in dependency-first order, beginning
+with `audit_events`, assignment domain history and relationships, then current
+operational records, identity/office relationships, users, offices, and
+organizations.
 
 ## Operational vNext Identity And Authorization Tests - Confirmed
 
@@ -220,6 +220,27 @@ build, repeated migration, `drizzle-kit check`, root verification, Markdown-link
 validation, scoped security scans, client-bundle scans, and diff checks passed.
 This is local/test evidence only and does not establish production readiness.
 
+## Operational vNext Phase 5F Audit Tests - Confirmed
+
+Phase 5F unit coverage proves typed taxonomy/category mapping, server-generated
+UUID request context, role permissions, bounded queries, paired cursor/target
+filters, prohibited-key/depth/size rejection, and contact-free serializers.
+
+PostgreSQL coverage proves the table, enums, indexes, composite foreign keys,
+valid inserts, actor snapshot, update/delete trigger rejection, cross-tenant and
+cross-office constraints, metadata limits, source/audit atomic commit, rollback
+on audit failure, no success event on source conflict or stale version,
+assignment-domain/general-event atomicity, reassignment state, restricted-office
+and tenant isolation, stronger security permission, stable pagination, and
+unsafe metadata suppression. It also regresses guarded work-order scheduling
+and cancellation zero-row updates so assignment state cannot partially commit.
+
+Playwright covers admin membership/office audit history, manager operational
+history, request/correlation filters, restricted-office isolation, Beta/Alpha
+tenant isolation, safe dispatcher/viewer/field denials, refresh persistence,
+filter persistence, no raw internal error disclosure, and 390px no-overflow.
+The test wrapper must exit naturally and leave no listener on port 3100.
+
 ## Practical Testing Matrix
 
 | Change type | Minimum expected verification |
@@ -233,6 +254,7 @@ This is local/test evidence only and does not establish production readiness.
 | Pilot V1 readiness engine | Focused unit tests for each rule, precedence, explanation fields, and recalculation. |
 | Pilot V1 API behavior | Success, validation, unauthorized, forbidden, not-found, conflict/stale snapshot, and persistence-failure tests. |
 | Pilot V1 database change | Migration tests plus affected integration tests, referential behavior checks, and rollback/recovery notes. |
+| General audit change | Taxonomy/serializer unit tests, PostgreSQL immutability and atomicity, tenant/office/security authorization, protected API/browser scenarios, and privacy scans. |
 | Pilot V1 permission change | Allowed and denied cases for each affected role, organization, and office boundary. |
 | Pilot V1 import behavior | Valid import, malformed file, missing required fields, duplicate records, sensitive columns, preview/apply flow, and import history. |
 | Bug fix | Regression test reproducing original failure when practical, plus related verifier/browser smoke. |
