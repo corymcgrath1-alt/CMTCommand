@@ -158,7 +158,14 @@ describe("server-side authorization context resolution", () => {
     );
     expect(state.status).toBe("authorized");
     if (state.status === "authorized") {
-      expect(state.context.permissions).toEqual(["organization.read", "office.read"]);
+      expect(state.context.permissions).toEqual([
+        "organization.read",
+        "office.read",
+        "project.read",
+        "work_order.read",
+        "technician.read",
+        "dispatch_assignment.read",
+      ]);
     }
   });
 });

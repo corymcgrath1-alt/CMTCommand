@@ -24,17 +24,22 @@
   - `apps/operational/drizzle/0000_open_giant_girl.sql`
   - `apps/operational/drizzle/0001_office-composite-key.sql`
   - `apps/operational/drizzle/0002_identity-membership-rbac.sql`
+  - `apps/operational/drizzle/0003_vengeful_vapor.sql`
+  - `apps/operational/drizzle/0004_right_reavers.sql`
   - `apps/operational/src/server/auth/`
   - `apps/operational/src/server/members/`
+  - `apps/operational/src/server/operational-records/`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md`
   - `apps/operational/tests/integration/tenancy.integration.test.ts`
+  - `apps/operational/tests/integration/operational-records.integration.test.ts`
   - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md`
   - `docs/CMTCOMMAND_BIBLE/13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md`
   - `docs/cmtcommand-vnext/baseline.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-15
+- Last Reviewed: 2026-07-16
 
 ## Current Architecture - Confirmed
 
@@ -154,8 +159,8 @@ Governing documents:
 
 That Phase 4 scaffold alone was technical infrastructure, not proof that Pilot
 V1 auth, tenancy, imports, readiness, coverage, Decision Log, audit, deployment,
-or domain persistence existed. Later sections record the implemented Phase 5
-and Phase 5D foundations.
+or domain persistence existed. Later sections record the implemented Phase 5,
+Phase 5D, and bounded Phase 5E foundations.
 
 ## Phase 5 Tenancy Foundation - Confirmed
 
@@ -218,6 +223,41 @@ readiness workflow, coverage workflow, or Field Operations runtime is implied.
 See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md) and the
 [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md).
 
+## Phase 5E Durable Operational Records - Confirmed
+
+Operational vNext now has four durable operational-record tables:
+
+- `projects`
+- `technicians`
+- `work_orders`
+- `dispatch_assignments`
+
+All four require organization and office ownership. Internal UUIDs remain
+separate from normalized source-system/source-record identifiers and from human
+project or work-order numbers. Composite foreign keys enforce office and
+organization agreement from work order to project and from dispatch assignment
+to work order and technician. Relationship deletion is restrictive.
+
+`src/server/operational-records/` provides Zod validation plus scoped create,
+list, and find services. Reads apply the server-derived organization/office
+scope. Creates check the central permission policy, serialize on the owning
+organization, and revalidate the current user, organization, membership, role
+permission, and office access inside the database transaction. Create results
+include safe actor-attributed mutation metadata, but no general audit event is
+persisted.
+
+The implemented role boundary is intentionally narrow:
+
+- Organization admin and operations manager: read/manage all four record types.
+- Dispatcher: read all four; manage dispatch assignments only.
+- Technical reviewer and viewer: read all four; no Phase 5E writes.
+- Field technician: no Phase 5E operational-record permission.
+
+Phase 5E exposes no operational-record route, Server Action, or product UI. It
+does not implement imports, durable Service Type records, readiness, coverage,
+Decision Log behavior, persistent general audit events, or Field Operations
+runtime. See the [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md).
+
 ## Future Field Operations Architecture - Path B
 
 Field Operations Capture & Report Intelligence is documented as a future
@@ -234,11 +274,13 @@ The future module boundary connects existing authorized assignments to:
 - Dispatcher field-status projections.
 - Version-specific exports and external synchronization receipts.
 
-The identity, membership, office access, and RBAC prerequisite is now implemented
-as a local foundation. Field Operations remains blocked on a production identity
-provider, durable projects/work orders/assignments/technicians, general
-audit-event persistence, and a private object-storage/upload boundary. It still
-must not begin as field-reporting tables or UI.
+The identity, membership, office access, and RBAC prerequisite is implemented as
+a local foundation. Phase 5E also supplies durable project, work-order,
+technician, and dispatch-assignment records, but the P2 gate remains partial
+because there is no durable Service Type record. Field Operations remains
+blocked on production identity, completion of P2, general audit-event
+persistence, and a private object-storage/upload boundary. It still must not
+begin as field-reporting tables or UI.
 
 See [Field Operations Capture And Reporting](13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md),
 [Field Operations V1](specs/FIELD_OPERATIONS_V1.md),
@@ -264,14 +306,19 @@ The current architecture favors a low-friction local demo with tested pure utili
 ## Implementation Gaps
 
 - Operational app scaffolding, tenancy persistence, provider-neutral identity,
-  memberships, office assignments, protected shell, and centralized RBAC exist.
-  No Tomorrow Readiness or Coverage business module exists.
+  memberships, office assignments, protected shell, centralized RBAC, and the
+  four Phase 5E operational-record types exist. No Tomorrow Readiness or
+  Coverage business module exists.
 - Exact managed auth, database, and hosting providers remain checkpoints.
 - Production authentication remains fail-closed until a provider is selected;
   the current signed adapter is development/test only.
 - General persistent security audit events and PostgreSQL RLS remain deferred.
+- Durable Service Type, import, availability, certification, clearance,
+  equipment, calibration, and service-requirement foundations remain absent.
 - No durable readiness snapshot or Decision Log implementation exists.
-- Field Operations is architecture-only; no field session, evidence, report, sample, media, extraction, export, or field UI implementation exists.
+- No route or UI exposes the Phase 5E operational-record services.
+- Field Operations remains architecture-only; no field session, evidence,
+  report, sample, media, extraction, export, or field UI implementation exists.
 
 ## Open Questions
 

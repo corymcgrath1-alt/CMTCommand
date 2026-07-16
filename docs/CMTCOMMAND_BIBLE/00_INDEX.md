@@ -21,7 +21,7 @@
   - `docs/CMTCOMMAND_BIBLE/13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-15
+- Last Reviewed: 2026-07-16
 
 ## Purpose
 
@@ -84,6 +84,7 @@ Operational vNext architecture:
 - [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md): read for the implemented shell, exact package versions, commands, health behavior, and verification results.
 - [Phase 5 Tenancy Foundation Report](plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md): read before adding users, memberships, roles, technicians, work orders, imports, readiness, or coverage.
 - [Phase 5D Identity And RBAC Report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md): read for the implemented user, external identity, membership, office-assignment, protected-shell, and authorization boundary.
+- [Phase 5E Durable Operational Records Report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md): read for the bounded project, technician, work-order, dispatch-assignment, source-identifier, scoped-service, and authorization foundation.
 
 Field Operations future workstream:
 
@@ -145,8 +146,11 @@ Do not treat inferred statements as product commitments. Do not treat founder ta
   and the first migration. Phase 5D adds application users, provider identity
   mappings, organization memberships, office assignments, centralized RBAC,
   protected Operational vNext pages/APIs, and a production-forbidden development
-  identity adapter. No production auth provider, product workflow, invitation
-  delivery, or general audit-event table exists.
+  identity adapter. Phase 5E adds four durable organization/office-owned record
+  types: projects, technicians, work orders, and dispatch assignments, with
+  source-ID separation and scoped server services. No production auth provider,
+  import/readiness/coverage workflow, operational-record UI/routes, durable
+  Service Type record, invitation delivery, or general audit-event table exists.
 - `euchre-platform/` and `brackethub/` are unrelated to root CMTCommand scope based on `AGENTS.md`, `MIGRATION_CLEANUP_REPORT.md`, and vNext docs.
 - `node scripts\verify-root.mjs` is the root verification command found in repository evidence.
 

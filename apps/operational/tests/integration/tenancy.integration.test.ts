@@ -341,7 +341,18 @@ async function cleanupTestRows(database: OperationalDatabase): Promise<void> {
       },
       async () => {
         await transaction.execute(
-          sql`truncate table "office_assignments", "external_identities", "organization_memberships", "users", "offices", "organizations" restart identity restrict`,
+          sql`truncate table
+            "dispatch_assignments",
+            "work_orders",
+            "technicians",
+            "projects",
+            "office_assignments",
+            "external_identities",
+            "organization_memberships",
+            "users",
+            "offices",
+            "organizations"
+            restart identity restrict`,
         );
       },
     );

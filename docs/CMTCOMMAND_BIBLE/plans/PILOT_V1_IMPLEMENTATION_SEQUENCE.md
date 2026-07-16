@@ -13,7 +13,9 @@
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md`
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
   - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
-- Last Reviewed: 2026-07-14
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5D_IDENTITY_RBAC_REPORT.md`
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md`
+- Last Reviewed: 2026-07-16
 
 ## Purpose
 
@@ -72,15 +74,20 @@ business behavior was implemented.
 | Verification requirements | Migration tests, model tests, permission scoping tests, data-minimization review. |
 | Stop conditions | Schema requires forbidden sensitive data or lacks organization/office scoping. |
 
-Phase 5 completed the first slice of this phase only: organizations, offices,
-the initial migration, explicit office access scopes, scoped office persistence,
-PostgreSQL isolation tests, and a PostgreSQL CI job. It did not implement users,
-memberships, roles, technicians, work orders, imports, readiness, coverage,
-Decision Log, audit events, or operational-impact data.
+Phase 5 completed organization/office tenancy, scoped office persistence,
+PostgreSQL isolation tests, and the database CI lane. Phase 5D then added users,
+external identities, organization memberships, office access assignments, and
+server-enforced RBAC.
 
-The next smallest slice should add identity records, organization memberships,
-office access assignments, and server-enforced RBAC before any technician or
-readiness workflow data is introduced.
+Phase 5E adds the next bounded slice: durable organization/office-owned projects,
+technicians, work orders, and dispatch assignments; separate source-system and
+source-record identifiers; scoped create/list/find services; role permissions;
+and database relationship/isolation tests. It adds no product route or UI and no
+import, readiness, coverage, Decision Log, or persistent general audit behavior.
+
+Phase 2 remains incomplete. Durable Service Type records, availability,
+certifications, clearances, equipment, calibrations, job-site entities, service
+requirements, and other readiness inputs still require separately scoped work.
 
 ## Phase 3 - Controlled Import Pipeline
 
@@ -182,12 +189,15 @@ readiness workflow data is introduced.
 
 ## Next Guarded Phase
 
-The guarded operational application shell now exists. The next smallest
-implementation phase should be the organization and office tenancy foundation:
-persistent organization/office schema, migrations, scoped data-access helpers,
-and isolation tests. Do not add technicians, work orders, imports, readiness
-rules, coverage, Decision Log behavior, or audit events until the tenancy
-boundary is persisted and tested.
+The guarded operational shell, tenancy, identity/RBAC, and bounded Phase 5E
+records now exist. The next Phase 2 slice should complete an explicitly approved
+readiness-data dependency such as durable Service Type and service-requirement
+records without treating Phase 5E as the entire data foundation.
+
+Do not begin controlled imports until their required core entities and data
+policy are complete. Do not begin readiness, coverage, Decision Log, persistent
+audit, or Field Operations UI/routes merely because four operational record
+types now persist.
 
 ## Remaining Open Questions
 

@@ -2,7 +2,7 @@
 
 ## Document Status
 
-- Status: Draft Architecture; Not Implemented
+- Status: Draft Architecture; Field Operations Runtime Not Implemented
 - Scope Label: Future Workstream
 - Primary Evidence:
   - Field Operations Capture & Report Intelligence workstream brief, 2026-07-15
@@ -14,7 +14,8 @@
   - [ADR-006 Field Evidence Is Immutable And AI Extraction Is Advisory](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md)
   - [Field Operations V1 Specification](specs/FIELD_OPERATIONS_V1.md)
   - [Field Operations Implementation Plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md)
-- Last Reviewed: 2026-07-15
+  - [Phase 5E Durable Operational Records Report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md)
+- Last Reviewed: 2026-07-16
 
 ## Product Position
 
@@ -33,18 +34,25 @@ Confirmed foundations:
 - Bounded Next.js Operational vNext app under `apps/operational/`.
 - PostgreSQL/Drizzle connection and migration tooling.
 - Persistent `organizations` and `offices` with scoped office repository functions.
+- Provider-neutral users, memberships, office access, and server-enforced local
+  identity/RBAC foundations.
+- Durable organization/office-owned `projects`, `work_orders`, `technicians`,
+  and `dispatch_assignments`, with separate source IDs, scoped services, role
+  checks, composite relationship constraints, and local PostgreSQL tests.
 - Zod, Vitest, Playwright, health routes, and a PostgreSQL integration-test lane.
 
 Missing foundations that block the concrete-inspection vertical slice:
 
-- Authentication and auditable user identity.
-- Organization memberships, office access assignments, roles, and server-enforced permissions.
-- Durable Project, Work Order, Assignment, and Technician records.
+- A production identity provider and pilot-ready authentication verification.
+- Completion of P2, including a durable Service Type record and any approved
+  remaining assignment/import-boundary decisions.
 - General audit-event persistence.
 - A private object-storage abstraction and authorized upload lifecycle.
 - A protected server-side product API pattern proven with authenticated tenant context.
 
-No field-reporting runtime, schema, route, upload, extraction, UI, or browser-local substitute is implemented by this architecture phase.
+Phase 5E records are shared prerequisites, not Field Operations behavior. No
+field-reporting runtime, schema, route, upload, extraction, UI, or browser-local
+substitute is implemented.
 
 ## Product Problem
 

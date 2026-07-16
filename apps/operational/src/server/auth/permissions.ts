@@ -8,11 +8,33 @@ export const permissionValues = [
   "organization.roles.manage",
   "office.read",
   "office.assignments.manage",
+  "project.read",
+  "project.manage",
+  "work_order.read",
+  "work_order.manage",
+  "technician.read",
+  "technician.manage",
+  "dispatch_assignment.read",
+  "dispatch_assignment.manage",
 ] as const;
 
 export type Permission = (typeof permissionValues)[number];
 
 const readPermissions: Permission[] = ["organization.read", "office.read"];
+
+const domainReadPermissions: Permission[] = [
+  "project.read",
+  "work_order.read",
+  "technician.read",
+  "dispatch_assignment.read",
+];
+
+const domainManagePermissions: Permission[] = [
+  "project.manage",
+  "work_order.manage",
+  "technician.manage",
+  "dispatch_assignment.manage",
+];
 
 const rolePermissions: Record<OrganizationRole, Permission[]> = {
   organization_admin: [
@@ -21,12 +43,22 @@ const rolePermissions: Record<OrganizationRole, Permission[]> = {
     "organization.members.manage",
     "organization.roles.manage",
     "office.assignments.manage",
+    ...domainReadPermissions,
+    ...domainManagePermissions,
   ],
-  operations_manager: readPermissions,
-  dispatcher: readPermissions,
-  technical_reviewer: readPermissions,
+  operations_manager: [
+    ...readPermissions,
+    ...domainReadPermissions,
+    ...domainManagePermissions,
+  ],
+  dispatcher: [
+    ...readPermissions,
+    ...domainReadPermissions,
+    "dispatch_assignment.manage",
+  ],
+  technical_reviewer: [...readPermissions, ...domainReadPermissions],
   field_technician: readPermissions,
-  viewer: readPermissions,
+  viewer: [...readPermissions, ...domainReadPermissions],
 };
 
 const organizationWideOfficeRoles = new Set<OrganizationRole>([

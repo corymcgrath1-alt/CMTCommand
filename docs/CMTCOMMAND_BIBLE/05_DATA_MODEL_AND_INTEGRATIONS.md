@@ -17,16 +17,24 @@
   - `apps/operational/drizzle/0000_open_giant_girl.sql`
   - `apps/operational/drizzle/0001_office-composite-key.sql`
   - `apps/operational/drizzle/0002_identity-membership-rbac.sql`
+  - `apps/operational/drizzle/0003_vengeful_vapor.sql`
+  - `apps/operational/drizzle/0004_right_reavers.sql`
   - `apps/operational/src/server/db/schema/users.ts`
   - `apps/operational/src/server/db/schema/external-identities.ts`
   - `apps/operational/src/server/db/schema/organization-memberships.ts`
   - `apps/operational/src/server/db/schema/office-assignments.ts`
+  - `apps/operational/src/server/db/schema/projects.ts`
+  - `apps/operational/src/server/db/schema/technicians.ts`
+  - `apps/operational/src/server/db/schema/work-orders.ts`
+  - `apps/operational/src/server/db/schema/dispatch-assignments.ts`
+  - `apps/operational/src/server/operational-records/`
   - `apps/operational/tests/integration/tenancy.integration.test.ts`
+  - `apps/operational/tests/integration/operational-records.integration.test.ts`
   - `README.md`
   - `docs/cmtcommand-vnext/plan.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-15
+- Last Reviewed: 2026-07-16
 
 ## Current Demo - Confirmed
 
@@ -246,6 +254,50 @@ Development fixture data is created only by
 `npm run seed:identity:dev`; it is not present in the production migration.
 See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md).
 
+## Phase 5E Durable Operational Records - Confirmed
+
+Phase 5E adds four current-state persistence models without changing the rule
+that customer source systems remain authoritative for their underlying records:
+
+| Table | Purpose | Source and human identifiers | Ownership |
+| --- | --- | --- | --- |
+| `projects` | Project context required by scheduled work. | Internal UUID; normalized `source_system`; `source_project_id`; separate `project_number`. | Required organization and office. |
+| `technicians` | Minimal business-operational technician roster. | Internal UUID; normalized `source_system`; `source_technician_id`; separate display name. | Required organization and office. |
+| `work_orders` | Scheduled work linked to one project, service-type text, job-site name, and time interval. | Internal UUID; normalized `source_system`; `source_work_order_id`; separate `work_order_number`. | Required organization and office. |
+| `dispatch_assignments` | Current technician-to-work-order assignment over a time interval. | Internal UUID; normalized `source_system`; `source_assignment_id`. | Required organization and office; creating/updating user IDs are required. |
+
+Source uniqueness is `(organization_id, source_system, source-specific id)`, so
+the same source identifier may exist in different organizations. Source IDs and
+human-readable numbers are not primary keys.
+
+Database integrity includes:
+
+- Composite office/organization foreign keys for every Phase 5E record.
+- A composite work-order/project foreign key requiring the same organization
+  and office.
+- Composite dispatch-assignment foreign keys requiring its work order and
+  technician to share the assignment's organization and office.
+- Restrictive deletes and cascading key updates for owned relationships.
+- Required nonblank normalized source identifiers and required display fields.
+- Database checks requiring work-order and assignment end times after start.
+- Organization/office, schedule, project, technician, active-state, and display
+  lookup indexes.
+
+`apps/operational/src/server/operational-records/` validates create inputs and
+provides scoped create/list/find services. Organization scope is derived from
+the authenticated context rather than accepted from input. Read predicates
+apply organization and office scope; inaccessible and nonexistent lookups share
+the `not_found_or_inaccessible` result. Create transactions serialize on the
+owning organization and revalidate the actor's current user, organization,
+membership, role permission, and office access before insertion. The shared
+organization lock also serializes the existing membership and office-access
+mutation path.
+
+Create results return mutation ID, action, actor, organization, subject, and
+time metadata. This metadata is not persisted and is not a general audit-event
+implementation. Phase 5E has no import path, update/delete service, product
+route/UI, durable Service Type table, readiness, coverage, or Decision Log.
+
 ## Derived Data
 
 Current demo derived data:
@@ -284,11 +336,14 @@ External integrations explicitly absent in current root evidence:
 
 ## Implementation Gaps
 
-- Persistent organization, office, user, external identity, membership, and
-  office-assignment schemas exist; the remaining Pilot V1 records do not.
-- Operational vNext has tenancy and identity/RBAC migrations. It still has no
-  import, readiness, coverage, Decision Log, general audit event, technician,
-  equipment, work-order, or project tables.
+- Persistent organization, office, user, external identity, membership,
+  office-assignment, project, technician, work-order, and dispatch-assignment
+  schemas exist. The remaining Pilot V1 records do not.
+- Operational vNext still has no import, readiness, coverage, Decision Log,
+  general audit-event, equipment, availability, certification, clearance,
+  calibration, durable Service Type, service-requirement, or readiness-snapshot
+  tables.
+- No product route or UI exposes the Phase 5E operational-record services.
 - No XLSX import implementation was found in the current static demo.
 - No import history or durable readiness snapshot exists.
 - No writeback protections exist because no external writeback integration exists.

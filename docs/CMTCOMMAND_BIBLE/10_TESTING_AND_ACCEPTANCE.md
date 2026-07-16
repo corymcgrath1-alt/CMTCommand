@@ -14,13 +14,15 @@
   - `apps/operational/vitest.config.ts`
   - `apps/operational/vitest.integration.config.ts`
   - `apps/operational/tests/integration/tenancy.integration.test.ts`
+  - `apps/operational/tests/unit/operational-records.validation.test.ts`
+  - `apps/operational/tests/integration/operational-records.integration.test.ts`
   - `.github/workflows/operational-ci.yml`
   - `DEVELOPER_NOTES.md`
   - `docs/cmtcommand-vnext/verification.md`
   - `docs/cmtcommand-vnext/status.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-14
+- Last Reviewed: 2026-07-16
 
 ## Current Demo - Confirmed
 
@@ -146,7 +148,11 @@ and runs PostgreSQL integration tests. It requires `APP_ENV=test`,
 `TEST_DATABASE_URL`, exact expected database name and loopback host, and
 explicit destructive-cleanup authorization; it must not fall back to
 `DATABASE_URL`. Cleanup verifies live `current_database()` identity immediately
-before explicitly enumerated `TRUNCATE ... RESTRICT` SQL.
+before explicitly enumerated `TRUNCATE ... RESTRICT` SQL. The Phase 5E cleanup
+list now names all ten current tables in dependency-first order:
+`dispatch_assignments`, `work_orders`, `technicians`, `projects`,
+`office_assignments`, `external_identities`, `organization_memberships`,
+`users`, `offices`, and `organizations`.
 
 ## Operational vNext Identity And Authorization Tests - Confirmed
 
@@ -175,6 +181,48 @@ Playwright covers unauthenticated protected-route redirection, development sign
 in, `HttpOnly` session cookie behavior, and fail-closed database-unavailable UI,
 in addition to the existing liveness/readiness checks. Full role-to-role browser
 acceptance requires the isolated migrated test database.
+
+## Operational vNext Durable Operational-Record Tests - Confirmed
+
+Phase 5E unit tests cover:
+
+- Source-system normalization, source-ID boundaries, trimming, and active-state
+  defaults.
+- UUID, contact-field, field-length, and timezone-aware date validation.
+- Work-order and dispatch-assignment interval ordering.
+- The least-privilege role matrix for all four record types while preserving
+  Phase 5D identity permissions.
+
+The 17-case PostgreSQL integration suite covers:
+
+- Presence of all four migrated tables.
+- A durable project -> work order -> dispatch assignment chain plus its
+  technician, with separate source and human identifiers.
+- Source-system normalization, same source IDs across organizations, and safe
+  same-organization conflict results.
+- Organization-wide, restricted-office, and empty-restricted scopes for all
+  four record types.
+- Service and composite-foreign-key rejection of cross-office and
+  cross-organization relationships.
+- Dispatcher assignment-only writes, viewer write denial, and field-technician
+  read denial.
+- In-transaction denial after actor suspension.
+- Organization-row serialization against a concurrent membership revocation.
+- Invalid interval rejection without persistence.
+- Direct database rejection of malformed source systems, whitespace-only text,
+  and invalid work-order/assignment intervals with named CHECK constraints.
+- Restrictive deletion for referenced projects, work orders, and technicians.
+
+Bounded local Phase 5E verification passed 27 focused unit tests, targeted lint
+and type checking, `drizzle-kit check`, repeated test migration, the 17-case
+operational-record PostgreSQL suite, and `npm.cmd run verify:db` across three
+integration files / 44 tests. `npm.cmd run verify` also passed lint, typecheck,
+12 unit-test files / 110 tests, and the production build. Root static
+verification passed, and relative Markdown validation found zero broken links
+across 154 links in 36 Bible/operational Markdown files. This is local phase
+evidence only. Scoped diff and untracked-source whitespace checks also passed.
+The separate Playwright command exercised all six scenarios but its wrapper
+timed out before exiting, so that command is not claimed as passed.
 
 ## Practical Testing Matrix
 
@@ -222,7 +270,9 @@ If not run, report:
 - Browser/CDP validation is not part of CI.
 - No full screen-reader transcript or formal accessibility audit was found.
 - Prototype surfaces have limited direct tests.
-- Pilot V1 operational logic, permissions, persistence, and deployment tests do not exist yet.
+- Phase 5E has bounded persistence, permission, and isolation coverage for four
+  operational-record types. Import, readiness, coverage, Decision Log,
+  operational-impact, Field Operations, and deployment tests do not exist yet.
 - Operational database connectivity and migration behavior require a safe `TEST_DATABASE_URL` or the PostgreSQL CI service-container job.
 
 ## Open Questions

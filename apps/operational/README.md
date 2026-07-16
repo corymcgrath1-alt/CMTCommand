@@ -1,13 +1,13 @@
 # CMTCommand Operational vNext
 
-This directory contains the guarded Operational vNext scaffold for CMTCommand.
+This directory contains the guarded Operational vNext foundation for CMTCommand.
 It proves the app boundary, TypeScript/Next.js toolchain, health endpoints,
 environment validation, Drizzle/PostgreSQL wiring, organization/office tenancy
 persistence, provider-neutral identity, memberships, office assignments,
-server-enforced RBAC, unit testing, integration testing, and browser test
-configuration.
+server-enforced RBAC, four durable operational-record types, unit testing,
+integration testing, and browser test configuration.
 
-It does not implement Pilot V1 business functionality.
+It does not implement the end-to-end Pilot V1 business workflow.
 
 ## Current Scope
 
@@ -24,6 +24,13 @@ Implemented in this scaffold:
   production runtimes.
 - Protected `/app` shell, secure active-organization selection, member
   administration, and tenant-scoped office APIs.
+- Durable `projects`, `technicians`, `work_orders`, and `dispatch_assignments`
+  with required organization/office ownership, source-system identifiers, and
+  database-enforced relationship scope.
+- Permission- and office-scoped create/list/find services for those four record
+  types. Create operations serialize on the organization, revalidate the current
+  actor inside the transaction, and return structured mutation metadata for a
+  future audit sink.
 - `/api/health` liveness endpoint.
 - `/api/ready` database-readiness endpoint.
 - Vitest unit tests.
@@ -38,7 +45,11 @@ Not implemented:
   invited membership only.
 - Persistent general audit events. Security mutations return structured,
   actor-attributed metadata for a future audit sink.
-- Imports, work orders, technicians, equipment, readiness rules, coverage, Decision Log, audit events, operational impact, or deployment.
+- A durable Service Type catalog, imports, equipment/certification/clearance
+  records, readiness rules, coverage, Decision Log, operational impact, or
+  deployment.
+- Product routes or UI for projects, technicians, work orders, or dispatch
+  assignments.
 
 ## Runtime
 
@@ -111,7 +122,8 @@ viewer. Seed data is not part of production migrations.
 
 ## Schema And Migrations
 
-The Drizzle schema contains the tenancy and identity foundation:
+The Drizzle schema contains the tenancy, identity, and bounded operational-data
+foundation:
 
 - `src/server/db/schema/organizations.ts`
 - `src/server/db/schema/offices.ts`
@@ -119,6 +131,10 @@ The Drizzle schema contains the tenancy and identity foundation:
 - `src/server/db/schema/external-identities.ts`
 - `src/server/db/schema/organization-memberships.ts`
 - `src/server/db/schema/office-assignments.ts`
+- `src/server/db/schema/projects.ts`
+- `src/server/db/schema/technicians.ts`
+- `src/server/db/schema/work-orders.ts`
+- `src/server/db/schema/dispatch-assignments.ts`
 
 Generate migrations after schema changes:
 
@@ -151,7 +167,7 @@ that merely contains `test`, an arbitrary remote host, or a URL that disagrees
 with the expected name or host is rejected. Diagnostics redact credentials and
 never print the unredacted connection string.
 
-PostgreSQL integration tests also delete their own organization/office fixtures.
+PostgreSQL integration tests also delete their own scoped test fixtures.
 That destructive cleanup requires an additional explicit authorization value:
 
 ```powershell
@@ -161,8 +177,9 @@ npm run test:integration
 
 Immediately before cleanup, the integration test verifies PostgreSQL's live
 `current_database()` identity inside the same transaction. Cleanup enumerates
-the six current identity/tenancy tables and uses `RESTRICT`, so a future
-dependent table fails visibly instead of being silently removed by `CASCADE`.
+the ten current operational, identity, and tenancy tables in dependency-first
+order and uses `RESTRICT`, so a future dependent table fails visibly instead of
+being silently removed by `CASCADE`.
 
 ## Development
 
@@ -232,7 +249,7 @@ part of the default gate.
 verification plus Playwright scaffold smoke tests. It does not include the
 database gate.
 
-## Current Identity And Tenancy Boundary
+## Current Identity, Tenancy, And Operational-Record Boundary
 
 Implemented:
 
@@ -255,6 +272,20 @@ Implemented:
 - Membership writes revalidate the actor inside the transaction, use optimistic
   versions, prevent self role/status changes and final-admin lockout, and return
   structured actor metadata.
+- Operational records use internal UUIDs while preserving normalized
+  `source_system` plus source-specific IDs separately from human project/work
+  numbers.
+- Every Phase 5E record requires `organization_id` and `office_id`. Composite
+  foreign keys keep work orders with projects and dispatch assignments with work
+  orders/technicians in the same organization and office.
+- Organization admins and operations managers can read/manage all four record
+  types. Dispatchers can read all four and manage dispatch assignments only;
+  technical reviewers and viewers are read-only; field technicians receive no
+  Phase 5E record permission.
+- Operational create services lock the organization and revalidate active user,
+  organization, membership, current role permission, and office access inside
+  the transaction. Returned actor-attributed mutation metadata is not persisted
+  audit history.
 
 Not implemented:
 
@@ -262,6 +293,8 @@ Not implemented:
 - Invitation acceptance and delivery.
 - Persistent general audit-event storage.
 - PostgreSQL Row-Level Security.
+- Operational-record HTTP routes, Server Actions, and product UI.
+- Durable Service Type records and the remaining readiness data domains.
 
 Protected scopes are derived from verified identity and current database
 membership. Client-supplied organization IDs, office IDs, roles, and permissions
@@ -310,7 +343,9 @@ Start with the CMTCommand Bible:
 - [Operational architecture blueprint](../../docs/CMTCOMMAND_BIBLE/plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md)
 - [Phase 4 scaffolding report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_4_SCAFFOLDING_REPORT.md)
 - [Phase 5D identity/RBAC report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_5D_IDENTITY_RBAC_REPORT.md)
+- [Phase 5E durable operational-records report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md)
 
 This scaffold is not ready for pilot use until later guarded phases add the
-imports, readiness engine, coverage workflow, persistent general audit events,
-production identity provider, and pilot operations.
+remaining operational data domains, imports, readiness engine, coverage
+workflow, persistent general audit events, production identity provider, and
+pilot operations.

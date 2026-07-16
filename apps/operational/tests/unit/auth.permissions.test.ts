@@ -13,11 +13,76 @@ import { statusTransitionAllowed } from "../../src/server/members/service";
 
 const organizationId = "10000000-0000-4000-8000-000000000001";
 const officeId = "20000000-0000-4000-8000-000000000001";
+const domainReadPermissions = [
+  "project.read",
+  "work_order.read",
+  "technician.read",
+  "dispatch_assignment.read",
+] as const;
+const domainManagePermissions = [
+  "project.manage",
+  "work_order.manage",
+  "technician.manage",
+  "dispatch_assignment.manage",
+] as const;
 
 describe("centralized permissions", () => {
-  it("allows organization admins to manage memberships and office access", () => {
-    const permissions = permissionsForRole("organization_admin");
-    expect(permissions).toEqual(
+  it("allows organization admins to manage memberships, office access, and all domain records", () => {
+    expect(permissionsForRole("organization_admin")).toEqual([
+      "organization.read",
+      "office.read",
+      "organization.members.read",
+      "organization.members.manage",
+      "organization.roles.manage",
+      "office.assignments.manage",
+      ...domainReadPermissions,
+      ...domainManagePermissions,
+    ]);
+  });
+
+  it("allows operations managers to read and manage all domain records", () => {
+    expect(permissionsForRole("operations_manager")).toEqual([
+      "organization.read",
+      "office.read",
+      ...domainReadPermissions,
+      ...domainManagePermissions,
+    ]);
+  });
+
+  it("limits dispatchers to domain reads and dispatch-assignment management", () => {
+    expect(permissionsForRole("dispatcher")).toEqual([
+      "organization.read",
+      "office.read",
+      ...domainReadPermissions,
+      "dispatch_assignment.manage",
+    ]);
+  });
+
+  it("keeps technical reviewers domain-read-only", () => {
+    expect(permissionsForRole("technical_reviewer")).toEqual([
+      "organization.read",
+      "office.read",
+      ...domainReadPermissions,
+    ]);
+  });
+
+  it("keeps viewers domain-read-only", () => {
+    expect(permissionsForRole("viewer")).toEqual([
+      "organization.read",
+      "office.read",
+      ...domainReadPermissions,
+    ]);
+  });
+
+  it("does not grant field technicians any domain permissions", () => {
+    expect(permissionsForRole("field_technician")).toEqual([
+      "organization.read",
+      "office.read",
+    ]);
+  });
+
+  it("preserves organization-admin membership and office-access permissions", () => {
+    expect(permissionsForRole("organization_admin")).toEqual(
       expect.arrayContaining([
         "organization.members.manage",
         "organization.roles.manage",
@@ -34,11 +99,6 @@ describe("centralized permissions", () => {
     "viewer",
   ] as const)("does not grant membership management to %s", (role) => {
     expect(permissionsForRole(role)).not.toContain("organization.members.manage");
-  });
-
-  it("keeps the viewer role read-only", () => {
-    const permissions = permissionsForRole("viewer");
-    expect(permissions).toEqual(["organization.read", "office.read"]);
   });
 
   it("does not give technical reviewers implicit user management", () => {

@@ -144,8 +144,9 @@ export default async function ProtectedAppPage({
           <div>
             <h2>Foundation capabilities</h2>
             <p className="muted">
-              This phase proves identity and access control only. Readiness,
-              coverage, assignments, field capture, and reporting remain deferred.
+              Identity, access control, and durable tenant-scoped operational
+              records are implemented. Imports, readiness, coverage decisions,
+              field capture, and reporting remain deferred.
             </p>
           </div>
           {hasPermission(context, "organization.members.read") ? (

@@ -24,14 +24,17 @@
   - `apps/operational/tests/integration/tenancy.integration.test.ts`
   - `apps/operational/src/server/auth/`
   - `apps/operational/src/server/members/`
+  - `apps/operational/src/server/operational-records/`
   - `apps/operational/tests/unit/auth.*.test.ts`
+  - `apps/operational/tests/unit/operational-records.validation.test.ts`
   - `apps/operational/tests/integration/identity.integration.test.ts`
+  - `apps/operational/tests/integration/operational-records.integration.test.ts`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md`
   - `docs/cmtcommand-vnext/review.md`
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-15
+- Last Reviewed: 2026-07-16
 
 ## Current Demo - Confirmed
 
@@ -180,9 +183,10 @@ Implemented role policy:
 | Field technician | Read current authorized organization/offices; no organization administration. | `restricted` only |
 | Viewer | Read current authorized organization/offices; no writes. | `all` or `restricted` |
 
-These permissions cover only implemented foundation surfaces. Readiness,
-coverage, assignments, field reporting, and technical report approval remain
-unimplemented and grant no current capability.
+At the Phase 5D checkpoint, these permissions covered only identity-foundation
+surfaces. The Phase 5E section below records the later bounded operational-record
+permissions. Readiness, coverage, field reporting, and technical report approval
+remain unimplemented and grant no current capability.
 
 Server authorization requirements:
 
@@ -205,6 +209,44 @@ PostgreSQL RLS and persistent general audit events are not implemented. Mutation
 metadata is preparation for a future audit sink, not an audit-history claim.
 See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md).
 
+## Phase 5E Operational-Record Authorization - Confirmed
+
+Phase 5E extends the central permission policy with separate read/manage
+permissions for projects, work orders, technicians, and dispatch assignments:
+
+| Role | Phase 5E operational-record capability |
+| --- | --- |
+| Organization admin | Read and manage all four record types within authorized organization/office scope. |
+| Operations manager | Read and manage all four record types within authorized organization/office scope. |
+| Dispatcher | Read all four record types; manage dispatch assignments only; restricted-office policy remains required. |
+| Technical reviewer | Read all four record types; no Phase 5E writes. |
+| Viewer | Read all four record types; no writes. |
+| Field technician | No Phase 5E operational-record permission. |
+
+Reads use organization/office predicates derived from the current authorization
+context. Creates first check permission, then lock the owning organization and
+re-read the current user, organization, membership, role, and office assignment
+inside the transaction. The shared organization lock serializes those writes
+with the existing membership and office-access mutation path. A stale context
+cannot keep writing after the actor is suspended or loses the required
+permission or office access.
+
+Database constraints independently require organization/office agreement for
+projects and technicians, work-order/project relationships, and
+dispatch-assignment/work-order/technician relationships. Cross-office and
+cross-organization references are rejected, and inaccessible relationships use
+the same public result as nonexistent records.
+
+Phase 5E accepts only minimal business-operational technician contact fields:
+display name, optional operational role, optional work email, and optional work
+phone. It adds no payroll, medical, home-address, background-report, location,
+credential, or provider-token data.
+
+Successful create results include a generated mutation ID, action, actor,
+organization, subject, and timestamp. Dispatch-assignment rows also retain
+creating/updating user IDs. No general audit event is persisted; denied actions
+and returned mutation metadata are not durable audit history.
+
 ## Pilot V1 Target Roles And Boundaries
 
 | Role | Allowed actions | Denied / constrained actions |
@@ -215,8 +257,9 @@ See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md).
 | Project Manager | Review relevant projects/work orders, supply or correct project information, review affecting decisions. | No organization-wide administration unless separately assigned another role. |
 | Executive / Read Only | Review readiness, trends, and impact summaries. | Cannot alter assignments or operational records. |
 
-The implemented field-technician role is a forward-compatible restricted role;
-it does not imply Field Operations or technician-assignment functionality exists.
+The implemented field-technician role remains forward-compatible and restricted.
+It receives no Phase 5E operational-record permissions; durable dispatch records
+do not imply own-assignment access, `My Day`, or other Field Operations behavior.
 
 ## Data Minimization - Pilot V1 Target
 
@@ -264,10 +307,12 @@ The demo must continue to use fictional or anonymized data. Pilot import validat
   the Operational vNext permission module is the enforced server boundary.
 - Browser/CDP security validation is not part of normal CI.
 - Production authentication, invitation delivery, audit storage, and provider
-  secret operations remain target requirements. Foundation RBAC is implemented
-  only for current identity/member/office surfaces.
-- Phase 5D proves isolation for identity, membership, office assignment, member
-  administration, and office reads, not for future Pilot V1 domain tables.
+  secret operations remain target requirements. Current RBAC covers the
+  identity/member/office surfaces and four Phase 5E record types only.
+- Phase 5D proves isolation for identity and membership behavior. Phase 5E adds
+  bounded organization/office/role isolation for projects, technicians, work
+  orders, and dispatch assignments, not for future import, readiness, coverage,
+  Decision Log, or Field Operations records.
 - Operational vNext health endpoints exist, but they are not authenticated and do not prove tenant isolation or pilot readiness.
 
 ## Open Questions

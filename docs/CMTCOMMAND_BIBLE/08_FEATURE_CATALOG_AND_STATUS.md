@@ -13,8 +13,11 @@
   - `pilotReadinessPack.js`
   - `demoControlCenter.js`
   - `tests/`
+  - `apps/operational/src/server/operational-records/`
+  - `apps/operational/tests/integration/operational-records.integration.test.ts`
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
-- Last Reviewed: 2026-07-15
+- Last Reviewed: 2026-07-16
 
 Allowed status values in this document: Implemented, Partially Implemented, Prototype, Disabled, Incomplete, Deprecated, Unclear. Pilot V1 target features that are authorized but not built are marked Incomplete with scope `Pilot V1 Target`.
 
@@ -44,6 +47,7 @@ Allowed status values in this document: Implemented, Partially Implemented, Prot
 | Scope | Feature | Status | User-visible purpose | Main implementation | Tests | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Pilot V1 Target | Tomorrow Readiness + Coverage Decision System | Incomplete | Determine whether tomorrow's scheduled work can be performed. | Not implemented | Not implemented | Governing spec: [Pilot V1 spec](specs/PILOT_V1_TOMORROW_READINESS_AND_COVERAGE.md). |
+| Pilot V1 Target | Durable projects, technicians, work orders, and dispatch assignments | Partially Implemented | Provide tenant/office-owned current records for later imports, readiness, coverage, and field workflows. | Four Phase 5E tables plus `src/server/operational-records/` | Focused unit and PostgreSQL integration tests | Source IDs are separate from internal/human IDs; no routes/UI/imports, durable Service Type, readiness, coverage, or persistent audit events. |
 | Pilot V1 Target | Controlled CSV/XLSX imports | Incomplete | Load operational data with preview, validation, data-quality reporting, and import history. | Not implemented | Not implemented | Current demo supports local CSV preview only. |
 | Pilot V1 Target | Durable readiness snapshots | Incomplete | Store rule-backed readiness results and explanations. | Not implemented | Not implemented | CMTCommand target source of truth for generated snapshots. |
 | Pilot V1 Target | Deterministic readiness engine | Incomplete | Apply Ready/At Risk/Not Ready rules with explanations and precedence. | Not implemented | Not implemented | Rules authorized; implementation pending. |
@@ -55,7 +59,7 @@ Allowed status values in this document: Implemented, Partially Implemented, Prot
 | Pilot V1 Target | Authenticated identity boundary | Partially Implemented | Resolve a verified external identity to a provider-independent CMTCommand user. | `apps/operational/src/server/auth/`, `users`, `external_identities` | Unit and PostgreSQL integration tests | Production provider is not selected; development/test adapter only and production fails closed. |
 | Pilot V1 Target | Organization memberships | Partially Implemented | Require an active organization relationship and support multiple organizations. | `organization_memberships`, auth resolver, `/app` | Unit, PostgreSQL integration, and browser acceptance passed for the bounded local/test scope. | Invitation acceptance/delivery remains deferred. |
 | Pilot V1 Target | Office access assignments | Implemented | Derive all-office or assigned-office scope with cross-organization protection. | `office_assignments`, auth resolver, office APIs | Unit, integration, and browser tests | Composite foreign keys enforce same-organization assignment. |
-| Pilot V1 Target | Role-based access control | Partially Implemented | Enforce identity-foundation reads and member administration by organization, office, and role. | `apps/operational/src/server/auth/permissions.ts`, protected pages/actions/APIs | Unit, integration, and browser tests | Central RBAC is implemented for current surfaces; future readiness/coverage permissions await those modules. |
+| Pilot V1 Target | Role-based access control | Partially Implemented | Enforce current reads/writes by organization, office, and role. | `apps/operational/src/server/auth/permissions.ts`, protected identity surfaces, Phase 5E services | Unit/integration tests for Phase 5E; existing browser tests cover identity surfaces | Central RBAC covers identity/member/office behavior and four Phase 5E record types; future import/readiness/coverage permissions await those modules. |
 | Pilot V1 Target | Membership administration | Implemented | List, prepare, role/status-manage, and office-scope members. | `/app/admin/members`, `src/server/members/service.ts` | Integration and authorization tests | No invitation email; full audit persistence deferred. |
 | Pilot V1 Target | Pilot operations and health | Incomplete | Support deployment, backups, rollback, logs, and health checks. | Not implemented | Not implemented | Provider unresolved. |
 
@@ -63,8 +67,8 @@ Allowed status values in this document: Implemented, Partially Implemented, Prot
 
 | Scope | Feature | Status | User-visible purpose | Main implementation | Tests | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| Future Field Operations | Concrete inspection capture and reporting | Incomplete | Connect an authorized assignment to field evidence, human-reviewed report, sample handoff, and internal export. | Architecture/docs only | Runtime tests not implemented | Does not change Pilot V1; see [Field Operations V1](specs/FIELD_OPERATIONS_V1.md). |
-| Future Field Operations | Immutable evidence and derivatives | Incomplete | Preserve original media and provide usable private previews. | ADR-006 only | Not implemented | Identity foundation exists; still blocked by assignments, audit persistence, and storage. |
+| Future Field Operations | Concrete inspection capture and reporting | Incomplete | Connect an authorized assignment to field evidence, human-reviewed report, sample handoff, and internal export. | Architecture/docs only | Runtime tests not implemented | Phase 5E supplies a bounded assignment prerequisite, but P2 remains partial and FR-1 is not implemented; see [Field Operations V1](specs/FIELD_OPERATIONS_V1.md). |
+| Future Field Operations | Immutable evidence and derivatives | Incomplete | Preserve original media and provide usable private previews. | ADR-006 only | Not implemented | Still blocked by production identity, completion of P2, audit persistence, and private storage. |
 | Future Field Operations | Advisory truck-ticket extraction | Incomplete | Suggest evidence-linked ticket values for human review. | Contract only | Not implemented | Manual/no-provider workflow is mandatory. |
 | Future Field Operations | Report review and immutable versioning | Incomplete | Attest, technically review when required, preserve approvals/amendments. | Contract only | Not implemented | AI cannot attest, approve, or submit. |
 | Future Field Operations | Cylinder/sample handoff | Incomplete | Show pickup, transit, receipt, and exception state to operations. | Contract only | Not implemented | Not a full LIMS. |

@@ -22,10 +22,13 @@ sufficient authorization.
 Before every destructive cleanup, the suite reads PostgreSQL's live
 `current_database()` value inside the same transaction. Cleanup proceeds only
 when it matches the authorized URL identity. The cleanup statement explicitly
-enumerates `office_assignments`, `external_identities`,
-`organization_memberships`, `users`, `offices`, and `organizations` and uses
-`RESTRICT`; adding a dependent table without updating the cleanup contract must
-fail rather than cascade-delete the new table.
+enumerates ten tables in dependency-first order: `dispatch_assignments`,
+`work_orders`, `technicians`, `projects`, `office_assignments`,
+`external_identities`, `organization_memberships`, `users`, `offices`, and
+`organizations`. Keeping the complete dependency-first list in one
+`TRUNCATE ... RESTRICT` statement makes cleanup readable while ensuring that a
+new dependent table fails visibly until the cleanup contract is intentionally
+updated; the suite never falls back to cascade deletion.
 
 Run the database gate from `apps/operational/`:
 

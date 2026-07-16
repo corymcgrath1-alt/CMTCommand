@@ -4,12 +4,14 @@ const shellStatus = [
   "Database connectivity is checked only by explicit readiness or smoke-test paths.",
   "Organization and office tenancy persistence exists server-side only.",
   "Provider-neutral identity, memberships, office access, and RBAC are implemented in the bounded operational app.",
+  "Projects, work orders, technicians, and dispatch assignments have durable tenant-scoped persistence services.",
 ];
 
 const scaffoldLimitations = [
   "Production authentication remains disabled until a managed provider is selected.",
   "Development sign-in requires an explicit allowlist and signed server-only session.",
-  "No imports, work orders, readiness rules, coverage workflow, Decision Log, or audit events.",
+  "No import pipeline, readiness rules, coverage workflow, Decision Log, or persistent audit events.",
+  "Durable operational records do not yet have public routes or product workflow UI.",
   "No deployment provider or managed database provider is configured.",
 ];
 

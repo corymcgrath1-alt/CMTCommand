@@ -16,6 +16,8 @@
   - `apps/operational/drizzle/0000_open_giant_girl.sql`
   - `apps/operational/drizzle/0001_office-composite-key.sql`
   - `apps/operational/drizzle/0002_identity-membership-rbac.sql`
+  - `apps/operational/drizzle/0003_vengeful_vapor.sql`
+  - `apps/operational/drizzle/0004_right_reavers.sql`
   - `apps/operational/scripts/db-migrate-test.ts`
   - `apps/operational/src/server/db/test-safety.ts`
   - `.gitignore`
@@ -23,7 +25,7 @@
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-15
+- Last Reviewed: 2026-07-16
 
 ## Current Demo - Confirmed
 
@@ -136,10 +138,11 @@ path:
 - Test database safety logic rejects blank or ambiguous proofs, substring-only
   test names, arbitrary remote hosts, URL/identity disagreement, and
   production-like identities. Diagnostics redact credentials.
-- Cleanup enumerates the current `office_assignments`, `external_identities`,
+- Cleanup enumerates the current `dispatch_assignments`, `work_orders`,
+  `technicians`, `projects`, `office_assignments`, `external_identities`,
   `organization_memberships`, `users`, `offices`, and `organizations` tables
-  with `RESTRICT`; future dependent tables fail cleanup visibly instead of being
-  silently removed through `CASCADE`.
+  in dependency-first order with `RESTRICT`; future dependent tables fail
+  cleanup visibly instead of being silently removed through `CASCADE`.
 
 The operational CI workflow now has a separate PostgreSQL service-container job
 for the database gate. It uses Node `22.22.2` and requires no external secrets or
