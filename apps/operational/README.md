@@ -3,7 +3,9 @@
 This directory contains the guarded Operational vNext scaffold for CMTCommand.
 It proves the app boundary, TypeScript/Next.js toolchain, health endpoints,
 environment validation, Drizzle/PostgreSQL wiring, organization/office tenancy
-persistence, unit testing, integration testing, and browser test configuration.
+persistence, provider-neutral identity, memberships, office assignments,
+server-enforced RBAC, unit testing, integration testing, and browser test
+configuration.
 
 It does not implement Pilot V1 business functionality.
 
@@ -15,6 +17,13 @@ Implemented in this scaffold:
 - Server-side environment validation with Zod.
 - Lazy PostgreSQL/Drizzle connection wiring.
 - Organization and office schema with explicit tenant-scoped persistence helpers.
+- Application users and unique provider-subject mappings.
+- Organization memberships, six fixed roles, explicit office-access policy,
+  and same-organization office assignments.
+- Signed, allowlisted development/test identity sessions that are forbidden in
+  production runtimes.
+- Protected `/app` shell, secure active-organization selection, member
+  administration, and tenant-scoped office APIs.
 - `/api/health` liveness endpoint.
 - `/api/ready` database-readiness endpoint.
 - Vitest unit tests.
@@ -24,9 +33,11 @@ Implemented in this scaffold:
 
 Not implemented:
 
-- Authentication, invitations, users, roles, or authorization.
-- Tenant-management routes or screens.
-- User-derived tenant sessions, organization memberships, office assignments, or RBAC.
+- A production authentication provider or production sign-in flow.
+- Invitation acceptance or email delivery. The administrator can prepare an
+  invited membership only.
+- Persistent general audit events. Security mutations return structured,
+  actor-attributed metadata for a future audit sink.
 - Imports, work orders, technicians, equipment, readiness rules, coverage, Decision Log, audit events, operational impact, or deployment.
 
 ## Runtime
@@ -52,17 +63,62 @@ Create local environment files only when needed. Do not commit `.env` or
 APP_ENV=development
 DATABASE_URL=
 TEST_DATABASE_URL=
+TEST_DATABASE_EXPECTED_NAME=
+TEST_DATABASE_EXPECTED_HOST=
+TEST_DATABASE_RESET_AUTHORIZATION=
+AUTH_MODE=disabled
+AUTH_SESSION_SECRET=
+AUTH_DEVELOPMENT_SUBJECTS=alpha-admin,alpha-dispatcher,alpha-viewer
 ```
 
-Leaving database values blank is valid for linting, type checking, unit tests,
-the scaffold home page, and production build.
+Leaving database values blank and `AUTH_MODE=disabled` is valid for linting,
+type checking, unit tests, the public scaffold page, and production build. It
+fails closed for protected application access.
+
+### Local development identity setup
+
+No production provider has been selected. To exercise identity and RBAC locally,
+use a non-production runtime, a migrated local database, and an explicit
+allowlist:
+
+```text
+APP_ENV=development
+AUTH_MODE=development
+AUTH_SESSION_SECRET=<at-least-32-random-local-characters>
+AUTH_DEVELOPMENT_SUBJECTS=alpha-admin,alpha-dispatcher,alpha-viewer,alpha-suspended,alpha-disabled,no-membership,beta-admin,beta-dispatcher,multi-organization-viewer
+DATABASE_URL=postgresql://user:password@localhost:5432/cmtcommand_operational_dev
+```
+
+Never reuse an example secret in a shared environment. The adapter is rejected
+when `APP_ENV` is staging/pilot-production/production or when `NODE_ENV` is
+production. It accepts no identity headers and writes an `HttpOnly`,
+`SameSite=Lax`, signed cookie containing only provider, subject, timestamps, and
+an optional server-validated active organization.
+
+After applying migrations, seed deterministic development identities:
+
+```powershell
+npm run db:migrate
+npm run seed:identity:dev
+npm run dev
+```
+
+The seed creates Alpha Engineering with Alexandria and Richmond, Beta Testing
+with Fairfax and Manassas, fixtures for all six roles, Alpha and Beta dispatcher
+subjects restricted to Alexandria and Fairfax respectively, a suspended
+membership, a disabled user, a user with no membership, and a multi-organization
+viewer. Seed data is not part of production migrations.
 
 ## Schema And Migrations
 
-The first Drizzle schema is intentionally limited to organizations and offices:
+The Drizzle schema contains the tenancy and identity foundation:
 
 - `src/server/db/schema/organizations.ts`
 - `src/server/db/schema/offices.ts`
+- `src/server/db/schema/users.ts`
+- `src/server/db/schema/external-identities.ts`
+- `src/server/db/schema/organization-memberships.ts`
+- `src/server/db/schema/office-assignments.ts`
 
 Generate migrations after schema changes:
 
@@ -84,12 +140,29 @@ Apply migrations to an explicit test database:
 ```powershell
 $env:APP_ENV="test"
 $env:TEST_DATABASE_URL="postgresql://user:password@localhost:5432/cmtcommand_operational_test"
+$env:TEST_DATABASE_EXPECTED_NAME="cmtcommand_operational_test"
+$env:TEST_DATABASE_EXPECTED_HOST="localhost"
 npm run db:migrate:test
 ```
 
-The test path refuses blank values, non-test database names, and unsafe-looking
-production/staging/pilot database names. It does not print the full connection
-string or password.
+The test path accepts only the exact repository-owned database identity
+`cmtcommand_operational_test` on an explicitly declared loopback host. A name
+that merely contains `test`, an arbitrary remote host, or a URL that disagrees
+with the expected name or host is rejected. Diagnostics redact credentials and
+never print the unredacted connection string.
+
+PostgreSQL integration tests also delete their own organization/office fixtures.
+That destructive cleanup requires an additional explicit authorization value:
+
+```powershell
+$env:TEST_DATABASE_RESET_AUTHORIZATION="ALLOW_CMT_TEST_DATABASE_RESET"
+npm run test:integration
+```
+
+Immediately before cleanup, the integration test verifies PostgreSQL's live
+`current_database()` identity inside the same transaction. Cleanup enumerates
+the six current identity/tenancy tables and uses `RESTRICT`, so a future
+dependent table fails visibly instead of being silently removed by `CASCADE`.
 
 ## Development
 
@@ -133,17 +206,20 @@ npm run db:generate
 npm run db:migrate
 npm run db:migrate:test
 npm run db:studio
+npm run seed:identity:dev
 ```
 
 `npm run verify` is the stable default gate: lint, typecheck, unit tests, and
 production build. It does not require a live database, browser installation, or
 auth provider credentials.
 
-`npm run test:db` requires a safe `TEST_DATABASE_URL`. It is intentionally not
-part of the default gate.
+`npm run test:db` requires `APP_ENV=test`, a safe `TEST_DATABASE_URL`, and the
+exact expected database name and loopback host. It is intentionally not part of
+the default gate.
 
 `npm run test:integration` runs PostgreSQL-backed integration tests and requires
-`APP_ENV=test` and a safe `TEST_DATABASE_URL`.
+the same exact database identity plus explicit destructive-cleanup
+authorization.
 
 `npm run verify:db` applies test migrations and runs PostgreSQL integration
 tests. It is the database-dependent gate and is intentionally separate from
@@ -156,7 +232,7 @@ part of the default gate.
 verification plus Playwright scaffold smoke tests. It does not include the
 database gate.
 
-## Current Tenancy Boundary
+## Current Identity And Tenancy Boundary
 
 Implemented:
 
@@ -168,20 +244,51 @@ Implemented:
   office reads.
 - Scoped persistence functions that return inaccessible cross-tenant offices as
   indistinguishable from nonexistent offices.
+- Provider subjects map uniquely to application users; email is not the immutable
+  identity key.
+- Active users require an active organization membership. Invited, suspended,
+  revoked, disabled, and unaffiliated states fail closed.
+- Multiple organizations use a signed active-organization selection revalidated
+  against current database membership on every request.
+- Role permissions are centralized in `src/server/auth/permissions.ts`.
+- Composite foreign keys prevent cross-organization office assignment.
+- Membership writes revalidate the actor inside the transaction, use optimistic
+  versions, prevent self role/status changes and final-admin lockout, and return
+  structured actor metadata.
 
 Not implemented:
 
-- Authentication.
-- Organization memberships.
-- Role assignments or RBAC.
-- User-derived access scopes.
-- Public organization or office routes.
-- Tenant-management UI.
+- Production authentication provider integration.
+- Invitation acceptance and delivery.
+- Persistent general audit-event storage.
 - PostgreSQL Row-Level Security.
 
-Access scopes are constructed by trusted internal callers and tests only. A
-future identity layer must derive these scopes server-side; client-supplied
-organization or office identifiers are not trusted authorization facts.
+Protected scopes are derived from verified identity and current database
+membership. Client-supplied organization IDs, office IDs, roles, and permissions
+are untrusted input. Existing setup-level organization/office helpers remain
+internal and must not receive browser-derived scopes.
+
+## Protected Request Verification
+
+With the local development setup running:
+
+1. Open `/sign-in` and choose an allowlisted subject.
+2. Verify `/app` displays the database-derived organization, role, and office
+   context.
+3. As `alpha-dispatcher`, verify `/api/offices` returns Alexandria only and a
+   direct Richmond request returns the same 404 shape as an unknown office.
+4. As `alpha-admin`, open `/app/admin/members`, prepare a membership, and verify
+   the UI says no email was sent.
+5. As `beta-admin`, verify Alpha offices and members are inaccessible.
+
+Common controlled failures:
+
+- `provider_not_selected`: `AUTH_MODE` is disabled; production remains fail-closed.
+- `authentication_misconfigured`: development mode lacks a 32-character secret,
+  has no allowlist, or was attempted in a production runtime.
+- `database_not_configured`: the signed identity is valid but `DATABASE_URL` is absent.
+- `identity_unknown`: the verified provider subject has no application mapping.
+- `no_membership` / `membership_denied`: the user lacks an active membership.
 
 ## Relationship To The Static Demo
 
@@ -202,7 +309,8 @@ Start with the CMTCommand Bible:
 - [Bible index](../../docs/CMTCOMMAND_BIBLE/00_INDEX.md)
 - [Operational architecture blueprint](../../docs/CMTCOMMAND_BIBLE/plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md)
 - [Phase 4 scaffolding report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_4_SCAFFOLDING_REPORT.md)
+- [Phase 5D identity/RBAC report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_5D_IDENTITY_RBAC_REPORT.md)
 
 This scaffold is not ready for pilot use until later guarded phases add the
-data foundation, imports, readiness engine, coverage workflow, security model,
-and pilot operations.
+imports, readiness engine, coverage workflow, persistent general audit events,
+production identity provider, and pilot operations.

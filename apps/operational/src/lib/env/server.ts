@@ -10,6 +10,20 @@ const appEnvironmentSchema = z.enum([
 
 const nodeEnvironmentSchema = z.enum(["development", "test", "production"]);
 
+const authModeSchema = z.enum(["disabled", "development"]);
+
+const optionalTrimmedStringSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  },
+  z.string().optional(),
+);
+
 const optionalPostgresUrlSchema = z.preprocess(
   (value) => {
     if (typeof value !== "string") {
@@ -35,6 +49,9 @@ const serverEnvSchema = z
     NODE_ENV: nodeEnvironmentSchema.optional(),
     DATABASE_URL: optionalPostgresUrlSchema,
     TEST_DATABASE_URL: optionalPostgresUrlSchema,
+    AUTH_MODE: authModeSchema.default("disabled"),
+    AUTH_SESSION_SECRET: optionalTrimmedStringSchema,
+    AUTH_DEVELOPMENT_SUBJECTS: optionalTrimmedStringSchema,
   })
   .passthrough();
 
@@ -45,6 +62,9 @@ export type ServerEnv = {
   NODE_ENV?: "development" | "test" | "production";
   DATABASE_URL?: string;
   TEST_DATABASE_URL?: string;
+  AUTH_MODE: "disabled" | "development";
+  AUTH_SESSION_SECRET?: string;
+  AUTH_DEVELOPMENT_SUBJECTS?: string;
 };
 
 export class ServerEnvError extends Error {
@@ -74,6 +94,9 @@ export function parseServerEnv(input: Record<string, string | undefined>): Serve
     NODE_ENV: parsed.data.NODE_ENV,
     DATABASE_URL: parsed.data.DATABASE_URL,
     TEST_DATABASE_URL: parsed.data.TEST_DATABASE_URL,
+    AUTH_MODE: parsed.data.AUTH_MODE,
+    AUTH_SESSION_SECRET: parsed.data.AUTH_SESSION_SECRET,
+    AUTH_DEVELOPMENT_SUBJECTS: parsed.data.AUTH_DEVELOPMENT_SUBJECTS,
   };
 }
 

@@ -107,8 +107,9 @@ auth credentials, deployment credentials, or customer data.
 configured as a single-worker check so it owns one local dev server and avoids
 stale-server reuse.
 
-`npm run test:db` is explicit and requires a safe `TEST_DATABASE_URL`. It is not
-part of the default gate.
+`npm run test:db` is explicit and requires `APP_ENV=test`, a safe
+`TEST_DATABASE_URL`, and exact repository test-database name and loopback-host
+proofs. It is not part of the default gate.
 
 ## Operational vNext Tenancy Tests - Confirmed
 
@@ -141,8 +142,39 @@ Phase 5 adds PostgreSQL integration tests for:
 - Safe public mapping for predictable database errors.
 
 `npm run verify:db` is the database-dependent gate. It applies test migrations
-and runs PostgreSQL integration tests. It requires `APP_ENV=test` and
-`TEST_DATABASE_URL`; it must not fall back to `DATABASE_URL`.
+and runs PostgreSQL integration tests. It requires `APP_ENV=test`,
+`TEST_DATABASE_URL`, exact expected database name and loopback host, and
+explicit destructive-cleanup authorization; it must not fall back to
+`DATABASE_URL`. Cleanup verifies live `current_database()` identity immediately
+before explicitly enumerated `TRUNCATE ... RESTRICT` SQL.
+
+## Operational vNext Identity And Authorization Tests - Confirmed
+
+Phase 5D unit tests cover:
+
+- Production-disabled and production-forbidden auth adapter behavior.
+- Explicit subject allowlists and session-secret requirements.
+- Signed-session round trips, tampering, expiry, alternate secrets, and active
+  organization payloads.
+- Role permissions, read-only viewer behavior, non-admin member denial, and
+  organization-wide office policy eligibility.
+- Verified subject mapping, mutable email, unknown/disabled user states,
+  invited/suspended/revoked memberships, inactive organizations, no membership,
+  multi-organization selection, invalid tenant override, restricted office
+  scope, and invalid all-office policy.
+- Membership status-transition rules, including terminal revocation.
+
+Phase 5D PostgreSQL integration tests cover unique external identity and
+membership constraints, duplicate/cross-organization office assignments,
+database-derived office scope, non-admin admin-action denial, self role/status
+protection, cross-organization mutation denial, stale versions, in-transaction
+actor revalidation, actor-attributed mutation metadata, and cross-organization
+office rejection during membership preparation.
+
+Playwright covers unauthenticated protected-route redirection, development sign
+in, `HttpOnly` session cookie behavior, and fail-closed database-unavailable UI,
+in addition to the existing liveness/readiness checks. Full role-to-role browser
+acceptance requires the isolated migrated test database.
 
 ## Practical Testing Matrix
 

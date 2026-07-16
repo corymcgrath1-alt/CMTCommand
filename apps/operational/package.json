@@ -25,7 +25,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:test": "tsx scripts/db-migrate-test.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "seed:identity:dev": "tsx scripts/seed-development-identities.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

@@ -15,12 +15,18 @@
   - `apps/operational/src/server/db/`
   - `apps/operational/src/server/tenancy/`
   - `apps/operational/drizzle/0000_open_giant_girl.sql`
+  - `apps/operational/drizzle/0001_office-composite-key.sql`
+  - `apps/operational/drizzle/0002_identity-membership-rbac.sql`
+  - `apps/operational/src/server/db/schema/users.ts`
+  - `apps/operational/src/server/db/schema/external-identities.ts`
+  - `apps/operational/src/server/db/schema/organization-memberships.ts`
+  - `apps/operational/src/server/db/schema/office-assignments.ts`
   - `apps/operational/tests/integration/tenancy.integration.test.ts`
   - `README.md`
   - `docs/cmtcommand-vnext/plan.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-14
+- Last Reviewed: 2026-07-15
 
 ## Current Demo - Confirmed
 
@@ -201,6 +207,45 @@ No authentication, memberships, RBAC, users, imports, readiness snapshots,
 Decision Log entries, audit events, or customer pilot records are implemented in
 this phase.
 
+## Phase 5D Identity And Authorization Model - Confirmed
+
+Phase 5D adds four persistence models without changing the source-of-truth policy
+for operational customer records:
+
+| Table | Purpose | Lifecycle or key rule | Ownership |
+| --- | --- | --- | --- |
+| `users` | Provider-independent application identity. | `active`, `invited`, `suspended`, `disabled`; normalized email unique but not the immutable identity key. | Global application record. |
+| `external_identities` | Verified provider identity mapping. | `(provider, provider_subject)` unique. | Belongs to one user. |
+| `organization_memberships` | User role and access relationship to one organization. | `invited`, `active`, `suspended`, `revoked`; `(organization_id, user_id)` unique; optimistic `version`. | Belongs to one organization and user. |
+| `office_assignments` | Explicit office access for restricted memberships. | Membership/office pair unique. | Belongs to the same organization as both membership and office. |
+
+Membership roles are `organization_admin`, `operations_manager`, `dispatcher`,
+`technical_reviewer`, `field_technician`, and `viewer`. Office policy is `all`
+or `restricted`; the server additionally validates that the role may use `all`.
+
+Database integrity includes:
+
+- Explicit `RESTRICT`/`CASCADE UPDATE` foreign keys.
+- Composite `(id, organization_id)` unique keys on offices and memberships.
+- Composite office-assignment foreign keys that make cross-organization
+  assignment impossible even if application validation fails.
+- Indexes for user email, provider identity ownership, user/status membership
+  lookup, organization member lists, membership assignments, and
+  organization/office assignment lookup.
+- Created/updated actor fields on memberships and created actor on assignments.
+
+The application does not store passwords, provider tokens, SSNs, dates of birth,
+home addresses, banking, medical, immigration, or unnecessary provider-profile
+fields.
+
+Invitation delivery is not implemented. Preparing a membership creates or reuses
+an application user and creates an `invited` membership; it does not create a
+token or claim that email was sent.
+
+Development fixture data is created only by
+`npm run seed:identity:dev`; it is not present in the production migration.
+See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md).
+
 ## Derived Data
 
 Current demo derived data:
@@ -239,8 +284,11 @@ External integrations explicitly absent in current root evidence:
 
 ## Implementation Gaps
 
-- Persistent organization and office schema exists; the rest of the Pilot V1 target records do not.
-- The Operational vNext scaffold has the initial tenancy migration only; it has no import, readiness, coverage, Decision Log, audit, technician, equipment, work-order, project, or user tables.
+- Persistent organization, office, user, external identity, membership, and
+  office-assignment schemas exist; the remaining Pilot V1 records do not.
+- Operational vNext has tenancy and identity/RBAC migrations. It still has no
+  import, readiness, coverage, Decision Log, general audit event, technician,
+  equipment, work-order, or project tables.
 - No XLSX import implementation was found in the current static demo.
 - No import history or durable readiness snapshot exists.
 - No writeback protections exist because no external writeback integration exists.

@@ -55,6 +55,9 @@ jobs:
     env:
       APP_ENV: test
       TEST_DATABASE_URL: postgresql://cmtcommand_test:cmtcommand_test_password@localhost:5432/cmtcommand_operational_test
+      TEST_DATABASE_EXPECTED_NAME: cmtcommand_operational_test
+      TEST_DATABASE_EXPECTED_HOST: localhost
+      TEST_DATABASE_RESET_AUTHORIZATION: ALLOW_CMT_TEST_DATABASE_RESET
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -3,11 +3,12 @@ const shellStatus = [
   "TypeScript, linting, unit tests, and build commands are local to this app.",
   "Database connectivity is checked only by explicit readiness or smoke-test paths.",
   "Organization and office tenancy persistence exists server-side only.",
+  "Provider-neutral identity, memberships, office access, and RBAC are implemented in the bounded operational app.",
 ];
 
 const scaffoldLimitations = [
-  "No authentication or user accounts.",
-  "No tenant-management UI, role-based authorization, or authenticated tenant sessions.",
+  "Production authentication remains disabled until a managed provider is selected.",
+  "Development sign-in requires an explicit allowlist and signed server-only session.",
   "No imports, work orders, readiness rules, coverage workflow, Decision Log, or audit events.",
   "No deployment provider or managed database provider is configured.",
 ];
@@ -32,6 +33,15 @@ export default function HomePage() {
               <li key={item}>{item}</li>
             ))}
           </ul>
+        </article>
+
+        <article className="panel" aria-labelledby="access-title">
+          <h2 id="access-title">Protected application</h2>
+          <p className="muted">
+            Access is derived from verified identity, active membership, role,
+            and office assignments.
+          </p>
+          <a href="/sign-in">Open sign-in</a>
         </article>
 
         <article className="panel" aria-labelledby="health-title">

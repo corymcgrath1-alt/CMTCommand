@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { closeDatabasePool, getDatabase, type OperationalDatabase } from "../../src/server/db/client";
-import { getSafeTestDatabaseConfig } from "../../src/server/db/test-safety";
+import {
+  getAuthorizedTestDatabaseCleanupConfig,
+  runAuthorizedTestDatabaseCleanup,
+  type AuthorizedTestDatabaseCleanupConfig,
+} from "../../src/server/db/test-safety";
 import { organizations } from "../../src/server/db/schema";
 import { getPostgresErrorInfo } from "../../src/server/tenancy/errors";
 import {
@@ -16,10 +20,11 @@ import {
 import type { OfficeRecord, OrganizationRecord } from "../../src/server/db/schema";
 
 let db: OperationalDatabase;
+let testDatabaseConfig: AuthorizedTestDatabaseCleanupConfig;
 
 beforeAll(() => {
-  const config = getSafeTestDatabaseConfig();
-  db = getDatabase(config.databaseUrl);
+  testDatabaseConfig = getAuthorizedTestDatabaseCleanupConfig();
+  db = getDatabase(testDatabaseConfig.databaseUrl);
 });
 
 beforeEach(async () => {
@@ -324,5 +329,21 @@ async function mustCreateOffice(
 }
 
 async function cleanupTestRows(database: OperationalDatabase): Promise<void> {
-  await database.execute(sql`truncate table "offices", "organizations" restart identity cascade`);
+  await database.transaction(async (transaction) => {
+    await runAuthorizedTestDatabaseCleanup(
+      testDatabaseConfig,
+      async () => {
+        const result = await transaction.execute<{ database_name: string }>(sql`
+          select current_database()::text as database_name
+        `);
+
+        return result.rows[0]?.database_name;
+      },
+      async () => {
+        await transaction.execute(
+          sql`truncate table "office_assignments", "external_identities", "organization_memberships", "users", "offices", "organizations" restart identity restrict`,
+        );
+      },
+    );
+  });
 }

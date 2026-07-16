@@ -22,11 +22,16 @@
   - `apps/operational/src/server/tenancy/scope.ts`
   - `apps/operational/src/server/tenancy/repository.ts`
   - `apps/operational/tests/integration/tenancy.integration.test.ts`
+  - `apps/operational/src/server/auth/`
+  - `apps/operational/src/server/members/`
+  - `apps/operational/tests/unit/auth.*.test.ts`
+  - `apps/operational/tests/integration/identity.integration.test.ts`
+  - `docs/CMTCOMMAND_BIBLE/decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md`
   - `docs/cmtcommand-vnext/review.md`
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-14
+- Last Reviewed: 2026-07-15
 
 ## Current Demo - Confirmed
 
@@ -114,15 +119,91 @@ persistence only:
 - PostgreSQL prevents offices from referencing nonexistent organizations.
 - PostgreSQL prevents deleting an organization while it still owns offices.
 
-This is not a complete authorization system:
+Phase 5 itself is not a complete authorization system. Phase 5D now supplies
+trusted scope for protected Operational vNext callers; setup-level tenancy
+helpers remain internal.
 
-- Authentication is not implemented.
-- User records, memberships, role assignments, and RBAC are not implemented.
-- Scope objects are constructed by trusted internal callers or tests.
-- Future authentication must derive tenant and office scope server-side.
-- Client-supplied organization ids are not trusted authorization facts.
-- PostgreSQL Row-Level Security is not implemented in Phase 5; ADR-004 leaves it
-  as a defense-in-depth evaluation before pilot production.
+## Phase 5D Identity, Session, And Authorization Boundary - Confirmed
+
+Identity boundary:
+
+- `users` are provider-independent application records.
+- `external_identities` map a unique verified provider/subject to one user.
+- Email is mutable contact/login metadata, not the immutable external identity
+  key.
+- Unknown identities are not automatically provisioned.
+- User status must be `active`; invited, suspended, and disabled users fail closed.
+
+Authentication provider boundary:
+
+- No production provider is selected. `AUTH_MODE=disabled` is the default and
+  protected production access fails closed.
+- The development/test adapter requires an explicit allowlist and a minimum
+  32-character signing secret.
+- The adapter is rejected in staging, pilot-production, production, or a
+  production Node runtime.
+- No request header is accepted as identity, role, organization, office, or
+  permission proof.
+- No provider access/refresh token is stored or exposed.
+- A future provider must validate issuer, audience, signature, expiration, and
+  state/nonce as applicable before producing the existing verified identity type.
+
+Session boundary:
+
+- Development sessions are HMAC-SHA256 signed and use `HttpOnly`,
+  `SameSite=Lax`, path-scoped cookies with an eight-hour maximum lifetime.
+- The cookie contains provider, subject, issued/expiry times, and optional active
+  organization only. It contains no application role or permission.
+- Production provider cookies must use `Secure`; the current development adapter
+  cannot execute in production.
+- State-changing Phase 5D UI operations use Next.js Server Actions with
+  same-origin action protection. Sensitive identity data is not placed in query
+  strings or local storage.
+
+Membership and active organization:
+
+- Access requires active user, active organization, and active membership.
+- Membership lifecycle is invited, active, suspended, or revoked.
+- Users may have multiple organizations. The signed active-organization choice
+  is revalidated against current membership on every request.
+- Suspended/revoked membership, inactive organization, missing membership, or an
+  invalid selection produces a controlled denied state.
+
+Implemented role policy:
+
+| Role | Current Phase 5D permission intent | Office policy |
+| --- | --- | --- |
+| Organization admin | Read organization/offices; list/manage members, roles, and office assignments. | `all` or `restricted` |
+| Operations manager | Read current authorized organization/offices. | `all` or `restricted` |
+| Dispatcher | Read current authorized organization/offices; no membership administration. | `restricted` only |
+| Technical reviewer | Read current authorized organization/offices; no membership administration. | `all` or `restricted` |
+| Field technician | Read current authorized organization/offices; no organization administration. | `restricted` only |
+| Viewer | Read current authorized organization/offices; no writes. | `all` or `restricted` |
+
+These permissions cover only implemented foundation surfaces. Readiness,
+coverage, assignments, field reporting, and technical report approval remain
+unimplemented and grant no current capability.
+
+Server authorization requirements:
+
+- Request scope follows verified identity -> application user -> active
+  membership -> office scope -> permissions -> scoped operation.
+- Client-supplied organization IDs, office IDs, roles, and permissions are always
+  untrusted input.
+- Cross-tenant office probes return `not_found_or_inaccessible` equivalence.
+- Membership writes revalidate the acting user and membership inside the locked
+  transaction, reject stale versions, prevent self role/status changes, protect
+  the final active admin, and identify the actor in structured mutation metadata.
+- Composite foreign keys prevent cross-organization office assignment.
+
+Development/test identities include all six roles, suspended membership,
+disabled user, no membership, one-office and multi-office scope, a second
+organization, and a multi-organization user. They are seeded separately from
+production migrations.
+
+PostgreSQL RLS and persistent general audit events are not implemented. Mutation
+metadata is preparation for a future audit sink, not an audit-history claim.
+See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md).
 
 ## Pilot V1 Target Roles And Boundaries
 
@@ -134,7 +215,8 @@ This is not a complete authorization system:
 | Project Manager | Review relevant projects/work orders, supply or correct project information, review affecting decisions. | No organization-wide administration unless separately assigned another role. |
 | Executive / Read Only | Review readiness, trends, and impact summaries. | Cannot alter assignments or operational records. |
 
-Field technicians do not need to be full application users in Pilot V1.
+The implemented field-technician role is a forward-compatible restricted role;
+it does not imply Field Operations or technician-assignment functionality exists.
 
 ## Data Minimization - Pilot V1 Target
 
@@ -178,16 +260,19 @@ The demo must continue to use fictional or anonymized data. Pilot import validat
 
 ## Security-Sensitive Contradictions Or Gaps
 
-- Settings UI copy mentions permissions and future integrations, but no real permission system or integration layer exists.
-- Role access exists in root demo UI state, but no auth service makes it enforceable.
+- Root demo Settings copy and role state remain non-authoritative demo behavior;
+  the Operational vNext permission module is the enforced server boundary.
 - Browser/CDP security validation is not part of normal CI.
-- Pilot V1 auth, RBAC, audit storage, and secret handling are target requirements, not current implementation.
-- Phase 5 proves only organization/office persistence isolation for office records, not complete tenant isolation for all future Pilot V1 data.
+- Production authentication, invitation delivery, audit storage, and provider
+  secret operations remain target requirements. Foundation RBAC is implemented
+  only for current identity/member/office surfaces.
+- Phase 5D proves isolation for identity, membership, office assignment, member
+  administration, and office reads, not for future Pilot V1 domain tables.
 - Operational vNext health endpoints exist, but they are not authenticated and do not prove tenant isolation or pilot readiness.
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Which exact managed authentication provider should implement invite-only Pilot V1 access?
+- [OPEN QUESTION - High Impact] Which exact managed authentication provider should replace the disabled production boundary and implement invite-only access?
 - [OPEN QUESTION - High Impact] What approval rules define significant operational changes?
 - [OPEN QUESTION - High Impact] What retention and deletion periods apply to customer data and Decision Log entries?
 - [OPEN QUESTION - Medium Impact] What logging policy safely supports troubleshooting without exposing pilot data?

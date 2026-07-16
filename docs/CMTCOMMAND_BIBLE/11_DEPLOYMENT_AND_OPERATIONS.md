@@ -14,6 +14,8 @@
   - `apps/operational/src/app/api/health/route.ts`
   - `apps/operational/src/app/api/ready/route.ts`
   - `apps/operational/drizzle/0000_open_giant_girl.sql`
+  - `apps/operational/drizzle/0001_office-composite-key.sql`
+  - `apps/operational/drizzle/0002_identity-membership-rbac.sql`
   - `apps/operational/scripts/db-migrate-test.ts`
   - `apps/operational/src/server/db/test-safety.ts`
   - `.gitignore`
@@ -21,7 +23,7 @@
   - `docs/cmtcommand-vnext/verification.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-14
+- Last Reviewed: 2026-07-15
 
 ## Current Demo - Confirmed
 
@@ -106,7 +108,10 @@ No deployment configuration is implemented yet.
 
 Phase 4 added a local operational shell and scoped CI proof:
 
-- `apps/operational/.env.example` defines blank placeholders for `APP_ENV`, `DATABASE_URL`, and `TEST_DATABASE_URL`.
+- `apps/operational/.env.example` defines blank placeholders for `APP_ENV`,
+  database URLs, exact test-database identity proofs, and destructive-cleanup
+  authorization, plus fail-closed auth mode, session secret, and development
+  subject allowlist settings.
 - `GET /api/health` returns app liveness without PostgreSQL.
 - `GET /api/ready` returns database readiness and 503 when PostgreSQL is unconfigured or unreachable.
 - `.github/workflows/operational-ci.yml` runs `npm ci`, `npm run verify`, and the root static verifier without secrets, database, auth provider, browser gate, or deployment.
@@ -121,12 +126,20 @@ path:
 - `apps/operational/drizzle/0000_open_giant_girl.sql` creates only
   `organizations`, `offices`, their status enums, and required constraints.
 - `npm run db:migrate` uses normal `DATABASE_URL` through Drizzle Kit.
-- `npm run db:migrate:test` requires `APP_ENV=test` and `TEST_DATABASE_URL`.
+- `npm run db:migrate:test` requires `APP_ENV=test`, `TEST_DATABASE_URL`, the
+  exact repository test-database name, and an explicitly declared loopback host.
 - `npm run verify:db` runs test migration application and PostgreSQL integration
   tests.
-- Test database safety logic rejects blank test URLs, non-test database names,
-  and unsafe-looking production/staging/pilot names, and redacts credentials in
-  output.
+- PostgreSQL integration cleanup additionally requires an exact destructive-reset
+  authorization value and verifies the live `current_database()` result inside
+  the cleanup transaction before destructive SQL executes.
+- Test database safety logic rejects blank or ambiguous proofs, substring-only
+  test names, arbitrary remote hosts, URL/identity disagreement, and
+  production-like identities. Diagnostics redact credentials.
+- Cleanup enumerates the current `office_assignments`, `external_identities`,
+  `organization_memberships`, `users`, `offices`, and `organizations` tables
+  with `RESTRICT`; future dependent tables fail cleanup visibly instead of being
+  silently removed through `CASCADE`.
 
 The operational CI workflow now has a separate PostgreSQL service-container job
 for the database gate. It uses Node `22.22.2` and requires no external secrets or
@@ -135,13 +148,52 @@ managed provider account.
 This is still not a production database provider, backup, recovery, monitoring,
 or deployment configuration.
 
+## Phase 5D Authentication Operations - Confirmed
+
+No production identity provider is selected. Operational vNext defaults to
+`AUTH_MODE=disabled`; protected access therefore fails closed in production.
+
+Local development/test identity requires all of:
+
+```text
+APP_ENV=development or test
+AUTH_MODE=development
+AUTH_SESSION_SECRET=<minimum 32 local-only characters>
+AUTH_DEVELOPMENT_SUBJECTS=<explicit comma-separated allowlist>
+DATABASE_URL=<migrated local PostgreSQL database>
+```
+
+The development adapter is rejected when `APP_ENV` is staging,
+pilot-production, or production, and also when `NODE_ENV=production`. Never put
+real provider secrets in these variables or commit `.env`/`.env.local`.
+
+Local identity setup:
+
+```powershell
+npm run db:migrate
+npm run seed:identity:dev
+npm run dev
+```
+
+The seed command is non-production gated and separate from migrations. It creates
+deterministic Alpha/Beta fixtures for authorization acceptance testing only.
+
+Production deployment remains blocked until a managed provider is selected and
+its issuer/audience/signature/expiration/state verification, secure session
+cookie behavior, invitation path, secret rotation, and incident/revocation
+operations are documented and tested.
+
+See `apps/operational/README.md` for subject fixtures, controlled failure states,
+and manual authorized-request verification.
+
 ## Pilot V1 Operational Gaps
 
 - No exact selected hosting provider.
 - No exact selected database provider.
 - No selected auth provider.
 - No deployment pipeline.
-- No production environment-variable contract beyond the Phase 4 scaffold placeholders.
+- No production auth-provider environment contract beyond the fail-closed
+  `AUTH_MODE=disabled` boundary.
 - No production database backup/recovery procedure.
 - No deployed health-check monitor or provider-level health integration.
 - No structured logging or monitoring configuration.

@@ -23,6 +23,9 @@ export default defineConfig({
       APP_ENV: "test",
       DATABASE_URL: "",
       TEST_DATABASE_URL: "",
+      AUTH_MODE: "development",
+      AUTH_SESSION_SECRET: "playwright-only-session-secret-32-characters",
+      AUTH_DEVELOPMENT_SUBJECTS: "alpha-admin",
     },
   },
   projects: [

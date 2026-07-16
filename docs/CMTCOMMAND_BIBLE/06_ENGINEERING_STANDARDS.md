@@ -110,10 +110,12 @@ npm run db:studio
 tests, and production build. It must not require a live database, browser
 installation, auth provider credentials, deployment account, or customer data.
 `npm run verify:db` applies test migrations and runs PostgreSQL integration
-tests with explicit `APP_ENV=test` and `TEST_DATABASE_URL`. `npm run verify:full`
-preserves the Phase 4 browser behavior: stable verification plus Playwright
-scaffold smoke tests. `npm run test:e2e`, `npm run test:db`, and
-`npm run test:integration` remain explicit separate checks.
+tests with explicit `APP_ENV=test`, `TEST_DATABASE_URL`, the exact repository
+test-database name and loopback host, and destructive-cleanup authorization.
+`npm run verify:full` preserves the Phase 4 browser behavior: stable
+verification plus Playwright scaffold smoke tests. `npm run test:e2e`,
+`npm run test:db`, and `npm run test:integration` remain explicit separate
+checks.
 
 ## Dependency Policy
 

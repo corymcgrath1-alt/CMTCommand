@@ -21,7 +21,7 @@ Authorization is server-enforced. UI route guards and hidden buttons may improve
 
 The authentication provider proves user identity and session state. CMTCommand then maps the authenticated identity to an internal user and membership record.
 
-Provider selection remains a Phase 4 checkpoint. The architecture requires:
+Provider selection remains a production-deployment checkpoint. The architecture requires:
 
 - Invite-only onboarding.
 - Stable external identity id.
@@ -197,6 +197,12 @@ All design should support multiple organizations later, but Pilot V1 does not ne
 
 ## Known Unresolved Decisions
 
+Phase 5D implements the internal user, provider identity, organization
+membership, office assignment, centralized permission, and protected-request
+foundation described here. [ADR-007](ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md)
+records the concrete server-derived scope decision. Production authentication,
+invitation delivery, persistent audit events, and RLS remain unresolved.
+
 - Exact managed authentication provider.
 - Whether RLS is enabled in Phase 4 or later pre-production hardening.
 - Exact approval threshold for significant coverage changes.
@@ -205,7 +211,7 @@ All design should support multiple organizations later, but Pilot V1 does not ne
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Which managed authentication provider should be selected before auth scaffolding?
+- [OPEN QUESTION - High Impact] Which managed authentication provider should replace the disabled production boundary before pilot deployment?
 - [OPEN QUESTION - High Impact] What approval threshold distinguishes ordinary from significant coverage decisions?
 - [OPEN QUESTION - Medium Impact] Should PostgreSQL RLS be mandatory before first pilot production, or accepted as post-scaffold hardening?
 - [OPEN QUESTION - Medium Impact] Can Project Managers directly edit imported records, or only submit corrections?

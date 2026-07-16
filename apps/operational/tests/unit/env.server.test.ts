@@ -10,8 +10,12 @@ describe("parseServerEnv", () => {
       }),
     ).toEqual({
       APP_ENV: "development",
+      NODE_ENV: undefined,
       DATABASE_URL: undefined,
       TEST_DATABASE_URL: undefined,
+      AUTH_MODE: "disabled",
+      AUTH_SESSION_SECRET: undefined,
+      AUTH_DEVELOPMENT_SUBJECTS: undefined,
     });
   });
 
@@ -23,8 +27,12 @@ describe("parseServerEnv", () => {
       }),
     ).toEqual({
       APP_ENV: "test",
+      NODE_ENV: undefined,
       DATABASE_URL: "postgresql://db.example.test/cmtcommand",
       TEST_DATABASE_URL: undefined,
+      AUTH_MODE: "disabled",
+      AUTH_SESSION_SECRET: undefined,
+      AUTH_DEVELOPMENT_SUBJECTS: undefined,
     });
   });
 

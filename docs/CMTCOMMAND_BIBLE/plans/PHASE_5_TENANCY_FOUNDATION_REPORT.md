@@ -153,16 +153,27 @@ The test path requires:
 
 - `APP_ENV=test`
 - `TEST_DATABASE_URL`
-- A database name containing `test`
+- `TEST_DATABASE_EXPECTED_NAME=cmtcommand_operational_test`
+- An exact URL database-name match
+- `TEST_DATABASE_EXPECTED_HOST` set to the exact loopback host in the URL
 - No unsafe production/staging/pilot markers in the host or database name
 
-The path does not fall back to `DATABASE_URL` and redacts credentials in output.
+The path does not fall back to `DATABASE_URL`, rejects substring-only test
+names and arbitrary remote hosts, and redacts credentials in output.
+
+Destructive integration cleanup additionally requires:
+
+- `TEST_DATABASE_RESET_AUTHORIZATION=ALLOW_CMT_TEST_DATABASE_RESET`
+- A live `current_database()` result matching the authorized URL identity
+- Cleanup of the explicitly enumerated `offices` and `organizations` tables
+  with `RESTRICT`, not `CASCADE`
 
 ## CI Integration-Test Strategy
 
 `.github/workflows/operational-ci.yml` keeps the no-database job separate from a
 PostgreSQL service-container job. The database job uses Node `22.22.2`, a
-clearly test-only database, `npm ci`, and `npm run verify:db`.
+fixed repository-owned test database on `localhost`, explicit identity and
+cleanup authorization variables, `npm ci`, and `npm run verify:db`.
 
 ## Verification Performed
 
@@ -190,7 +201,7 @@ clearly test-only database, `npm ci`, and `npm run verify:db`.
 
 ## Phase 5B Error-Mapping Correction
 
-Status: Phase 5 Implemented but Awaiting PostgreSQL Reverification
+Status: Phase 5B PostgreSQL Reverification Passed
 
 The first PostgreSQL CI execution proved that PostgreSQL started, the test
 database safety guard accepted the CI database, the initial migration applied,
@@ -203,8 +214,49 @@ small bounded `.cause` chain. It does not change schemas, migrations,
 constraints, tenant-scope predicates, expected public results, authentication,
 memberships, RBAC, or product-domain behavior.
 
-Phase 5 remains awaiting PostgreSQL reverification until `npm run verify:db`
-passes in GitHub Actions or against a safe explicit local test database.
+The corrected error mapping passed the stable and PostgreSQL GitHub Actions jobs
+at commit `bc31413` on 2026-07-14.
+
+## Phase 5C Destructive Test Database Safety Correction
+
+Status: Database-Independent Verification Passed; PostgreSQL Reverification Pending
+
+The Phase 5 test harness previously treated a database name containing `test`
+as evidence that the database was disposable. Integration cleanup then used an
+open-ended `TRUNCATE ... CASCADE`. A misleading remote database such as
+`customer_test` could therefore pass configuration validation and reach
+destructive cleanup.
+
+Phase 5C replaces substring matching with a fail-closed contract:
+
+- Only `cmtcommand_operational_test` is an accepted expected database name.
+- The URL name must match that expected identity exactly.
+- The explicitly expected host must match the URL and must be loopback.
+- Destructive cleanup requires the exact authorization value
+  `ALLOW_CMT_TEST_DATABASE_RESET`.
+- The integration suite reads PostgreSQL's live `current_database()` inside the
+  cleanup transaction immediately before destructive SQL.
+- Cleanup explicitly enumerates `offices` and `organizations` and uses
+  `RESTRICT`. A future dependent table must make cleanup fail visibly until the
+  contract is intentionally updated.
+- Errors and diagnostics never include credentials or the unredacted URL.
+
+Phase 5C verification performed locally:
+
+- The focused regression test failed before implementation: 13 failed, 4 passed.
+- `npm run test -- tests/unit/db.test-safety.test.ts` passed: 17 tests.
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `npm run test` passed: 7 test files / 47 tests.
+- `npm run verify` passed: lint, typecheck, 47 unit tests, and production build.
+- `node scripts/verify-root.mjs` passed.
+- `npm run verify:db` failed closed before connecting when the required test
+  environment was absent.
+
+Local PostgreSQL execution was not available: no PostgreSQL or Docker service
+was present and `localhost:5432` was closed. The strengthened migration and
+integration path therefore remains pending execution by the existing GitHub
+Actions PostgreSQL service after a later authorized push.
 
 ## Security Boundary
 

@@ -37,6 +37,7 @@ export const offices = pgTable(
     })
       .onDelete("restrict")
       .onUpdate("cascade"),
+    unique("offices_id_organization_unique").on(table.id, table.organizationId),
     unique("offices_organization_code_unique").on(table.organizationId, table.code),
     check(
       "offices_code_format_check",
