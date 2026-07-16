@@ -4,6 +4,8 @@ import {
   check,
   foreignKey,
   index,
+  integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -12,6 +14,23 @@ import {
 } from "drizzle-orm/pg-core";
 import { offices } from "./offices";
 import { projects } from "./projects";
+import { serviceTypes } from "./service-types";
+
+export const workOrderStatusValues = [
+  "draft",
+  "ready_for_dispatch",
+  "scheduled",
+  "in_progress",
+  "completed",
+  "cancelled",
+] as const;
+export const workOrderPriorityValues = ["low", "normal", "high", "urgent"] as const;
+
+export const workOrderStatus = pgEnum("work_order_status", workOrderStatusValues);
+export const workOrderPriority = pgEnum(
+  "work_order_priority",
+  workOrderPriorityValues,
+);
 
 export const workOrders = pgTable(
   "work_orders",
@@ -23,8 +42,15 @@ export const workOrders = pgTable(
     sourceSystem: text("source_system").notNull(),
     sourceWorkOrderId: text("source_work_order_id").notNull(),
     workOrderNumber: text("work_order_number").notNull(),
+    serviceTypeId: uuid("service_type_id").notNull(),
     serviceType: text("service_type").notNull(),
     jobSiteName: text("job_site_name").notNull(),
+    priority: workOrderPriority("priority").notNull().default("normal"),
+    status: workOrderStatus("status").notNull().default("draft"),
+    version: integer("version").notNull().default(1),
+    timeZone: text("time_zone").notNull().default("UTC"),
+    dispatchInstructions: text("dispatch_instructions"),
+    cancellationReason: text("cancellation_reason"),
     scheduledStartAt: timestamp("scheduled_start_at", {
       withTimezone: true,
       precision: 3,
@@ -46,6 +72,13 @@ export const workOrders = pgTable(
       columns: [table.officeId, table.organizationId],
       foreignColumns: [offices.id, offices.organizationId],
       name: "work_orders_office_organization_fk",
+    })
+      .onDelete("restrict")
+      .onUpdate("cascade"),
+    foreignKey({
+      columns: [table.serviceTypeId, table.organizationId],
+      foreignColumns: [serviceTypes.id, serviceTypes.organizationId],
+      name: "work_orders_service_type_organization_fk",
     })
       .onDelete("restrict")
       .onUpdate("cascade"),
@@ -81,6 +114,11 @@ export const workOrders = pgTable(
       table.officeId,
       table.isActive,
     ),
+    index("work_orders_organization_service_type_idx").on(
+      table.organizationId,
+      table.serviceTypeId,
+      table.status,
+    ),
     check(
       "work_orders_source_system_not_blank_check",
       sql`${table.sourceSystem} ~ '[^[:space:]]'`,
@@ -109,7 +147,22 @@ export const workOrders = pgTable(
       "work_orders_schedule_order_check",
       sql`${table.scheduledEndAt} > ${table.scheduledStartAt}`,
     ),
+    check("work_orders_version_positive_check", sql`${table.version} > 0`),
+    check(
+      "work_orders_time_zone_not_blank_check",
+      sql`${table.timeZone} ~ '[^[:space:]]'`,
+    ),
+    check(
+      "work_orders_dispatch_instructions_not_blank_check",
+      sql`${table.dispatchInstructions} is null or ${table.dispatchInstructions} ~ '[^[:space:]]'`,
+    ),
+    check(
+      "work_orders_cancellation_reason_check",
+      sql`(${table.status} = 'cancelled' and ${table.cancellationReason} ~ '[^[:space:]]') or (${table.status} <> 'cancelled' and ${table.cancellationReason} is null)`,
+    ),
   ],
 );
 
 export type WorkOrderRecord = typeof workOrders.$inferSelect;
+export type WorkOrderStatus = (typeof workOrderStatusValues)[number];
+export type WorkOrderPriority = (typeof workOrderPriorityValues)[number];

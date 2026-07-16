@@ -161,6 +161,7 @@ describe("server-side authorization context resolution", () => {
       expect(state.context.permissions).toEqual([
         "organization.read",
         "office.read",
+        "service_type.read",
         "project.read",
         "work_order.read",
         "technician.read",

@@ -63,16 +63,14 @@ test("sign-in remains usable at 390px without overflow or browser errors", async
   expect(browserErrors).toEqual([]);
 });
 
-test("development session cookie is HttpOnly and fails safely without a database", async ({
+test("development session cookie is HttpOnly and resolves a database-backed identity", async ({
   context,
   page,
 }) => {
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Continue to protected app" }).click();
 
-  await expect(
-    page.getByRole("heading", { name: "Authentication service unavailable" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Alpha Engineering" })).toBeVisible();
   const sessionCookie = (await context.cookies()).find(
     (cookie) => cookie.name === "cmtcommand-operational-session",
   );
@@ -93,19 +91,18 @@ test("liveness endpoint returns a stable machine-readable response", async ({
   });
 });
 
-test("readiness endpoint reports controlled 503 when PostgreSQL is not configured", async ({
+test("readiness endpoint reports PostgreSQL ready", async ({
   request,
 }) => {
   const response = await request.get("/api/ready");
 
-  expect(response.status()).toBe(503);
+  expect(response.status()).toBe(200);
   expect(response.headers()["cache-control"]).toMatch(/no-store/);
   await expect(response.json()).resolves.toEqual({
-    status: "not_ready",
+    status: "ready",
     service: "cmtcommand-operational",
-    reason: "database_not_configured",
     checks: {
-      database: "not_configured",
+      database: "ok",
     },
   });
 });

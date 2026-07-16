@@ -209,43 +209,53 @@ PostgreSQL RLS and persistent general audit events are not implemented. Mutation
 metadata is preparation for a future audit sink, not an audit-history claim.
 See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md).
 
-## Phase 5E Operational-Record Authorization - Confirmed
+## Phase 5E Operational Dispatch Authorization - Confirmed
 
-Phase 5E extends the central permission policy with separate read/manage
-permissions for projects, work orders, technicians, and dispatch assignments:
+Phase 5E extends the central permission policy with read/manage capabilities for
+projects, service types, work orders, technicians, and dispatch assignments,
+plus explicit assignment, transition, conflict-override, own-read, and
+own-acknowledgment capabilities:
 
 | Role | Phase 5E operational-record capability |
 | --- | --- |
-| Organization admin | Read and manage all four record types within authorized organization/office scope. |
-| Operations manager | Read and manage all four record types within authorized organization/office scope. |
-| Dispatcher | Read all four record types; manage dispatch assignments only; restricted-office policy remains required. |
-| Technical reviewer | Read all four record types; no Phase 5E writes. |
-| Viewer | Read all four record types; no writes. |
-| Field technician | No Phase 5E operational-record permission. |
+| Organization admin | Read/manage all Phase 5E records; assign, transition, and override schedule conflicts with an explicit reason. |
+| Operations manager | Read/manage all Phase 5E records; assign, transition, and override schedule conflicts with an explicit reason. |
+| Dispatcher | Read projects, service types, technicians, work orders, and assignments; manage work orders/assignments and technician relationships; no conflict override. Restricted-office policy remains required. |
+| Technical reviewer | Read authorized Phase 5E records; no Phase 5E writes. |
+| Viewer | Read authorized Phase 5E records; no writes. |
+| Field technician | Read only assignments linked through their current technician profile and acknowledge only their own primary assignment. |
 
 Reads use organization/office predicates derived from the current authorization
-context. Creates first check permission, then lock the owning organization and
-re-read the current user, organization, membership, role, and office assignment
-inside the transaction. The shared organization lock serializes those writes
-with the existing membership and office-access mutation path. A stale context
-cannot keep writing after the actor is suspended or loses the required
-permission or office access.
+context. Own-assignment reads additionally require the authenticated membership
+to be linked to the assignment's active technician relationship. Mutations
+first check permission, then lock the organization and re-read the current user,
+membership, role, and office assignment inside the transaction. Expected
+versions reject stale writes. A stale context cannot keep writing after the
+actor is suspended or loses permission or office access.
 
 Database constraints independently require organization/office agreement for
-projects and technicians, work-order/project relationships, and
-dispatch-assignment/work-order/technician relationships. Cross-office and
-cross-organization references are rejected, and inaccessible relationships use
-the same public result as nonexistent records.
+projects, service types, technicians, work orders, assignments, eligibility,
+primary/support relationships, and assignment events. Cross-office and
+cross-organization references are rejected. Inaccessible resources use the
+same public result as nonexistent records, and conflicts outside the actor's
+office visibility may block without disclosing the other assignment.
 
 Phase 5E accepts only minimal business-operational technician contact fields:
 display name, optional operational role, optional work email, and optional work
 phone. It adds no payroll, medical, home-address, background-report, location,
 credential, or provider-token data.
 
-Successful create results include a generated mutation ID, action, actor,
-organization, subject, and timestamp. Dispatch-assignment rows also retain
-creating/updating user IDs. No general audit event is persisted; denied actions
-and returned mutation metadata are not durable audit history.
+Technician office eligibility is a dispatch-domain qualification and never an
+authorization grant. A technician can exist without a login. Optional
+membership linkage enables own-assignment behavior only after the normal active
+user/membership/office checks succeed.
+
+Assignment events durably record assignment creation, scheduling, primary and
+support changes, lifecycle transitions, and authorized conflict overrides. A
+database trigger makes those domain events append-only. They do not replace a
+general audit platform: denied actions, membership changes, authentication
+events, request identifiers, and retention policy still require the future
+security audit-event boundary.
 
 ## Pilot V1 Target Roles And Boundaries
 
@@ -257,9 +267,10 @@ and returned mutation metadata are not durable audit history.
 | Project Manager | Review relevant projects/work orders, supply or correct project information, review affecting decisions. | No organization-wide administration unless separately assigned another role. |
 | Executive / Read Only | Review readiness, trends, and impact summaries. | Cannot alter assignments or operational records. |
 
-The implemented field-technician role remains forward-compatible and restricted.
-It receives no Phase 5E operational-record permissions; durable dispatch records
-do not imply own-assignment access, `My Day`, or other Field Operations behavior.
+The implemented field-technician role remains restricted. It receives only
+linked own-assignment read and acknowledgment; no organization-wide dispatch,
+reassignment, membership administration, field session, evidence, report, or
+sample capability is implied.
 
 ## Data Minimization - Pilot V1 Target
 
@@ -308,11 +319,12 @@ The demo must continue to use fictional or anonymized data. Pilot import validat
 - Browser/CDP security validation is not part of normal CI.
 - Production authentication, invitation delivery, audit storage, and provider
   secret operations remain target requirements. Current RBAC covers the
-  identity/member/office surfaces and four Phase 5E record types only.
+  identity/member/office surfaces and bounded Phase 5E dispatch workflow only.
 - Phase 5D proves isolation for identity and membership behavior. Phase 5E adds
-  bounded organization/office/role isolation for projects, technicians, work
-  orders, and dispatch assignments, not for future import, readiness, coverage,
-  Decision Log, or Field Operations records.
+  bounded organization/office/role isolation for projects, service types,
+  technicians, work orders, assignment relationships, and assignment events,
+  not for future import, readiness, coverage, Decision Log, or Field Operations
+  records.
 - Operational vNext health endpoints exist, but they are not authenticated and do not prove tenant isolation or pilot readiness.
 
 ## Open Questions

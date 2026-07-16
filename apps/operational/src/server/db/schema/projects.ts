@@ -4,6 +4,8 @@ import {
   check,
   foreignKey,
   index,
+  integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -11,6 +13,9 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { offices } from "./offices";
+
+export const projectStatusValues = ["active", "inactive", "archived"] as const;
+export const projectStatus = pgEnum("project_status", projectStatusValues);
 
 export const projects = pgTable(
   "projects",
@@ -22,6 +27,9 @@ export const projects = pgTable(
     sourceProjectId: text("source_project_id").notNull(),
     projectNumber: text("project_number").notNull(),
     name: text("name").notNull(),
+    address: text("address"),
+    status: projectStatus("status").notNull().default("active"),
+    version: integer("version").notNull().default(1),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true, precision: 3 })
       .notNull()
@@ -75,7 +83,13 @@ export const projects = pgTable(
       sql`${table.projectNumber} ~ '[^[:space:]]'`,
     ),
     check("projects_name_not_blank_check", sql`${table.name} ~ '[^[:space:]]'`),
+    check(
+      "projects_address_not_blank_check",
+      sql`${table.address} is null or ${table.address} ~ '[^[:space:]]'`,
+    ),
+    check("projects_version_positive_check", sql`${table.version} > 0`),
   ],
 );
 
 export type ProjectRecord = typeof projects.$inferSelect;
+export type ProjectStatus = (typeof projectStatusValues)[number];

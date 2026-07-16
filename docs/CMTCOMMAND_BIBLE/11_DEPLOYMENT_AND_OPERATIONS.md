@@ -18,6 +18,9 @@
   - `apps/operational/drizzle/0002_identity-membership-rbac.sql`
   - `apps/operational/drizzle/0003_vengeful_vapor.sql`
   - `apps/operational/drizzle/0004_right_reavers.sql`
+  - `apps/operational/drizzle/0005_chemical_eternity.sql`
+  - `apps/operational/drizzle/0006_dispatch-backfill-and-history-guards.sql`
+  - `apps/operational/drizzle/0007_deep_smasher.sql`
   - `apps/operational/scripts/db-migrate-test.ts`
   - `apps/operational/src/server/db/test-safety.ts`
   - `.gitignore`
@@ -138,11 +141,11 @@ path:
 - Test database safety logic rejects blank or ambiguous proofs, substring-only
   test names, arbitrary remote hosts, URL/identity disagreement, and
   production-like identities. Diagnostics redact credentials.
-- Cleanup enumerates the current `dispatch_assignments`, `work_orders`,
-  `technicians`, `projects`, `office_assignments`, `external_identities`,
-  `organization_memberships`, `users`, `offices`, and `organizations` tables
-  in dependency-first order with `RESTRICT`; future dependent tables fail
-  cleanup visibly instead of being silently removed through `CASCADE`.
+- Cleanup enumerates current assignment events/relationships, dispatch
+  assignments, work orders, technician eligibility, technicians, service types,
+  projects, identity, office, and organization tables in dependency-first order
+  with `RESTRICT`; future dependent tables fail cleanup visibly instead of being
+  silently removed through `CASCADE`.
 
 The operational CI workflow now has a separate PostgreSQL service-container job
 for the database gate. It uses Node `22.22.2` and requires no external secrets or

@@ -4,6 +4,8 @@ import {
   check,
   foreignKey,
   index,
+  integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -14,6 +16,21 @@ import { technicians } from "./technicians";
 import { users } from "./users";
 import { workOrders } from "./work-orders";
 
+export const dispatchAssignmentStatusValues = [
+  "draft",
+  "unassigned",
+  "assigned",
+  "acknowledged",
+  "in_progress",
+  "completed",
+  "cancelled",
+] as const;
+
+export const dispatchAssignmentStatus = pgEnum(
+  "dispatch_assignment_status",
+  dispatchAssignmentStatusValues,
+);
+
 export const dispatchAssignments = pgTable(
   "dispatch_assignments",
   {
@@ -23,7 +40,7 @@ export const dispatchAssignments = pgTable(
     sourceSystem: text("source_system").notNull(),
     sourceAssignmentId: text("source_assignment_id").notNull(),
     workOrderId: uuid("work_order_id").notNull(),
-    technicianId: uuid("technician_id").notNull(),
+    technicianId: uuid("technician_id"),
     assignmentStartAt: timestamp("assignment_start_at", {
       withTimezone: true,
       precision: 3,
@@ -34,6 +51,10 @@ export const dispatchAssignments = pgTable(
     }).notNull(),
     createdByUserId: uuid("created_by_user_id").notNull(),
     updatedByUserId: uuid("updated_by_user_id").notNull(),
+    status: dispatchAssignmentStatus("status").notNull().default("unassigned"),
+    version: integer("version").notNull().default(1),
+    timeZone: text("time_zone").notNull().default("UTC"),
+    cancellationReason: text("cancellation_reason"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true, precision: 3 })
       .notNull()
@@ -55,13 +76,9 @@ export const dispatchAssignments = pgTable(
       .onDelete("restrict")
       .onUpdate("cascade"),
     foreignKey({
-      columns: [table.technicianId, table.organizationId, table.officeId],
-      foreignColumns: [
-        technicians.id,
-        technicians.organizationId,
-        technicians.officeId,
-      ],
-      name: "dispatch_assignments_technician_organization_office_fk",
+      columns: [table.technicianId],
+      foreignColumns: [technicians.id],
+      name: "dispatch_assignments_technician_id_fk",
     })
       .onDelete("restrict")
       .onUpdate("cascade"),
@@ -83,6 +100,11 @@ export const dispatchAssignments = pgTable(
       table.organizationId,
       table.sourceSystem,
       table.sourceAssignmentId,
+    ),
+    unique("dispatch_assignments_id_organization_office_unique").on(
+      table.id,
+      table.organizationId,
+      table.officeId,
     ),
     index("dispatch_assignments_organization_office_schedule_idx").on(
       table.organizationId,
@@ -116,7 +138,22 @@ export const dispatchAssignments = pgTable(
       "dispatch_assignments_schedule_order_check",
       sql`${table.assignmentEndAt} > ${table.assignmentStartAt}`,
     ),
+    check("dispatch_assignments_version_positive_check", sql`${table.version} > 0`),
+    check(
+      "dispatch_assignments_time_zone_not_blank_check",
+      sql`${table.timeZone} ~ '[^[:space:]]'`,
+    ),
+    check(
+      "dispatch_assignments_primary_pointer_check",
+      sql`(${table.status} in ('assigned', 'acknowledged', 'in_progress', 'completed') and ${table.technicianId} is not null) or (${table.status} in ('draft', 'unassigned', 'cancelled'))`,
+    ),
+    check(
+      "dispatch_assignments_cancellation_reason_check",
+      sql`(${table.status} = 'cancelled' and ${table.cancellationReason} ~ '[^[:space:]]') or (${table.status} <> 'cancelled' and ${table.cancellationReason} is null)`,
+    ),
   ],
 );
 
 export type DispatchAssignmentRecord = typeof dispatchAssignments.$inferSelect;
+export type DispatchAssignmentStatus =
+  (typeof dispatchAssignmentStatusValues)[number];

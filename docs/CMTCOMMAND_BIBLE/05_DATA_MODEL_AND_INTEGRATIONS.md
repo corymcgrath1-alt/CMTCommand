@@ -254,17 +254,22 @@ Development fixture data is created only by
 `npm run seed:identity:dev`; it is not present in the production migration.
 See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md).
 
-## Phase 5E Durable Operational Records - Confirmed
+## Phase 5E Operational Dispatch Records - Confirmed
 
-Phase 5E adds four current-state persistence models without changing the rule
-that customer source systems remain authoritative for their underlying records:
+Phase 5E provides current state plus durable relationship/event history without
+changing the rule that customer source systems remain authoritative for their
+underlying source records:
 
-| Table | Purpose | Source and human identifiers | Ownership |
-| --- | --- | --- | --- |
-| `projects` | Project context required by scheduled work. | Internal UUID; normalized `source_system`; `source_project_id`; separate `project_number`. | Required organization and office. |
-| `technicians` | Minimal business-operational technician roster. | Internal UUID; normalized `source_system`; `source_technician_id`; separate display name. | Required organization and office. |
-| `work_orders` | Scheduled work linked to one project, service-type text, job-site name, and time interval. | Internal UUID; normalized `source_system`; `source_work_order_id`; separate `work_order_number`. | Required organization and office. |
-| `dispatch_assignments` | Current technician-to-work-order assignment over a time interval. | Internal UUID; normalized `source_system`; `source_assignment_id`. | Required organization and office; creating/updating user IDs are required. |
+| Table | Purpose | Ownership and key integrity |
+| --- | --- | --- |
+| `projects` | Project context required by scheduled work. | Required organization/office; normalized source identity; optimistic version. |
+| `service_types` | Small durable catalog for work-order service identity. | Organization-owned key unique per organization; optional same-organization default office; status/version and actor fields. |
+| `technicians` | Minimal business-operational dispatch roster. | Required organization/home office; optional same-organization membership link; status/version. |
+| `technician_office_eligibilities` | Current offices where a technician may be dispatched. | Composite organization/technician/office constraints; unique current relationship. |
+| `work_orders` | Scheduled project work with a durable service type and historical name snapshot. | Required same-organization/office project and service type; lifecycle/status/version. |
+| `dispatch_assignments` | Scheduled handoff for one work order. | Required same-organization/office work order; lifecycle/status/version/timezone and actor fields. |
+| `assignment_technicians` | Primary/support technician relationships, including ended history. | Composite organization/office assignment and technician constraints; partial unique indexes prevent duplicate active relationships and more than one active primary. |
+| `assignment_events` | Append-only domain history for assignment and technician changes. | Composite tenant/office/assignment/technician/actor constraints; update/delete rejected by trigger. |
 
 Source uniqueness is `(organization_id, source_system, source-specific id)`, so
 the same source identifier may exist in different organizations. Source IDs and
@@ -275,28 +280,33 @@ Database integrity includes:
 - Composite office/organization foreign keys for every Phase 5E record.
 - A composite work-order/project foreign key requiring the same organization
   and office.
-- Composite dispatch-assignment foreign keys requiring its work order and
-  technician to share the assignment's organization and office.
+- Composite dispatch-assignment and relationship foreign keys requiring work
+  order, eligible technician, office, membership, and history references to stay
+  within their organization/office boundary.
+- Durable service-type ownership and work-order/service-type agreement.
+- A partial unique active-primary index and active relationship de-duplication.
+- Append-only update/delete protection for assignment events.
 - Restrictive deletes and cascading key updates for owned relationships.
 - Required nonblank normalized source identifiers and required display fields.
-- Database checks requiring work-order and assignment end times after start.
+- Database checks requiring work-order and assignment end times after start,
+  valid terminal relationship timestamps, and nonblank override/cancellation
+  reasons where required by services.
 - Organization/office, schedule, project, technician, active-state, and display
   lookup indexes.
 
-`apps/operational/src/server/operational-records/` validates create inputs and
-provides scoped create/list/find services. Organization scope is derived from
-the authenticated context rather than accepted from input. Read predicates
-apply organization and office scope; inaccessible and nonexistent lookups share
-the `not_found_or_inaccessible` result. Create transactions serialize on the
-owning organization and revalidate the actor's current user, organization,
-membership, role permission, and office access before insertion. The shared
-organization lock also serializes the existing membership and office-access
-mutation path.
+`apps/operational/src/server/operational-records/` validates catalog/current
+record creates and optimistic updates. `apps/operational/src/server/dispatch/`
+owns lifecycle transitions, half-open interval overlap checks, assignment
+technician changes, own acknowledgment, and work-order reconciliation.
+Organization scope is derived from authenticated context rather than accepted
+from input. Inaccessible and nonexistent resources share a public result.
+Mutations serialize on the organization and revalidate the actor, membership,
+role permission, and office access inside the transaction.
 
-Create results return mutation ID, action, actor, organization, subject, and
-time metadata. This metadata is not persisted and is not a general audit-event
-implementation. Phase 5E has no import path, update/delete service, product
-route/UI, durable Service Type table, readiness, coverage, or Decision Log.
+Assignment events persist operational history and actor attribution, but they
+are not a general audit-event implementation. Phase 5E has no import path,
+hard-delete operation, readiness, coverage, Decision Log, field session,
+evidence, report, sample, or integration record.
 
 ## Derived Data
 
@@ -337,13 +347,14 @@ External integrations explicitly absent in current root evidence:
 ## Implementation Gaps
 
 - Persistent organization, office, user, external identity, membership,
-  office-assignment, project, technician, work-order, and dispatch-assignment
-  schemas exist. The remaining Pilot V1 records do not.
+  office-assignment, project, service-type, technician, work-order,
+  dispatch-assignment, assignment-technician, and assignment-event schemas
+  exist. The remaining Pilot V1 records do not.
 - Operational vNext still has no import, readiness, coverage, Decision Log,
   general audit-event, equipment, availability, certification, clearance,
-  calibration, durable Service Type, service-requirement, or readiness-snapshot
-  tables.
-- No product route or UI exposes the Phase 5E operational-record services.
+  calibration, service-requirement, or readiness-snapshot tables.
+- Phase 5E pages and APIs expose only bounded operational dispatch workflows;
+  they do not expose deferred readiness, coverage, or Field Operations behavior.
 - No XLSX import implementation was found in the current static demo.
 - No import history or durable readiness snapshot exists.
 - No writeback protections exist because no external writeback integration exists.

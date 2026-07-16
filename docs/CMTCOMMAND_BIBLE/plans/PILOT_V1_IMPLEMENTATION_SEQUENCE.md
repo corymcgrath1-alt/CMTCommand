@@ -80,14 +80,15 @@ external identities, organization memberships, office access assignments, and
 server-enforced RBAC.
 
 Phase 5E adds the next bounded slice: durable organization/office-owned projects,
-technicians, work orders, and dispatch assignments; separate source-system and
-source-record identifiers; scoped create/list/find services; role permissions;
-and database relationship/isolation tests. It adds no product route or UI and no
-import, readiness, coverage, Decision Log, or persistent general audit behavior.
+service types, technicians, work orders, dispatch assignments, primary/support
+relationships, append-only assignment history, scoped lifecycle services,
+protected routes/UI, and database/browser verification. It adds no import,
+readiness, coverage, Decision Log, persistent general audit, or Field Operations
+behavior.
 
-Phase 2 remains incomplete. Durable Service Type records, availability,
-certifications, clearances, equipment, calibrations, job-site entities, service
-requirements, and other readiness inputs still require separately scoped work.
+Phase 2 remains incomplete. Availability, certifications, clearances, equipment,
+calibrations, job-site entities, service requirements, and other readiness
+inputs still require separately scoped work.
 
 ## Phase 3 - Controlled Import Pipeline
 
@@ -190,14 +191,15 @@ requirements, and other readiness inputs still require separately scoped work.
 ## Next Guarded Phase
 
 The guarded operational shell, tenancy, identity/RBAC, and bounded Phase 5E
-records now exist. The next Phase 2 slice should complete an explicitly approved
-readiness-data dependency such as durable Service Type and service-requirement
-records without treating Phase 5E as the entire data foundation.
+dispatch workflow now exist. The next Phase 2 slice should complete an
+explicitly approved readiness-data dependency such as service requirements,
+availability, certifications, equipment, or calibration without treating Phase
+5E as the entire data foundation.
 
 Do not begin controlled imports until their required core entities and data
 policy are complete. Do not begin readiness, coverage, Decision Log, persistent
-audit, or Field Operations UI/routes merely because four operational record
-types now persist.
+audit, or Field Operations UI/routes merely because the operational dispatch
+handoff now persists.
 
 ## Remaining Open Questions
 

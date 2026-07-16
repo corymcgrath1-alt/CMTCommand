@@ -342,8 +342,12 @@ async function cleanupTestRows(database: OperationalDatabase): Promise<void> {
       async () => {
         await transaction.execute(
           sql`truncate table
+            "assignment_events",
+            "assignment_technicians",
             "dispatch_assignments",
             "work_orders",
+            "technician_office_eligibilities",
+            "service_types",
             "technicians",
             "projects",
             "office_assignments",

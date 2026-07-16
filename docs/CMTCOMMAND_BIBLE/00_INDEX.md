@@ -79,6 +79,7 @@ Operational vNext architecture:
 - [ADR-004 Tenancy Authorization And Audit Model](decisions/ADR-004_TENANCY_AUTHORIZATION_AND_AUDIT_MODEL.md): governs auth, membership, RBAC, office scope, Decision Log distinction, and audit model.
 - [ADR-005 Import And Readiness Execution Model](decisions/ADR-005_IMPORT_AND_READINESS_EXECUTION_MODEL.md): governs imports, readiness execution, snapshots, recalculation, and queue threshold.
 - [ADR-007 Server-Derived Authorization Scope](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md): governs verified identity mapping, active membership, office scope, permissions, development sessions, and untrusted browser claims.
+- [ADR-008 Dispatch Assignments Are The Field Operations Handoff](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md): governs durable service types, assignment technician relationships, lifecycle events, conflict handling, and the Field Operations handoff boundary.
 - [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md): canonical technical overview.
 - [Phase 4 Scaffolding Readiness Checklist](plans/PHASE_4_SCAFFOLDING_READINESS_CHECKLIST.md): gate before creating the operational app shell.
 - [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md): read for the implemented shell, exact package versions, commands, health behavior, and verification results.
@@ -146,11 +147,12 @@ Do not treat inferred statements as product commitments. Do not treat founder ta
   and the first migration. Phase 5D adds application users, provider identity
   mappings, organization memberships, office assignments, centralized RBAC,
   protected Operational vNext pages/APIs, and a production-forbidden development
-  identity adapter. Phase 5E adds four durable organization/office-owned record
-  types: projects, technicians, work orders, and dispatch assignments, with
-  source-ID separation and scoped server services. No production auth provider,
-  import/readiness/coverage workflow, operational-record UI/routes, durable
-  Service Type record, invitation delivery, or general audit-event table exists.
+  identity adapter. Phase 5E adds durable projects, technicians, service types,
+  work orders, dispatch assignments, primary/support relationships, and
+  append-only assignment events, with protected APIs and operational workflow
+  pages. No production auth provider, import/readiness/coverage workflow,
+  invitation delivery, field-reporting runtime, or general audit-event table
+  exists.
 - `euchre-platform/` and `brackethub/` are unrelated to root CMTCommand scope based on `AGENTS.md`, `MIGRATION_CLEANUP_REPORT.md`, and vNext docs.
 - `node scripts\verify-root.mjs` is the root verification command found in repository evidence.
 

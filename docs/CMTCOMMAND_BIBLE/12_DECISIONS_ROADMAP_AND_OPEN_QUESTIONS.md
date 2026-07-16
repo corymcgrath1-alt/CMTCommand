@@ -22,9 +22,10 @@
   - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md`
   - `docs/CMTCOMMAND_BIBLE/13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md`
+  - `docs/CMTCOMMAND_BIBLE/decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
-- Last Reviewed: 2026-07-15
+- Last Reviewed: 2026-07-16
 
 ## Confirmed Decisions
 
@@ -67,6 +68,7 @@
 | Phase 4 operational scaffold lives under `apps/operational/`. | [Phase 4 Scaffolding Report](plans/PHASE_4_SCAFFOLDING_REPORT.md), `apps/operational/package.json`, `.github/workflows/operational-ci.yml` | Future operational work has an app-local Next.js, TypeScript, npm, test, build, health, and Drizzle boundary. | No Pilot V1 business behavior is implemented yet. | Yes |
 | Phase 5 implements only organization/office tenancy persistence before users or product workflows. | [Phase 5 Tenancy Foundation Report](plans/PHASE_5_TENANCY_FOUNDATION_REPORT.md), `apps/operational/drizzle/0000_open_giant_girl.sql`, `apps/operational/src/server/tenancy/` | Tenant-owned office data now has a tested persistence boundary before identities, roles, imports, readiness, or coverage. | Scopes are supplied by trusted internal callers/tests until authentication and memberships exist. | Yes |
 | Authorization scope is derived server-side from verified identity and active membership. | [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md), [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md) | Protected requests revalidate application user, membership, organization, office scope, and permissions; browser claims are untrusted. | Production auth provider and persistent audit events remain checkpoints. | Yes |
+| Dispatch assignments and append-only assignment events are the durable operational handoff into future Field Operations. | [ADR-008](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md), [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md) | Phase 5E owns durable service types, primary/support relationships, lifecycle transitions, conflict policy, own-assignment access, and work-order reconciliation. | Assignment events are domain history, not the general audit platform; Field Operations remains unimplemented. | Yes |
 
 ## Field Operations Architecture Direction - 2026-07-15
 
@@ -78,7 +80,7 @@ This is a future-workstream architecture direction, not a change to the founder-
 | Original field evidence is immutable; derivatives are separate. | [ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md) | Preserves source integrity and allows safe previews/transcodes. | Higher storage, processing, and retention complexity. | Target |
 | AI extraction is advisory and every accepted value requires human review with provenance. | [ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md) | AI cannot attest, approve, finalize, or submit professional reports. | More review-state and UI complexity. | Target |
 | Approved reports and amendments are immutable versions. | [ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md) | Exports and external sync can reference exactly what was approved. | Requires atomic finalization/version/audit transactions. | Target |
-| FR-1 is blocked until production identity, assignments, audit persistence, and private storage exist. | [Field Operations plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md), [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md) | Identity/RBAC is acceptance-complete for its bounded local/test scope; field-reporting tables/UI still cannot begin. | Production provider and remaining shared foundations are unresolved. | Yes |
+| FR-1 is blocked until every P1-P5 gate is complete; Phase 5E closes only P2. | [Field Operations plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md), [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md) | Durable assignment/service-type/technician handoff exists; field-reporting tables/UI still cannot begin. | Production identity, general audit, private storage, and approved report/retention policy remain unresolved. | Yes |
 
 ## Resolved Or Partially Resolved Phase 1 Questions
 
@@ -110,6 +112,10 @@ Founder-approved Pilot V1 direction:
   the [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md) for every
   protected request, membership mutation, office access, and production auth
   provider decision.
+- Use [ADR-008](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md)
+  and the [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md)
+  for service-type ownership, dispatch lifecycle, technician relationships,
+  conflict policy, and future Field Operations handoff decisions.
 
 Repository-supported candidate slices recorded in `docs/cmtcommand-vnext/plan.md` remain historical planning evidence:
 
@@ -123,9 +129,9 @@ Do not treat old candidate slices as committed roadmap unless they align with th
 Future Field Operations direction:
 
 - Complete the remaining shared Operational vNext prerequisites first:
-  production authentication, durable assignments/work orders, audit events, and
-  private storage/upload authorization. The local identity/RBAC foundation is
-  implemented.
+  production authentication, general audit events, private storage/upload
+  authorization, and approved report/retention policy. The local identity/RBAC
+  foundation and durable-record P2 gate are implemented.
 - Treat [FR-0](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md) as documentation/architecture complete only.
 - Do not begin the concrete-inspection FR-1 vertical slice until every prerequisite gate and organization-specific report requirement is verified.
 - Keep FR-2 offline/media resilience, FR-3 additional templates, FR-4 email/Procore adapters, FR-5 plan-location intelligence, and FR-6 advanced analytics deferred.

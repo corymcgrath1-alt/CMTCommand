@@ -15,6 +15,7 @@
   - [Field Operations V1 Specification](specs/FIELD_OPERATIONS_V1.md)
   - [Field Operations Implementation Plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md)
   - [Phase 5E Durable Operational Records Report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md)
+  - [ADR-008 Dispatch Assignments Are The Field Operations Handoff](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md)
 - Last Reviewed: 2026-07-16
 
 ## Product Position
@@ -36,21 +37,24 @@ Confirmed foundations:
 - Persistent `organizations` and `offices` with scoped office repository functions.
 - Provider-neutral users, memberships, office access, and server-enforced local
   identity/RBAC foundations.
-- Durable organization/office-owned `projects`, `work_orders`, `technicians`,
-  and `dispatch_assignments`, with separate source IDs, scoped services, role
-  checks, composite relationship constraints, and local PostgreSQL tests.
+- Durable organization/office-owned projects, service types, work orders,
+  technicians, dispatch assignments, primary/support relationships, and
+  append-only assignment events, with protected APIs/UI and local PostgreSQL and
+  browser tests.
+- Linked field-technician own-assignment read and acknowledgment, without any
+  field-session, evidence, report, or sample behavior.
 - Zod, Vitest, Playwright, health routes, and a PostgreSQL integration-test lane.
 
 Missing foundations that block the concrete-inspection vertical slice:
 
 - A production identity provider and pilot-ready authentication verification.
-- Completion of P2, including a durable Service Type record and any approved
-  remaining assignment/import-boundary decisions.
 - General audit-event persistence.
 - A private object-storage abstraction and authorized upload lifecycle.
-- A protected server-side product API pattern proven with authenticated tenant context.
+- Approved report/template, retention, and technical-review requirements.
 
-Phase 5E records are shared prerequisites, not Field Operations behavior. No
+Phase 5E closes the durable-record P2 gate and establishes the assignment/event
+handoff described by ADR-008. These are shared prerequisites, not Field
+Operations behavior. No
 field-reporting runtime, schema, route, upload, extraction, UI, or browser-local
 substitute is implemented.
 

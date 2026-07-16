@@ -5,7 +5,7 @@
 - Status: Active Plan
 - Product Position: Future workstream after the founder-approved Tomorrow Readiness and Coverage pilot unless a later founder decision explicitly changes scope
 - Current Path: Path B
-- Current Phase: FR-0 complete at documentation/architecture level only
+- Current Phase: FR-0 complete at documentation/architecture level only; P2 durable-record gate complete
 - Primary Evidence:
   - [Field Operations Capture And Reporting](../13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md)
   - [Field Operations V1 Specification](../specs/FIELD_OPERATIONS_V1.md)
@@ -28,8 +28,8 @@ FR-0 is complete only in the following sense:
 - Field-reporting domain, states, security boundaries, target API contracts, provider-neutral ports, and acceptance criteria are documented.
 - Evidence immutability, advisory AI, human review, report versioning, and manual fallback are recorded in ADR-006.
 - The current repository prerequisite gap is explicit.
-- Phase 5E partially satisfies P2 with durable Project, Work Order, Technician,
-  and dispatch Assignment records; durable Service Type remains missing.
+- Phase 5E satisfies P2 with durable Project, Work Order, Assignment, Service
+  Type, Technician, primary/support relationship, and assignment-event records.
 
 FR-0 did not add runtime field-reporting behavior, schemas, migrations, routes, providers, UI, extraction, exports, or integrations.
 
@@ -41,7 +41,7 @@ The following gates must be implemented and verified in the normal Operational v
 | --- | --- | --- | --- |
 | P0 | Persistent organization/office tenancy and scoped queries. | Implemented local foundation with migration and isolation coverage; deployment/CI evidence remains a separate release gate. | Migration, isolation tests, stable verification. |
 | P1 | Authenticated identity, internal users, organization memberships, office access assignments, and server-enforced RBAC. | Local foundation implemented and tested in Phase 5D; production provider selection remains before pilot use. | Migrations, policy tests, denied cases, authenticated request context, production provider verification. |
-| P2 | Durable Project, Work Order, Assignment, Service Type, and Technician records with tenant/office ownership. | **Partially implemented.** Phase 5E adds Project, Work Order, Technician, and dispatch Assignment tables plus source IDs, scoped services, role checks, and relationship/isolation tests. A durable Service Type record is still missing. | Migrations, source-ID model, scoped repository/integration tests. |
+| P2 | Durable Project, Work Order, Assignment, Service Type, and Technician records with tenant/office ownership. | **Implemented and verified for the bounded local/test gate.** Phase 5E includes durable service types, primary/support technician relationships, assignment lifecycle/events, own-assignment access, protected APIs/UI, and tenant/isolation tests. | Migrations, source-ID model, PostgreSQL relationship/transition tests, protected API and Playwright workflow evidence. |
 | P3 | General append-only audit-event persistence linked to authenticated actor and request context. | Missing. | Schema, service, allowed/denied action tests. |
 | P4 | Private object-storage decision and provider-neutral authorized upload/read/delete-under-policy interface. | Missing. | Threat model, adapter contract, size/content validation, idempotency and cross-tenant tests. |
 | P5 | Report/template, retention, technical-review, and concrete field requirements approved for the pilot organization. | Missing product decisions. | Versioned configuration and acceptance fixtures. |
@@ -51,11 +51,10 @@ Stop if any persistent field record can be created without trusted actor, organi
 ## Next Executable Gate
 
 Phase 5D implements the local P1 data and authorization foundation without
-selecting a production provider. Phase 5E partially implements P2, but a durable
-Service Type record is absent. P1 is not pilot-complete until the production
-provider is selected and verified; P2 remains partial; P3 through P5 remain
-unsatisfied. The next Field Operations work still must not be evidence tables or
-UI.
+selecting a production provider. Phase 5E completes the bounded durable-record
+P2 gate. P1 is not pilot-complete until the production provider is selected and
+verified; P3 through P5 remain unsatisfied. The next Field Operations work still
+must not be evidence tables or UI.
 
 Do not begin with evidence tables, upload routes, or `My Day` screens.
 

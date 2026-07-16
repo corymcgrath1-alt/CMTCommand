@@ -4,6 +4,8 @@ import {
   check,
   foreignKey,
   index,
+  integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -11,6 +13,10 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { offices } from "./offices";
+import { organizationMemberships } from "./organization-memberships";
+
+export const technicianStatusValues = ["active", "inactive", "on_leave"] as const;
+export const technicianStatus = pgEnum("technician_status", technicianStatusValues);
 
 export const technicians = pgTable(
   "technicians",
@@ -24,6 +30,10 @@ export const technicians = pgTable(
     operationalRole: text("operational_role"),
     workEmail: text("work_email"),
     workPhone: text("work_phone"),
+    organizationMembershipId: uuid("organization_membership_id"),
+    homeOfficeId: uuid("home_office_id").notNull(),
+    status: technicianStatus("status").notNull().default("active"),
+    version: integer("version").notNull().default(1),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true, precision: 3 })
       .notNull()
@@ -40,6 +50,27 @@ export const technicians = pgTable(
     })
       .onDelete("restrict")
       .onUpdate("cascade"),
+    foreignKey({
+      columns: [table.organizationMembershipId, table.organizationId],
+      foreignColumns: [
+        organizationMemberships.id,
+        organizationMemberships.organizationId,
+      ],
+      name: "technicians_membership_organization_fk",
+    })
+      .onDelete("restrict")
+      .onUpdate("cascade"),
+    foreignKey({
+      columns: [table.homeOfficeId, table.organizationId],
+      foreignColumns: [offices.id, offices.organizationId],
+      name: "technicians_home_office_organization_fk",
+    })
+      .onDelete("restrict")
+      .onUpdate("cascade"),
+    unique("technicians_id_organization_unique").on(
+      table.id,
+      table.organizationId,
+    ),
     unique("technicians_id_organization_office_unique").on(
       table.id,
       table.organizationId,
@@ -50,6 +81,10 @@ export const technicians = pgTable(
       table.sourceSystem,
       table.sourceTechnicianId,
     ),
+    unique("technicians_organization_membership_unique").on(
+      table.organizationId,
+      table.organizationMembershipId,
+    ),
     index("technicians_organization_office_active_idx").on(
       table.organizationId,
       table.officeId,
@@ -59,6 +94,11 @@ export const technicians = pgTable(
       table.organizationId,
       table.officeId,
       table.displayName,
+    ),
+    index("technicians_organization_home_office_status_idx").on(
+      table.organizationId,
+      table.homeOfficeId,
+      table.status,
     ),
     check(
       "technicians_source_system_not_blank_check",
@@ -88,7 +128,9 @@ export const technicians = pgTable(
       "technicians_work_phone_not_blank_check",
       sql`${table.workPhone} is null or ${table.workPhone} ~ '[^[:space:]]'`,
     ),
+    check("technicians_version_positive_check", sql`${table.version} > 0`),
   ],
 );
 
 export type TechnicianRecord = typeof technicians.$inferSelect;
+export type TechnicianStatus = (typeof technicianStatusValues)[number];

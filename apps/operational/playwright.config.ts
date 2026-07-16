@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalSetup: "./tests/e2e/global-setup.ts",
   fullyParallel: false,
   workers: 1,
   timeout: 30_000,
@@ -15,17 +16,19 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run dev -- --hostname 127.0.0.1 --port 3100",
+    command:
+      "node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port 3100",
     url: "http://127.0.0.1:3100",
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
       APP_ENV: "test",
-      DATABASE_URL: "",
-      TEST_DATABASE_URL: "",
+      DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
+      TEST_DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
       AUTH_MODE: "development",
       AUTH_SESSION_SECRET: "playwright-only-session-secret-32-characters",
-      AUTH_DEVELOPMENT_SUBJECTS: "alpha-admin",
+      AUTH_DEVELOPMENT_SUBJECTS:
+        "alpha-admin,alpha-operations,alpha-dispatcher,alpha-reviewer,alpha-technician,alpha-viewer,beta-admin,beta-dispatcher",
     },
   },
   projects: [

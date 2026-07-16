@@ -9,6 +9,7 @@ import {
   selectActiveOrganizationAction,
   signOutAction,
 } from "./actions";
+import { OperationalNav } from "./operational-nav";
 
 export const metadata: Metadata = {
   title: "Protected operations",
@@ -97,6 +98,7 @@ export default async function ProtectedAppPage({
           </form>
         </div>
       </header>
+      <OperationalNav context={context} />
 
       <section className="status-grid" aria-label="Authorized account context">
         <article className="panel stack">
@@ -144,8 +146,8 @@ export default async function ProtectedAppPage({
           <div>
             <h2>Foundation capabilities</h2>
             <p className="muted">
-              Identity, access control, and durable tenant-scoped operational
-              records are implemented. Imports, readiness, coverage decisions,
+              Identity, access control, durable operational records, and the
+              dispatch lifecycle are implemented. Readiness, coverage decisions,
               field capture, and reporting remain deferred.
             </p>
           </div>

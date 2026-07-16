@@ -13,6 +13,7 @@ import {
   organizationMemberships,
   organizations,
   projects,
+  serviceTypes,
   technicians,
   users,
   workOrders,
@@ -40,6 +41,10 @@ import {
   listTechnicians,
   listWorkOrders,
 } from "../../src/server/operational-records/service";
+import {
+  assignPrimaryTechnician,
+  transitionWorkOrder,
+} from "../../src/server/dispatch/service";
 import type {
   OperationalRecordCreateResult,
   OperationalRecordListResult,
@@ -54,6 +59,7 @@ let testDatabaseConfig: AuthorizedTestDatabaseCleanupConfig;
 
 const scheduledStartAt = new Date("2026-07-17T11:30:00.000Z");
 const scheduledEndAt = new Date("2026-07-17T13:30:00.000Z");
+const serviceTypeByOffice = new Map<string, string>();
 
 beforeAll(() => {
   testDatabaseConfig = getAuthorizedTestDatabaseCleanupConfig();
@@ -151,6 +157,7 @@ describe("durable operational records", () => {
     const baseTechnician = {
       organizationId: fixture.organizationA.id,
       officeId: fixture.alphaOffice.id,
+      homeOfficeId: fixture.alphaOffice.id,
       sourceSystem: "direct-validation",
       sourceTechnicianId: "direct-technician",
       displayName: "Direct technician",
@@ -236,6 +243,7 @@ describe("durable operational records", () => {
       organizationId: fixture.organizationA.id,
       officeId: fixture.alphaOffice.id,
       projectId: project.id,
+      serviceTypeId: fixture.alphaServiceType.id,
       sourceSystem: "direct-validation",
       sourceWorkOrderId: "direct-work-order",
       workOrderNumber: "DIRECT-WORK-ORDER",
@@ -326,6 +334,7 @@ describe("durable operational records", () => {
       .values({
         organizationId: fixture.organizationA.id,
         officeId: fixture.alphaOffice.id,
+        homeOfficeId: fixture.alphaOffice.id,
         sourceSystem: "direct-validation",
         sourceTechnicianId: "assignment-parent-technician",
         displayName: "Direct assignment technician",
@@ -337,6 +346,7 @@ describe("durable operational records", () => {
         organizationId: fixture.organizationA.id,
         officeId: fixture.alphaOffice.id,
         projectId: project.id,
+        serviceTypeId: fixture.alphaServiceType.id,
         sourceSystem: "direct-validation",
         sourceWorkOrderId: "assignment-parent-work-order",
         workOrderNumber: "DIRECT-ASSIGNMENT-WO",
@@ -754,7 +764,7 @@ describe("durable operational records", () => {
       fixture.alphaOffice.id,
       "service-alpha-first",
     );
-    const alphaSecond = await createOperationalChain(
+    await createOperationalChain(
       db,
       alphaAdmin,
       fixture.alphaSecondOffice.id,
@@ -807,36 +817,6 @@ describe("durable operational records", () => {
           fixture.alphaOffice.id,
           beta.project.id,
           "cross-organization-work-order",
-        ),
-      ),
-      await createDispatchAssignment(
-        db,
-        alphaAdmin,
-        assignmentInput(
-          fixture.alphaOffice.id,
-          alphaFirst.workOrder.id,
-          alphaSecond.technician.id,
-          "cross-office-assignment",
-        ),
-      ),
-      await createDispatchAssignment(
-        db,
-        alphaAdmin,
-        assignmentInput(
-          fixture.alphaOffice.id,
-          beta.workOrder.id,
-          alphaFirst.technician.id,
-          "cross-organization-work-order-assignment",
-        ),
-      ),
-      await createDispatchAssignment(
-        db,
-        alphaAdmin,
-        assignmentInput(
-          fixture.alphaOffice.id,
-          alphaFirst.workOrder.id,
-          beta.technician.id,
-          "cross-organization-technician-assignment",
         ),
       ),
     ];
@@ -896,6 +876,7 @@ describe("durable operational records", () => {
         db.insert(technicians).values({
           organizationId: fixture.organizationA.id,
           officeId: fixture.betaOffice.id,
+          homeOfficeId: fixture.betaOffice.id,
           sourceSystem: "direct",
           sourceTechnicianId: "cross-organization-technician",
           displayName: "Cross-organization technician",
@@ -909,6 +890,7 @@ describe("durable operational records", () => {
           organizationId: fixture.organizationA.id,
           officeId: fixture.alphaSecondOffice.id,
           projectId: alphaFirst.project.id,
+          serviceTypeId: fixture.alphaSecondOfficeServiceType.id,
           sourceSystem: "direct",
           sourceWorkOrderId: "cross-office-work-order",
           workOrderNumber: "DIRECT-CROSS-OFFICE",
@@ -926,6 +908,7 @@ describe("durable operational records", () => {
           organizationId: fixture.organizationA.id,
           officeId: fixture.alphaOffice.id,
           projectId: beta.project.id,
+          serviceTypeId: fixture.alphaServiceType.id,
           sourceSystem: "direct",
           sourceWorkOrderId: "cross-organization-work-order",
           workOrderNumber: "DIRECT-CROSS-ORG",
@@ -960,23 +943,6 @@ describe("durable operational records", () => {
           organizationId: fixture.organizationA.id,
           officeId: fixture.alphaOffice.id,
           sourceSystem: "direct",
-          sourceAssignmentId: "cross-office-technician-assignment",
-          workOrderId: alphaFirst.workOrder.id,
-          technicianId: alphaSecond.technician.id,
-          assignmentStartAt: scheduledStartAt,
-          assignmentEndAt: scheduledEndAt,
-          createdByUserId: fixture.alphaAdmin.id,
-          updatedByUserId: fixture.alphaAdmin.id,
-        }),
-      "dispatch_assignments_technician_organization_office_fk",
-    );
-
-    await expectDatabaseConstraint(
-      () =>
-        db.insert(dispatchAssignments).values({
-          organizationId: fixture.organizationA.id,
-          officeId: fixture.alphaOffice.id,
-          sourceSystem: "direct",
           sourceAssignmentId: "cross-organization-work-order-assignment",
           workOrderId: beta.workOrder.id,
           technicianId: alphaFirst.technician.id,
@@ -1002,11 +968,11 @@ describe("durable operational records", () => {
           createdByUserId: fixture.alphaAdmin.id,
           updatedByUserId: fixture.alphaAdmin.id,
         }),
-      "dispatch_assignments_technician_organization_office_fk",
+      "dispatch_assignments_technician_organization_fk",
     );
   });
 
-  it("allows a dispatcher to create an assignment but not projects, technicians, or work orders", async () => {
+  it("allows a dispatcher to manage work orders and assignments but not projects or technicians", async () => {
     const fixture = await seedAuthorizationFixture(db);
     const admin = await authorizedContext(
       db,
@@ -1043,6 +1009,12 @@ describe("durable operational records", () => {
         ),
       ),
     ).value;
+    const readyWorkOrder = await transitionWorkOrder(db, admin, {
+      workOrderId: workOrder.id,
+      expectedVersion: workOrder.version,
+      toStatus: "ready_for_dispatch",
+    });
+    expect(readyWorkOrder.status).toBe("ok");
 
     await expect(
       createProject(
@@ -1058,8 +1030,7 @@ describe("durable operational records", () => {
         technicianInput(fixture.alphaOffice.id, "dispatcher-technician"),
       ),
     ).resolves.toEqual({ status: "forbidden", reason: "missing_permission" });
-    await expect(
-      createWorkOrder(
+    const dispatcherWorkOrder = await createWorkOrder(
         db,
         dispatcher,
         workOrderInput(
@@ -1067,8 +1038,8 @@ describe("durable operational records", () => {
           project.id,
           "dispatcher-work-order",
         ),
-      ),
-    ).resolves.toEqual({ status: "forbidden", reason: "missing_permission" });
+      );
+    expect(dispatcherWorkOrder.status).toBe("created");
 
     const assignment = mustBeCreated(
       await createDispatchAssignment(
@@ -1395,7 +1366,7 @@ describe("durable operational records", () => {
         db
           .delete(technicians)
           .where(eq(technicians.id, chain.technician.id)),
-      "dispatch_assignments_technician_organization_office_fk",
+      "assignment_events_technician_id_fk",
     );
 
     await expect(findProjectById(db, admin, chain.project.id)).resolves.toMatchObject({
@@ -1451,6 +1422,7 @@ function workOrderInput(
   return {
     officeId,
     projectId,
+    serviceTypeId: serviceTypeByOffice.get(officeId),
     sourceSystem,
     sourceWorkOrderId: "source-work-order-" + key,
     workOrderNumber: "TRD-" + key.toUpperCase(),
@@ -1515,6 +1487,14 @@ async function createOperationalChain(
       workOrderInput(officeId, project.value.id, key, sourceSystem),
     ),
   );
+  const ready = await transitionWorkOrder(database, context, {
+    workOrderId: workOrder.value.id,
+    expectedVersion: workOrder.value.version,
+    toStatus: "ready_for_dispatch",
+  });
+  if (ready.status !== "ok") {
+    throw new Error("Expected work order to become ready: " + JSON.stringify(ready));
+  }
   const assignment = mustBeCreated(
     await createDispatchAssignment(
       database,
@@ -1528,12 +1508,20 @@ async function createOperationalChain(
       ),
     ),
   );
+  const assigned = await assignPrimaryTechnician(database, context, {
+    assignmentId: assignment.value.id,
+    technicianId: technician.value.id,
+    expectedVersion: assignment.value.version,
+  });
+  if (assigned.status !== "ok") {
+    throw new Error("Expected primary assignment: " + JSON.stringify(assigned));
+  }
 
   return {
     project: project.value,
     technician: technician.value,
     workOrder: workOrder.value,
-    assignment: assignment.value,
+    assignment: assigned.value,
     mutations: [
       project.mutation,
       technician.mutation,
@@ -1782,6 +1770,43 @@ async function seedAuthorizationFixture(database: OperationalDatabase) {
       userValues("beta-admin@example.test", "Beta Admin"),
     ])
     .returning();
+
+  const [alphaServiceType, alphaSecondOfficeServiceType, betaServiceType] =
+    await database
+      .insert(serviceTypes)
+      .values([
+        {
+          organizationId: organizationA.id,
+          officeId: alphaOffice.id,
+          key: "concrete_testing_alexandria",
+          name: "Concrete Testing",
+          category: "concrete",
+          createdByUserId: alphaAdmin.id,
+          updatedByUserId: alphaAdmin.id,
+        },
+        {
+          organizationId: organizationA.id,
+          officeId: alphaSecondOffice.id,
+          key: "concrete_testing_richmond",
+          name: "Concrete Testing",
+          category: "concrete",
+          createdByUserId: alphaAdmin.id,
+          updatedByUserId: alphaAdmin.id,
+        },
+        {
+          organizationId: organizationB.id,
+          officeId: betaOffice.id,
+          key: "concrete_testing_fairfax",
+          name: "Concrete Testing",
+          category: "concrete",
+          createdByUserId: betaAdmin.id,
+          updatedByUserId: betaAdmin.id,
+        },
+      ])
+      .returning();
+  serviceTypeByOffice.set(alphaOffice.id, alphaServiceType.id);
+  serviceTypeByOffice.set(alphaSecondOffice.id, alphaSecondOfficeServiceType.id);
+  serviceTypeByOffice.set(betaOffice.id, betaServiceType.id);
   const [
     alphaAdminMembership,
     alphaOperationsManagerMembership,
@@ -1887,6 +1912,9 @@ async function seedAuthorizationFixture(database: OperationalDatabase) {
     alphaViewerMembership,
     alphaFieldTechnicianMembership,
     betaAdminMembership,
+    alphaServiceType,
+    alphaSecondOfficeServiceType,
+    betaServiceType,
   };
 }
 
@@ -1967,8 +1995,12 @@ async function cleanupTestRows(database: OperationalDatabase): Promise<void> {
       async () => {
         await transaction.execute(
           sql`truncate table
+            "assignment_events",
+            "assignment_technicians",
             "dispatch_assignments",
             "work_orders",
+            "technician_office_eligibilities",
+            "service_types",
             "technicians",
             "projects",
             "office_assignments",

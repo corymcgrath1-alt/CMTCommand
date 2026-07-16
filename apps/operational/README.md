@@ -4,8 +4,8 @@ This directory contains the guarded Operational vNext foundation for CMTCommand.
 It proves the app boundary, TypeScript/Next.js toolchain, health endpoints,
 environment validation, Drizzle/PostgreSQL wiring, organization/office tenancy
 persistence, provider-neutral identity, memberships, office assignments,
-server-enforced RBAC, four durable operational-record types, unit testing,
-integration testing, and browser test configuration.
+server-enforced RBAC, a durable operational dispatch workflow, unit testing,
+PostgreSQL integration testing, and browser acceptance coverage.
 
 It does not implement the end-to-end Pilot V1 business workflow.
 
@@ -24,13 +24,14 @@ Implemented in this scaffold:
   production runtimes.
 - Protected `/app` shell, secure active-organization selection, member
   administration, and tenant-scoped office APIs.
-- Durable `projects`, `technicians`, `work_orders`, and `dispatch_assignments`
-  with required organization/office ownership, source-system identifiers, and
-  database-enforced relationship scope.
-- Permission- and office-scoped create/list/find services for those four record
-  types. Create operations serialize on the organization, revalidate the current
-  actor inside the transaction, and return structured mutation metadata for a
-  future audit sink.
+- Durable projects, service types, technicians, work orders, dispatch
+  assignments, primary/support relationships, and append-only assignment
+  events with database-enforced tenant/office scope.
+- Permission- and office-scoped create/list/update/transition services with
+  optimistic concurrency, transactional actor revalidation, schedule conflict
+  detection, work-order reconciliation, and own-assignment authorization.
+- Protected Projects, Work Orders, Technicians, Dispatch, and My Assignments
+  pages plus thin protected JSON APIs.
 - `/api/health` liveness endpoint.
 - `/api/ready` database-readiness endpoint.
 - Vitest unit tests.
@@ -45,11 +46,8 @@ Not implemented:
   invited membership only.
 - Persistent general audit events. Security mutations return structured,
   actor-attributed metadata for a future audit sink.
-- A durable Service Type catalog, imports, equipment/certification/clearance
-  records, readiness rules, coverage, Decision Log, operational impact, or
-  deployment.
-- Product routes or UI for projects, technicians, work orders, or dispatch
-  assignments.
+- Imports, equipment/certification/clearance records, readiness rules, coverage,
+  Decision Log, operational impact, Field Operations, or deployment.
 
 ## Runtime
 
@@ -242,12 +240,11 @@ authorization.
 tests. It is the database-dependent gate and is intentionally separate from
 `npm run verify`.
 
-`npm run test:e2e` runs Playwright browser smoke tests and is intentionally not
-part of the default gate.
+`npm run test:e2e` runs protected shell and Phase 5E operational-dispatch
+browser acceptance tests and is intentionally not part of the default gate.
 
-`npm run verify:full` preserves the browser behavior from Phase 4: stable
-verification plus Playwright scaffold smoke tests. It does not include the
-database gate.
+`npm run verify:full` runs stable verification plus the Playwright protected
+workflow suite. It does not include the database gate.
 
 ## Current Identity, Tenancy, And Operational-Record Boundary
 
@@ -275,17 +272,17 @@ Implemented:
 - Operational records use internal UUIDs while preserving normalized
   `source_system` plus source-specific IDs separately from human project/work
   numbers.
-- Every Phase 5E record requires `organization_id` and `office_id`. Composite
-  foreign keys keep work orders with projects and dispatch assignments with work
-  orders/technicians in the same organization and office.
-- Organization admins and operations managers can read/manage all four record
-  types. Dispatchers can read all four and manage dispatch assignments only;
-  technical reviewers and viewers are read-only; field technicians receive no
-  Phase 5E record permission.
-- Operational create services lock the organization and revalidate active user,
+- Composite foreign keys keep projects, service types, technicians, work orders,
+  assignments, relationships, and history within their organization/office
+  boundaries. Partial unique indexes enforce one active primary technician.
+- Organization admins and operations managers manage the bounded workflow;
+  dispatchers manage work orders and assignments without conflict override;
+  technical reviewers/viewers are read-only; linked field technicians receive
+  only own-assignment read and acknowledgment.
+- Operational mutation services lock the organization and revalidate active user,
   organization, membership, current role permission, and office access inside
-  the transaction. Returned actor-attributed mutation metadata is not persisted
-  audit history.
+  the transaction. Assignment events are durable domain history, not the general
+  audit platform.
 
 Not implemented:
 
@@ -293,8 +290,8 @@ Not implemented:
 - Invitation acceptance and delivery.
 - Persistent general audit-event storage.
 - PostgreSQL Row-Level Security.
-- Operational-record HTTP routes, Server Actions, and product UI.
-- Durable Service Type records and the remaining readiness data domains.
+- Import, readiness, coverage, Decision Log, Field Operations, and remaining
+  readiness-data domains.
 
 Protected scopes are derived from verified identity and current database
 membership. Client-supplied organization IDs, office IDs, roles, and permissions

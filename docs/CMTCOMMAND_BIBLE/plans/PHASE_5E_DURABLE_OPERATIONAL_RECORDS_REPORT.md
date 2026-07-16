@@ -1,141 +1,191 @@
-# Phase 5E Durable Projects, Work Orders, Technicians, And Dispatch Assignments Report
+# Phase 5E Durable Operational Records And Dispatch Workflow Report
 
 ## Status
 
-- Implementation status: Acceptance-complete for the bounded local/test Phase
-  5E persistence, authorization, and tenant-isolation scope described here.
-- Database verification: Passed against an isolated localhost-only PostgreSQL
-  16 runtime using the repository test-database safety contract.
-- Product workflow status: Not implemented; no Phase 5E route or UI is exposed.
+- Phase 5E-A durable-record foundation: acceptance-complete and committed.
+- Phase 5E-B operational dispatch workflow: acceptance-complete for the bounded
+  local/test scope documented here.
+- Complete bounded Phase 5E: acceptance-complete; no Field Operations FR-1
+  behavior is implemented or authorized.
 - Date: 2026-07-16
 
-## Corrected Preflight
+## Repository Boundary
 
-Work began only after the Phase 5E preflight confirmed:
+Phase 5E-B began from committed Phase 5E-A checkpoint
+`24cdc0ce1268200da0e68eba927bc653720388ad` on
+`phase-5-tenancy-foundation`, tracking
+`origin/phase-5-tenancy-foundation`. All root CMTCommand files were clean; the
+pre-existing tracked and untracked `euchre-platform/` work remained out of scope
+and untouched. No staging, commit, push, branch switch, merge, rebase, reset,
+clean, stash, PR, or other remote mutation was performed.
 
-- Repository root: `C:/Users/Surface i7/Documents/CMT Command Center`.
-- Branch: `phase-5-tenancy-foundation`.
-- Starting HEAD: `dc2cce7d70a7471b0676ab31459f6275eed08234`.
-- Upstream: `origin/phase-5-tenancy-foundation`.
-- Checkpoint commits `ef0e3829082756a48612def37d106bf58ddb3a51` and
-  `dc2cce7d70a7471b0676ab31459f6275eed08234` exist as commits.
-- All non-`euchre-platform/` files were clean. The unrelated tracked and
-  untracked `euchre-platform/` work remained out of scope and untouched.
+## Durable Domain
 
-No branch switch, history rewrite, staging, commit, push, pull, PR, merge,
-rebase, clean, or other remote mutation was performed.
+The complete bounded model now includes:
 
-## Implemented Boundary
+- Projects with lifecycle/versioned updates and archive without hard delete.
+- Organization-owned Service Types with unique normalized keys, optional
+  default office, status/version, actor attribution, and historical work-order
+  compatibility after archival.
+- Technicians with required home office, optional organization-membership link,
+  active/inactive/on-leave status, versioned work-profile updates, and current
+  office eligibility distinct from user authorization.
+- Work Orders with a durable service-type reference, historical service-name
+  snapshot, lifecycle/version, requested interval, priority, and transactional
+  reconciliation from assignment state.
+- Dispatch Assignments with operational timezone, schedule, lifecycle/version,
+  actor attribution, and one work-order boundary.
+- Assignment Technicians with one active primary, zero or more active supports,
+  duplicate-active prevention, and preserved ended/reassignment history.
+- Append-only Assignment Events for creation, scheduling, primary/support
+  changes, status transitions, cancellation, and conflict override.
 
-Phase 5E adds four durable organization/office-owned record types:
+Assignment lifecycle is centralized as `draft -> unassigned -> assigned ->
+acknowledged -> in_progress -> completed`, with documented direct
+`assigned -> in_progress`, primary removal to `unassigned`, and cancellation
+from nonterminal states. Terminal assignments do not silently reopen. Work-order
+lifecycle is centralized as `draft -> ready_for_dispatch -> scheduled ->
+in_progress -> completed`, with cancellation from nonterminal states.
 
-| Record | Durable purpose | Identifiers and key relationships |
-| --- | --- | --- |
-| Project | Project context for scheduled work. | Internal UUID; normalized source system and source project ID; separate human project number. |
-| Technician | Minimal operational technician roster. | Internal UUID; normalized source system and source technician ID; display name and optional business contact fields. |
-| Work order | Scheduled service work. | Internal UUID; normalized source system and source work-order ID; separate human work-order number; same-office project; service-type text; job-site name; valid schedule interval. |
-| Dispatch assignment | Current technician-to-work-order assignment. | Internal UUID; normalized source system and source assignment ID; same-office work order and technician; valid assignment interval; creating/updating user IDs. |
+Schedule overlap uses half-open intervals `[start, end)`. Adjacent intervals do
+not conflict; cancelled assignments and the assignment being edited are ignored.
+Conflict override is denied by default and requires explicit central permission,
+a reason, actor attribution, and an append-only event. Out-of-scope conflicts may
+block without disclosing another office's assignment.
 
-Source uniqueness is organization-wide on source system plus the record-specific
-source ID. The same source identifier may therefore exist in separate
-organizations. Internal UUIDs, source identifiers, and human numbers are not
-interchangeable.
+## Authorization And Transaction Safety
 
-Database constraints enforce required organization/office ownership,
-same-organization/same-office relationships, restrictive parent deletion,
-normalized source-system syntax, genuine non-whitespace required fields, and
-end-after-start intervals. The generated Phase 5E migrations are:
+All protected pages and APIs resolve verified identity to the current active
+application user, organization membership, office scope, and centralized role
+permissions. Organization admin and operations manager may manage the complete
+bounded workflow and override conflicts with a reason. Dispatcher may manage
+work orders and assignments but has no conflict-override permission. Technical
+reviewer and viewer are read-only. A field technician may read only assignments
+connected to their linked technician profile and acknowledge only their active
+primary assignment.
 
-- `apps/operational/drizzle/0003_vengeful_vapor.sql`, which adds the four tables,
-  relationships, indexes, and initial checks.
-- `apps/operational/drizzle/0004_right_reavers.sql`, which replaces the initial
-  ordinary-space-only nonblank checks with checks that also reject tabs,
-  newlines, and other whitespace-only direct database writes.
+Technician office eligibility never grants application authorization. Optional
+membership linkage never derives a role or office scope from the technician
+record.
 
-## Authorization And Services
+Multi-record mutations lock the owning organization, revalidate the actor and
+office access in the transaction, validate the expected version, update current
+state, reconcile work-order state where applicable, and append the assignment
+event atomically. Failed event insertion or reconciliation rolls back the
+current-state change. Inaccessible and nonexistent resources share non-leaking
+results.
 
-`apps/operational/src/server/operational-records/` provides validated create,
-list, and find services. Organization scope comes only from the server-derived
-authorization context. Reads apply organization and office predicates; an empty
-restricted office scope returns no records; inaccessible and nonexistent
-lookups share one public result.
+## Protected Product Surfaces
 
-Create services check the central permission policy, lock the owning
-organization, then revalidate the current user, organization, membership, role,
-and office access inside the transaction. That shared lock serializes creation
-with the existing membership and office-access mutation path, so a concurrent
-revocation is ordered before or after the write rather than racing between the
-authorization check and insert. Expected relationship foreign-key failures map
-to a non-leaking result; unexpected foreign-key failures remain persistence
-errors.
+The Operational vNext navigation now exposes bounded protected pages for:
 
-The Phase 5E role matrix is:
+- Projects: authorized-office search/status list, create/edit/archive, and
+  work-order counts.
+- Work Orders: office/project/date/priority/status/service filters, create/edit,
+  ready-for-dispatch transition, cancellation with reason, and assignment count.
+- Technicians: status/home office/eligibility/login-link visibility, create/edit,
+  eligibility management, and schedule-conflict indication.
+- Dispatch: office/date board, ready queue, unassigned assignment creation,
+  primary reassignment, support changes, transition/cancellation controls,
+  authorized conflict override, and stale-version recovery messaging.
+- My Assignments: linked technician's project/address/service/time/instructions,
+  appropriate history, and own acknowledgment only.
 
-- Organization admin and operations manager: read/manage all four record types.
-- Dispatcher: read all four and manage dispatch assignments only.
-- Technical reviewer and viewer: read all four; no Phase 5E writes.
-- Field technician: no Phase 5E operational-record permission.
+Thin Route Handlers under `src/app/api/` validate request shapes and delegate to
+server-only services. They do not own lifecycle or tenant policy. Browser
+coverage includes the operations-manager workflow, office-restricted dispatcher,
+read-only viewer/reviewer, own-assignment technician, cross-tenant rejection,
+persisted refresh, stale-update recovery, and 390px no-overflow behavior.
 
-Successful creates return actor-attributed mutation metadata. It is transient
-metadata for a future audit sink, not persisted general audit history.
+## Migrations And Catalog
 
-## Explicit Exclusions
+Phase 5E-A migrations remain unchanged:
 
-This phase does not add:
+- `0003_vengeful_vapor.sql`
+- `0004_right_reavers.sql`
 
-- Operational-record routes, Server Actions, or product workflow UI.
-- Update/delete service operations or external import/writeback behavior.
-- A durable Service Type catalog; work orders contain validated service-type
-  text only, so Field Operations prerequisite P2 remains partial.
-- Readiness, coverage, Decision Log, operational-impact, availability,
-  certification, clearance, equipment, calibration, or service-requirement
-  records.
-- A user-to-technician identity mapping or field-technician own-assignment
-  access.
-- Persistent general audit events, production authentication, RLS, deployment,
-  backup, or monitoring changes.
+Phase 5E-B adds forward-only migrations:
+
+- `0005_chemical_eternity.sql`: generated catalog, lifecycle, relationship, and
+  event structures.
+- `0006_dispatch-backfill-and-history-guards.sql`: deterministic legacy
+  backfill, complete composite tenant/office foreign-key guards, and the
+  append-only assignment-event trigger.
+- `0007_deep_smasher.sql`: generated post-backfill required-column tightening.
+
+The generated SQL and custom guard migration were manually reviewed. No fixture
+data appears in migrations. A fresh guarded migration and a repeated no-op
+application succeeded against PostgreSQL 16.14. Catalog inspection confirmed the
+expected tables, enums, indexes, partial unique constraints, composite keys,
+foreign keys, and append-only trigger.
+
+The deterministic seed first applies the identity fixtures and then creates
+Alpha Engineering and Beta Testing service types, projects, technicians,
+eligibilities, work orders, assignments, relationships, and events. Two runs
+produced the same 24-row full-record fingerprint:
+`11849260ee4b80032bba86f07cf10e72`.
 
 ## Verification Evidence
 
-The final local evidence was:
+An isolated `postgres:16` container used exact database
+`cmtcommand_operational_test`, non-production local credentials, the repository
+database-identity/reset guard, and loopback-only `127.0.0.1:55432` publishing.
+PostgreSQL reported version 16.14. The container was removed after verification.
 
-- `npm.cmd run verify`: passed lint, typecheck, 12 unit-test files / 110 tests,
-  and the Next.js production build.
-- Focused Phase 5E PostgreSQL integration suite: 17/17 passed, including direct
-  database CHECK failures and deterministic concurrent revocation ordering.
-- `npm.cmd run verify:db`: passed test migration plus 3 integration files / 44
-  tests against the isolated test database.
-- `npx.cmd drizzle-kit check`: migration metadata passed.
-- Repeated migration application completed safely; the live catalog contained
-  five Drizzle migration records and exactly ten public application tables.
+Executed evidence:
 
-The separate Playwright command exercised all six existing shell scenarios,
-including the 390px case, but its wrapper did not exit before the 180-second
-timeout. That command is not claimed as passed and Phase 5E adds no browser
-surface. `node scripts\verify-root.mjs` passed. Relative Markdown validation
-checked 154 links across 36 Bible/operational Markdown files with no broken
-links. Scoped `git diff --check`, untracked-source whitespace checks, conflict/
-debug/disabled-test scans, and high-risk secret-pattern scans passed.
+- `npm test`: 13 files / 116 tests passed.
+- Focused dispatch PostgreSQL suite: 9 grouped integration cases passed.
+- `npm run test:integration`: 4 files / 53 tests passed.
+- `npm run verify:db`: migration guard and all PostgreSQL integration tests
+  passed.
+- `npm run verify`: lint, typecheck, unit tests, and production build passed.
+- `npm run test:e2e`: 10/10 scenarios passed, exited naturally with status 0,
+  and left no listener on port 3100.
+- `npm run verify:full`: lint, typecheck, unit tests, production build, and all
+  Playwright scenarios passed.
+- `npm run build`: production build passed.
+- `npm run db:generate`: no schema changes remained to generate.
+- `npx drizzle-kit check`: migration metadata passed.
+- Root static verifier, relative Markdown-link validation, scoped secret scans,
+  client-bundle scans, and `git diff --check` passed.
 
-## Migration And Recovery
+## Playwright Lifecycle Correction
 
-Both Phase 5E migrations are forward-only repository migrations. No production
-database was contacted. `0004` deliberately drops and recreates only the new
-Phase 5E nonblank CHECK constraints; it does not delete or rewrite application
-rows.
+The earlier six scenario bodies completed, but the Windows `npm` wrapper around
+the Playwright-owned Next development server did not provide reliable child
+process ownership/teardown. Direct `spawnSync` of `npm.cmd` from global setup
+also failed with `EINVAL` on Windows.
 
-Production rollback or recovery is not invented here. Before deployment, the
-operator must use the approved database backup/restore and release rollback
-procedure, verify migration compatibility with the prior application version,
-and rehearse recovery against production-like infrastructure. No down migration
-or destructive recovery command was executed during this task.
+The web server now invokes the Next CLI directly through Node, while global
+setup launches its seed subprocess through `ComSpec` and closes its PostgreSQL
+pool before the web server begins. The final 10-scenario run exited naturally
+with code 0 and port 3100 was clear. No timeout was increased and no unrelated
+process was killed.
 
-## Assumptions And Caveats
+## Field Operations Prerequisite Result
 
-- Every Phase 5E record requires one office so PostgreSQL composite foreign keys
-  can enforce the complete relationship boundary. Organization-wide projects
-  require a separately approved data-model change.
-- Source identity is unique per organization rather than per office.
-- Service Type remains scalar text, not an implied durable entity.
-- The implementation is a bounded persistence and service foundation, not the
-  complete Pilot V1 or Field Operations workflow.
+Phase 5E closes the bounded durable-record P2 gate: Project, Work Order,
+Assignment, Service Type, and Technician records, assignment relationships,
+own-assignment authorization, and append-only assignment history now exist.
+[ADR-008](../decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md)
+defines this assignment/event stream as the future Field Operations handoff.
+
+FR-1 is not authorized. Pilot-ready production identity (P1 completion), a
+general append-only audit platform (P3), private object storage/upload policy
+(P4), and approved report/template/retention requirements (P5) remain blocked.
+No field sessions, reports, media, AI extraction, samples, laboratory workflow,
+Procore, email ingestion, readiness, or coverage behavior was implemented.
+
+## Assumptions And Open Risks
+
+- Service-type governance, ownership changes, and organization-wide versus
+  default-office policy require product operating rules before pilot import.
+- Technician membership linkage is intentionally optional and one-to-one within
+  an organization; provisioning/lifecycle policy remains future work.
+- Conflict override is restricted to admin/operations-manager by current policy;
+  dispatcher override requires a later explicit policy decision.
+- Operational dates use stored IANA time zones; production source timezone and
+  daylight-saving data quality still need import policy.
+- General audit retention, PostgreSQL RLS, production authentication, managed
+  database, backup/recovery, monitoring, and deployment remain release gates.

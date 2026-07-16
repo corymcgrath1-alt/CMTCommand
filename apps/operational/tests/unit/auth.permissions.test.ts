@@ -14,12 +14,14 @@ import { statusTransitionAllowed } from "../../src/server/members/service";
 const organizationId = "10000000-0000-4000-8000-000000000001";
 const officeId = "20000000-0000-4000-8000-000000000001";
 const domainReadPermissions = [
+  "service_type.read",
   "project.read",
   "work_order.read",
   "technician.read",
   "dispatch_assignment.read",
 ] as const;
 const domainManagePermissions = [
+  "service_type.manage",
   "project.manage",
   "work_order.manage",
   "technician.manage",
@@ -37,6 +39,9 @@ describe("centralized permissions", () => {
       "office.assignments.manage",
       ...domainReadPermissions,
       ...domainManagePermissions,
+      "dispatch_assignment.assign",
+      "dispatch_assignment.transition",
+      "dispatch_assignment.conflict_override",
     ]);
   });
 
@@ -46,6 +51,9 @@ describe("centralized permissions", () => {
       "office.read",
       ...domainReadPermissions,
       ...domainManagePermissions,
+      "dispatch_assignment.assign",
+      "dispatch_assignment.transition",
+      "dispatch_assignment.conflict_override",
     ]);
   });
 
@@ -54,7 +62,10 @@ describe("centralized permissions", () => {
       "organization.read",
       "office.read",
       ...domainReadPermissions,
+      "work_order.manage",
       "dispatch_assignment.manage",
+      "dispatch_assignment.assign",
+      "dispatch_assignment.transition",
     ]);
   });
 
@@ -74,11 +85,25 @@ describe("centralized permissions", () => {
     ]);
   });
 
-  it("does not grant field technicians any domain permissions", () => {
+  it("grants field technicians only own-assignment read and acknowledgment", () => {
     expect(permissionsForRole("field_technician")).toEqual([
       "organization.read",
       "office.read",
+      "dispatch_assignment.read_own",
+      "dispatch_assignment.acknowledge_own",
     ]);
+    expect(permissionsForRole("field_technician")).not.toContain(
+      "dispatch_assignment.read",
+    );
+    expect(permissionsForRole("field_technician")).not.toContain(
+      "dispatch_assignment.transition",
+    );
+  });
+
+  it("does not permit dispatcher conflict overrides", () => {
+    expect(permissionsForRole("dispatcher")).not.toContain(
+      "dispatch_assignment.conflict_override",
+    );
   });
 
   it("preserves organization-admin membership and office-access permissions", () => {

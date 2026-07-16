@@ -36,6 +36,27 @@
       "when": 1784209564488,
       "tag": "0004_right_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784215408927,
+      "tag": "0005_chemical_eternity",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784215411752,
+      "tag": "0006_dispatch-backfill-and-history-guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784215451154,
+      "tag": "0007_deep_smasher",
+      "breakpoints": true
     }
   ]
 }

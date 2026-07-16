@@ -1,14 +1,30 @@
 export type OperationalRecordConflictReason =
   | "project_source_already_exists"
+  | "service_type_key_already_exists"
   | "technician_source_already_exists"
+  | "technician_eligibility_already_exists"
   | "work_order_source_already_exists"
   | "dispatch_assignment_source_already_exists";
 
 export type OperationalRecordMutationAction =
+  | "service_type.created"
+  | "service_type.updated"
   | "project.created"
+  | "project.updated"
   | "technician.created"
+  | "technician.updated"
+  | "technician.eligibility_added"
+  | "technician.eligibility_removed"
   | "work_order.created"
-  | "dispatch_assignment.created";
+  | "work_order.updated"
+  | "work_order.transitioned"
+  | "dispatch_assignment.created"
+  | "dispatch_assignment.transitioned"
+  | "dispatch_assignment.primary_assigned"
+  | "dispatch_assignment.support_added"
+  | "dispatch_assignment.technician_removed"
+  | "dispatch_assignment.schedule_updated"
+  | "dispatch_assignment.acknowledged";
 
 export type OperationalRecordMutationMetadata = {
   mutationId: string;
@@ -36,6 +52,16 @@ export type OperationalRecordFailure =
       reason: OperationalRecordConflictReason;
     }
   | {
+      status: "stale_update";
+    }
+  | {
+      status: "invalid_transition";
+    }
+  | {
+      status: "inactive_reference";
+      reason: "service_type_inactive" | "technician_inactive";
+    }
+  | {
       status: "persistence_error";
       reason: "database_error";
     };
@@ -43,6 +69,14 @@ export type OperationalRecordFailure =
 export type OperationalRecordCreateResult<T> =
   | {
       status: "created";
+      value: T;
+      mutation: OperationalRecordMutationMetadata;
+    }
+  | OperationalRecordFailure;
+
+export type OperationalRecordMutationResult<T> =
+  | {
+      status: "ok";
       value: T;
       mutation: OperationalRecordMutationMetadata;
     }
@@ -73,3 +107,20 @@ export function notFoundOrInaccessible(): OperationalRecordFailure {
 export function persistenceFailure(): OperationalRecordFailure {
   return { status: "persistence_error", reason: "database_error" };
 }
+
+export function createMutationMetadata(
+  action: OperationalRecordMutationAction,
+  context: AuthorizationContext,
+  subjectId: string,
+): OperationalRecordMutationMetadata {
+  return {
+    mutationId: randomUUID(),
+    action,
+    actorUserId: context.user.id,
+    organizationId: context.membership.organizationId,
+    subjectId,
+    occurredAt: new Date().toISOString(),
+  };
+}
+import { randomUUID } from "node:crypto";
+import type { AuthorizationContext } from "@/server/auth/types";

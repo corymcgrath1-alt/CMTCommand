@@ -223,40 +223,52 @@ readiness workflow, coverage workflow, or Field Operations runtime is implied.
 See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md) and the
 [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md).
 
-## Phase 5E Durable Operational Records - Confirmed
+## Phase 5E Operational Dispatch Workflow - Confirmed
 
-Operational vNext now has four durable operational-record tables:
+Operational vNext now provides a bounded modular-monolith workflow around:
 
-- `projects`
-- `technicians`
-- `work_orders`
-- `dispatch_assignments`
+- organization/office-owned projects and technicians;
+- organization-owned durable service types;
+- work orders with explicit lifecycle and durable service-type references;
+- dispatch assignments with optimistic versions and operational time zones;
+- primary/support assignment-technician relationships; and
+- append-only assignment domain events.
 
-All four require organization and office ownership. Internal UUIDs remain
-separate from normalized source-system/source-record identifiers and from human
-project or work-order numbers. Composite foreign keys enforce office and
-organization agreement from work order to project and from dispatch assignment
-to work order and technician. Relationship deletion is restrictive.
+The server boundary is layered as follows:
 
-`src/server/operational-records/` provides Zod validation plus scoped create,
-list, and find services. Reads apply the server-derived organization/office
-scope. Creates check the central permission policy, serialize on the owning
-organization, and revalidate the current user, organization, membership, role
-permission, and office access inside the database transaction. Create results
-include safe actor-attributed mutation metadata, but no general audit event is
-persisted.
+```text
+Protected page or thin Route Handler
+    -> server-derived authorization context
+    -> Zod input validation
+    -> operational-record or dispatch service
+    -> centralized lifecycle/conflict policy
+    -> Drizzle transaction and PostgreSQL constraints
+```
 
-The implemented role boundary is intentionally narrow:
+`src/server/operational-records/` owns catalog and current-record mutations.
+`src/server/dispatch/` owns assignment/work-order state machines, operational
+date/time behavior, overlap detection, technician relationship changes,
+assignment events, and transactional reconciliation. `src/server/http/` maps
+domain results to non-leaking HTTP responses. Route handlers do not duplicate
+domain transitions.
 
-- Organization admin and operations manager: read/manage all four record types.
-- Dispatcher: read all four; manage dispatch assignments only.
-- Technical reviewer and viewer: read all four; no Phase 5E writes.
-- Field technician: no Phase 5E operational-record permission.
+Every multi-record mutation serializes on the organization, revalidates the
+actor's current user, membership, role, permission, and office access in the
+transaction, validates an expected version, and commits current state plus its
+assignment event atomically. Composite organization/office foreign keys and
+partial unique indexes independently protect tenant relationships and the one
+active-primary invariant. An append-only database trigger rejects assignment
+event update/delete.
 
-Phase 5E exposes no operational-record route, Server Action, or product UI. It
-does not implement imports, durable Service Type records, readiness, coverage,
-Decision Log behavior, persistent general audit events, or Field Operations
-runtime. See the [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md).
+Protected pages and APIs now cover Projects, Work Orders, Technicians, Dispatch,
+and My Assignments. Field technicians receive only linked own-assignment read
+and acknowledgment capabilities; technician eligibility never grants user
+authorization. See [ADR-008](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md)
+and the [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md).
+
+Phase 5E still does not implement imports, readiness, coverage, Decision Log,
+general audit-event persistence, production authentication, or any Field
+Operations field session/evidence/report runtime.
 
 ## Future Field Operations Architecture - Path B
 
@@ -275,12 +287,12 @@ The future module boundary connects existing authorized assignments to:
 - Version-specific exports and external synchronization receipts.
 
 The identity, membership, office access, and RBAC prerequisite is implemented as
-a local foundation. Phase 5E also supplies durable project, work-order,
-technician, and dispatch-assignment records, but the P2 gate remains partial
-because there is no durable Service Type record. Field Operations remains
-blocked on production identity, completion of P2, general audit-event
-persistence, and a private object-storage/upload boundary. It still must not
-begin as field-reporting tables or UI.
+a local foundation. Phase 5E closes the durable-record portion of P2 with
+Project, Work Order, Assignment, Service Type, and Technician records, plus the
+assignment lifecycle and own-assignment handoff. Field Operations remains
+blocked on pilot-ready production identity, general audit-event persistence, a
+private object-storage/upload boundary, and approved report/retention policy.
+It still must not begin as field-reporting tables or UI.
 
 See [Field Operations Capture And Reporting](13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md),
 [Field Operations V1](specs/FIELD_OPERATIONS_V1.md),
@@ -307,16 +319,17 @@ The current architecture favors a low-friction local demo with tested pure utili
 
 - Operational app scaffolding, tenancy persistence, provider-neutral identity,
   memberships, office assignments, protected shell, centralized RBAC, and the
-  four Phase 5E operational-record types exist. No Tomorrow Readiness or
-  Coverage business module exists.
+  bounded Phase 5E operational dispatch workflow exist. No Tomorrow Readiness
+  or Coverage business module exists.
 - Exact managed auth, database, and hosting providers remain checkpoints.
 - Production authentication remains fail-closed until a provider is selected;
   the current signed adapter is development/test only.
 - General persistent security audit events and PostgreSQL RLS remain deferred.
-- Durable Service Type, import, availability, certification, clearance,
-  equipment, calibration, and service-requirement foundations remain absent.
+- Import, availability, certification, clearance, equipment, calibration, and
+  service-requirement foundations remain absent.
 - No durable readiness snapshot or Decision Log implementation exists.
-- No route or UI exposes the Phase 5E operational-record services.
+- Phase 5E routes/UI expose only operational dispatch; no deferred Field
+  Operations capability is exposed.
 - Field Operations remains architecture-only; no field session, evidence,
   report, sample, media, extraction, export, or field UI implementation exists.
 

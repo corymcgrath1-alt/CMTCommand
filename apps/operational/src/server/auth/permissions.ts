@@ -8,6 +8,8 @@ export const permissionValues = [
   "organization.roles.manage",
   "office.read",
   "office.assignments.manage",
+  "service_type.read",
+  "service_type.manage",
   "project.read",
   "project.manage",
   "work_order.read",
@@ -16,6 +18,11 @@ export const permissionValues = [
   "technician.manage",
   "dispatch_assignment.read",
   "dispatch_assignment.manage",
+  "dispatch_assignment.assign",
+  "dispatch_assignment.transition",
+  "dispatch_assignment.conflict_override",
+  "dispatch_assignment.read_own",
+  "dispatch_assignment.acknowledge_own",
 ] as const;
 
 export type Permission = (typeof permissionValues)[number];
@@ -23,6 +30,7 @@ export type Permission = (typeof permissionValues)[number];
 const readPermissions: Permission[] = ["organization.read", "office.read"];
 
 const domainReadPermissions: Permission[] = [
+  "service_type.read",
   "project.read",
   "work_order.read",
   "technician.read",
@@ -30,10 +38,17 @@ const domainReadPermissions: Permission[] = [
 ];
 
 const domainManagePermissions: Permission[] = [
+  "service_type.manage",
   "project.manage",
   "work_order.manage",
   "technician.manage",
   "dispatch_assignment.manage",
+];
+
+const dispatchWorkflowManagePermissions: Permission[] = [
+  "dispatch_assignment.assign",
+  "dispatch_assignment.transition",
+  "dispatch_assignment.conflict_override",
 ];
 
 const rolePermissions: Record<OrganizationRole, Permission[]> = {
@@ -45,19 +60,28 @@ const rolePermissions: Record<OrganizationRole, Permission[]> = {
     "office.assignments.manage",
     ...domainReadPermissions,
     ...domainManagePermissions,
+    ...dispatchWorkflowManagePermissions,
   ],
   operations_manager: [
     ...readPermissions,
     ...domainReadPermissions,
     ...domainManagePermissions,
+    ...dispatchWorkflowManagePermissions,
   ],
   dispatcher: [
     ...readPermissions,
     ...domainReadPermissions,
+    "work_order.manage",
     "dispatch_assignment.manage",
+    "dispatch_assignment.assign",
+    "dispatch_assignment.transition",
   ],
   technical_reviewer: [...readPermissions, ...domainReadPermissions],
-  field_technician: readPermissions,
+  field_technician: [
+    ...readPermissions,
+    "dispatch_assignment.read_own",
+    "dispatch_assignment.acknowledge_own",
+  ],
   viewer: [...readPermissions, ...domainReadPermissions],
 };
 

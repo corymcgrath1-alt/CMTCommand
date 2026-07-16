@@ -13,8 +13,11 @@
   - `pilotReadinessPack.js`
   - `demoControlCenter.js`
   - `tests/`
+  - `apps/operational/src/server/dispatch/`
+  - `apps/operational/src/server/db/schema/`
+  - `apps/operational/tests/integration/dispatch-workflow.integration.test.ts`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
-- Last Reviewed: 2026-07-13
+- Last Reviewed: 2026-07-16
 
 ## Current Demo - Confirmed
 
@@ -49,6 +52,23 @@
 | Coverage Recommendation | Suggested replacement or coverage action for a readiness issue. | Eligible technicians, required certifications, equipment, availability, cascading impact. | TRD-104/Maria Lopez is canonical demo story, not production hardcoding. | Founder decision, 2026-07-13 |
 | Cascading Impact | Downstream readiness effect caused by moving or approving coverage. | Affected work orders, technicians, equipment. | Directly and indirectly affected work orders must recalculate after approval. | Founder decision, 2026-07-13 |
 | Data-Quality Report | Report of missing, invalid, duplicate, sensitive, or unexpected import data. | Import history, imported datasets, validation failures. | Pilot uploads must be validated and access-controlled. | Founder decision, 2026-07-13 |
+
+## Operational vNext Dispatch Domain - Confirmed
+
+| Canonical term | Definition | Related entities | Rules / distinctions | Evidence |
+| --- | --- | --- | --- | --- |
+| Service Type | Organization-owned catalog entry describing the kind of operational service requested. | Work order, organization, optional default office. | Key is unique within an organization; inactive/archived entries cannot be selected for new work, while historical work-order references remain valid. | `apps/operational/src/server/db/schema/service-types.ts` |
+| Technician | Business-operational person record used for dispatch. | Home office, office eligibility, optional organization membership, assignment relationships. | A technician may exist without a login. Linking a membership enables own-assignment identity but never grants application permissions from the technician record. | `apps/operational/src/server/db/schema/technicians.ts` |
+| Technician Office Eligibility | Current dispatch eligibility for a technician at an office. | Technician, office, organization. | Eligibility answers where dispatch may assign the technician; it is distinct from an authenticated user's office authorization. | `apps/operational/src/server/db/schema/technician-office-eligibilities.ts` |
+| Work Order | Organization/office-owned request for scheduled service work. | Project, durable service type, dispatch assignments. | Lifecycle is `draft -> ready_for_dispatch -> scheduled -> in_progress -> completed`, with cancellation from nonterminal states. Assignment changes reconcile current work-order state transactionally. | `apps/operational/src/server/db/schema/work-orders.ts`, `apps/operational/src/server/dispatch/domain.ts` |
+| Dispatch Assignment | Scheduled operational handoff from a work order to a primary technician and optional support technicians. | Work order, assignment-technician relationships, assignment events. | Lifecycle is `draft`, `unassigned`, `assigned`, `acknowledged`, `in_progress`, `completed`, or `cancelled`; terminal assignments do not reopen silently. | `apps/operational/src/server/db/schema/dispatch-assignments.ts`, `apps/operational/src/server/dispatch/domain.ts` |
+| Assignment Technician | Durable primary/support relationship between an assignment and technician. | Dispatch assignment, technician. | At most one active primary; zero or more active support technicians; ended relationships remain as reassignment history. | `apps/operational/src/server/db/schema/assignment-technicians.ts` |
+| Assignment Event | Append-only domain history for creation, scheduling, technician changes, lifecycle transitions, and conflict overrides. | Dispatch assignment, actor, related technicians. | Inserted atomically with assignment mutations; database guards reject update/delete. It is not the future general security audit platform. | `apps/operational/src/server/db/schema/assignment-events.ts`, `apps/operational/drizzle/0006_dispatch-backfill-and-history-guards.sql` |
+
+Dispatch interval overlap uses half-open intervals: `[start, end)`. Adjacent
+boundaries do not conflict. Active relationships on non-cancelled assignments
+are checked; an override is blocked by default and requires explicit permission,
+an explicit reason, actor attribution, and a durable `conflict_overridden` event.
 
 ## Readiness Status Rules - Pilot V1 Target
 

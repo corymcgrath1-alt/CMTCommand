@@ -1,27 +1,21 @@
-import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import type { OperationalDatabase } from "@/server/db/client";
 import {
+  assignmentEvents,
   dispatchAssignments,
-  officeAssignments,
   offices,
   organizationMemberships,
-  organizations,
   projects,
+  serviceTypes,
+  technicianOfficeEligibilities,
   technicians,
-  users,
   workOrders,
   type DispatchAssignmentRecord,
   type ProjectRecord,
   type TechnicianRecord,
   type WorkOrderRecord,
 } from "@/server/db/schema";
-import {
-  hasPermission,
-  permissionsForRole,
-  roleMayUseOrganizationWideOfficeAccess,
-  type Permission,
-} from "@/server/auth/permissions";
+import { hasPermission } from "@/server/auth/permissions";
 import type { AuthorizationContext } from "@/server/auth/types";
 import { getPostgresErrorInfo } from "@/server/tenancy/errors";
 import { uuidInputSchema, validationIssues } from "@/server/tenancy/validation";
@@ -33,6 +27,7 @@ import {
 } from "./validation";
 import {
   forbidden,
+  createMutationMetadata,
   notFoundOrInaccessible,
   persistenceFailure,
   type OperationalRecordConflictReason,
@@ -41,15 +36,12 @@ import {
   type OperationalRecordListResult,
   type OperationalRecordLookupResult,
   type OperationalRecordMutationAction,
-  type OperationalRecordMutationMetadata,
 } from "./results";
 import { operationalRecordScopePredicate } from "./scope";
-
-type Transaction = Parameters<
-  Parameters<OperationalDatabase["transaction"]>[0]
->[0];
-
-type CurrentActorCheck = "allowed" | "forbidden" | "office_inaccessible";
+import {
+  lockOperationalOrganization,
+  revalidateOperationalActor,
+} from "./mutation-context";
 
 export async function listProjects(
   db: OperationalDatabase,
@@ -322,15 +314,14 @@ export async function createProject(
 
   try {
     return await db.transaction(async (transaction) => {
-      await lockOrganization(transaction, context.membership.organizationId);
+      await lockOperationalOrganization(transaction, context.membership.organizationId);
 
-      const actorCheck = await checkCurrentActor(
+      const actorFailure = await revalidateOperationalActor(
         transaction,
         context,
         "project.manage",
         parsed.data.officeId,
       );
-      const actorFailure = failureForActorCheck(actorCheck);
       if (actorFailure) {
         return actorFailure;
       }
@@ -340,6 +331,7 @@ export async function createProject(
         .values({
           ...parsed.data,
           organizationId: context.membership.organizationId,
+          isActive: parsed.data.status === "active",
         })
         .returning();
 
@@ -371,17 +363,35 @@ export async function createTechnician(
 
   try {
     return await db.transaction(async (transaction) => {
-      await lockOrganization(transaction, context.membership.organizationId);
+      await lockOperationalOrganization(transaction, context.membership.organizationId);
 
-      const actorCheck = await checkCurrentActor(
+      const actorFailure = await revalidateOperationalActor(
         transaction,
         context,
         "technician.manage",
         parsed.data.officeId,
       );
-      const actorFailure = failureForActorCheck(actorCheck);
       if (actorFailure) {
         return actorFailure;
+      }
+
+      if (parsed.data.organizationMembershipId) {
+        const [membership] = await transaction
+          .select({ id: organizationMemberships.id })
+          .from(organizationMemberships)
+          .where(
+            and(
+              eq(organizationMemberships.id, parsed.data.organizationMembershipId),
+              eq(
+                organizationMemberships.organizationId,
+                context.membership.organizationId,
+              ),
+              eq(organizationMemberships.role, "field_technician"),
+              eq(organizationMemberships.status, "active"),
+            ),
+          )
+          .limit(1);
+        if (!membership) return notFoundOrInaccessible();
       }
 
       const [value] = await transaction
@@ -389,8 +399,17 @@ export async function createTechnician(
         .values({
           ...parsed.data,
           organizationId: context.membership.organizationId,
+          homeOfficeId: parsed.data.officeId,
+          isActive: parsed.data.status === "active",
         })
         .returning();
+
+      await transaction.insert(technicianOfficeEligibilities).values({
+        organizationId: context.membership.organizationId,
+        officeId: parsed.data.officeId,
+        technicianId: value.id,
+        createdByUserId: context.user.id,
+      });
 
       return created(value, context, "technician.created");
     });
@@ -420,15 +439,14 @@ export async function createWorkOrder(
 
   try {
     return await db.transaction(async (transaction) => {
-      await lockOrganization(transaction, context.membership.organizationId);
+      await lockOperationalOrganization(transaction, context.membership.organizationId);
 
-      const actorCheck = await checkCurrentActor(
+      const actorFailure = await revalidateOperationalActor(
         transaction,
         context,
         "work_order.manage",
         parsed.data.officeId,
       );
-      const actorFailure = failureForActorCheck(actorCheck);
       if (actorFailure) {
         return actorFailure;
       }
@@ -441,12 +459,49 @@ export async function createWorkOrder(
             eq(projects.id, parsed.data.projectId),
             eq(projects.organizationId, context.membership.organizationId),
             eq(projects.officeId, parsed.data.officeId),
+            eq(projects.status, "active"),
           ),
         )
         .limit(1);
 
-      if (!project) {
+      const [serviceType] = await transaction
+        .select({
+          id: serviceTypes.id,
+          name: serviceTypes.name,
+          officeId: serviceTypes.officeId,
+          status: serviceTypes.status,
+        })
+        .from(serviceTypes)
+        .where(
+          and(
+            eq(serviceTypes.id, parsed.data.serviceTypeId),
+            eq(serviceTypes.organizationId, context.membership.organizationId),
+          ),
+        )
+        .limit(1);
+
+      const [office] = await transaction
+        .select({ timeZone: offices.timeZone })
+        .from(offices)
+        .where(
+          and(
+            eq(offices.id, parsed.data.officeId),
+            eq(offices.organizationId, context.membership.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!project || !serviceType || !office) {
         return notFoundOrInaccessible();
+      }
+      if (
+        serviceType.officeId !== null &&
+        serviceType.officeId !== parsed.data.officeId
+      ) {
+        return notFoundOrInaccessible();
+      }
+      if (serviceType.status !== "active") {
+        return { status: "inactive_reference", reason: "service_type_inactive" };
       }
 
       const [value] = await transaction
@@ -454,6 +509,10 @@ export async function createWorkOrder(
         .values({
           ...parsed.data,
           organizationId: context.membership.organizationId,
+          serviceType: serviceType.name,
+          status: "draft",
+          timeZone: office.timeZone,
+          isActive: true,
         })
         .returning();
 
@@ -467,6 +526,7 @@ export async function createWorkOrder(
       [
         "work_orders_office_organization_fk",
         "work_orders_project_organization_office_fk",
+        "work_orders_service_type_organization_fk",
       ],
     );
   }
@@ -488,21 +548,48 @@ export async function createDispatchAssignment(
 
   try {
     return await db.transaction(async (transaction) => {
-      await lockOrganization(transaction, context.membership.organizationId);
+      await lockOperationalOrganization(transaction, context.membership.organizationId);
 
-      const actorCheck = await checkCurrentActor(
+      const actorFailure = await revalidateOperationalActor(
         transaction,
         context,
         "dispatch_assignment.manage",
         parsed.data.officeId,
       );
-      const actorFailure = failureForActorCheck(actorCheck);
       if (actorFailure) {
         return actorFailure;
       }
 
+      const [existingSource] = await transaction
+        .select({ id: dispatchAssignments.id })
+        .from(dispatchAssignments)
+        .where(
+          and(
+            eq(
+              dispatchAssignments.organizationId,
+              context.membership.organizationId,
+            ),
+            eq(dispatchAssignments.sourceSystem, parsed.data.sourceSystem),
+            eq(
+              dispatchAssignments.sourceAssignmentId,
+              parsed.data.sourceAssignmentId,
+            ),
+          ),
+        )
+        .limit(1);
+      if (existingSource) {
+        return {
+          status: "conflict",
+          reason: "dispatch_assignment_source_already_exists",
+        };
+      }
+
       const [workOrder] = await transaction
-        .select({ id: workOrders.id })
+        .select({
+          id: workOrders.id,
+          status: workOrders.status,
+          timeZone: workOrders.timeZone,
+        })
         .from(workOrders)
         .where(
           and(
@@ -512,20 +599,12 @@ export async function createDispatchAssignment(
           ),
         )
         .limit(1);
-      const [technician] = await transaction
-        .select({ id: technicians.id })
-        .from(technicians)
-        .where(
-          and(
-            eq(technicians.id, parsed.data.technicianId),
-            eq(technicians.organizationId, context.membership.organizationId),
-            eq(technicians.officeId, parsed.data.officeId),
-          ),
-        )
-        .limit(1);
 
-      if (!workOrder || !technician) {
+      if (!workOrder) {
         return notFoundOrInaccessible();
+      }
+      if (workOrder.status !== "ready_for_dispatch") {
+        return { status: "invalid_transition" };
       }
 
       const [value] = await transaction
@@ -533,10 +612,40 @@ export async function createDispatchAssignment(
         .values({
           ...parsed.data,
           organizationId: context.membership.organizationId,
+          technicianId: null,
+          status: "unassigned",
+          timeZone: workOrder.timeZone,
+          isActive: true,
           createdByUserId: context.user.id,
           updatedByUserId: context.user.id,
         })
         .returning();
+
+      await transaction.insert(assignmentEvents).values({
+        organizationId: context.membership.organizationId,
+        officeId: parsed.data.officeId,
+        dispatchAssignmentId: value.id,
+        eventType: "created",
+        fromStatus: null,
+        toStatus: "unassigned",
+        actedByUserId: context.user.id,
+        assignmentVersion: value.version,
+      });
+
+      await transaction
+        .update(workOrders)
+        .set({
+          status: "scheduled",
+          updatedAt: new Date(),
+          version: sql`${workOrders.version} + 1`,
+        })
+        .where(
+          and(
+            eq(workOrders.id, workOrder.id),
+            eq(workOrders.organizationId, context.membership.organizationId),
+            eq(workOrders.status, "ready_for_dispatch"),
+          ),
+        );
 
       return created(value, context, "dispatch_assignment.created");
     });
@@ -547,7 +656,6 @@ export async function createDispatchAssignment(
       "dispatch_assignment_source_already_exists",
       [
         "dispatch_assignments_work_order_organization_office_fk",
-        "dispatch_assignments_technician_organization_office_fk",
       ],
     );
   }
@@ -571,116 +679,6 @@ function parseRecordId(
       };
 }
 
-async function lockOrganization(
-  transaction: Transaction,
-  organizationId: string,
-): Promise<void> {
-  await transaction.execute(sql`
-    select ${organizations.id}
-    from ${organizations}
-    where ${organizations.id} = ${organizationId}
-    for update
-  `);
-}
-
-async function checkCurrentActor(
-  transaction: Transaction,
-  context: AuthorizationContext,
-  permission: Permission,
-  officeId: string,
-): Promise<CurrentActorCheck> {
-  const [actor] = await transaction
-    .select({
-      role: organizationMemberships.role,
-      membershipStatus: organizationMemberships.status,
-      officeAccess: organizationMemberships.officeAccess,
-      userStatus: users.status,
-      organizationStatus: organizations.status,
-    })
-    .from(organizationMemberships)
-    .innerJoin(users, eq(organizationMemberships.userId, users.id))
-    .innerJoin(
-      organizations,
-      eq(organizationMemberships.organizationId, organizations.id),
-    )
-    .where(
-      and(
-        eq(organizationMemberships.id, context.membership.id),
-        eq(
-          organizationMemberships.organizationId,
-          context.membership.organizationId,
-        ),
-        eq(organizationMemberships.userId, context.user.id),
-      ),
-    )
-    .limit(1);
-
-  if (
-    !actor ||
-    actor.membershipStatus !== "active" ||
-    actor.userStatus !== "active" ||
-    actor.organizationStatus !== "active" ||
-    !permissionsForRole(actor.role).includes(permission)
-  ) {
-    return "forbidden";
-  }
-
-  if (actor.officeAccess === "all") {
-    if (!roleMayUseOrganizationWideOfficeAccess(actor.role)) {
-      return "forbidden";
-    }
-
-    const [office] = await transaction
-      .select({ id: offices.id })
-      .from(offices)
-      .where(
-        and(
-          eq(offices.id, officeId),
-          eq(offices.organizationId, context.membership.organizationId),
-        ),
-      )
-      .limit(1);
-
-    return office ? "allowed" : "office_inaccessible";
-  }
-
-  const [office] = await transaction
-    .select({ id: offices.id })
-    .from(officeAssignments)
-    .innerJoin(offices, eq(officeAssignments.officeId, offices.id))
-    .where(
-      and(
-        eq(
-          officeAssignments.organizationMembershipId,
-          context.membership.id,
-        ),
-        eq(
-          officeAssignments.organizationId,
-          context.membership.organizationId,
-        ),
-        eq(officeAssignments.officeId, officeId),
-        eq(offices.organizationId, context.membership.organizationId),
-      ),
-    )
-    .limit(1);
-
-  return office ? "allowed" : "office_inaccessible";
-}
-
-function failureForActorCheck(
-  check: CurrentActorCheck,
-): OperationalRecordFailure | null {
-  if (check === "forbidden") {
-    return forbidden();
-  }
-
-  if (check === "office_inaccessible") {
-    return notFoundOrInaccessible();
-  }
-
-  return null;
-}
-
 function created<T extends { id: string }>(
   value: T,
   context: AuthorizationContext,
@@ -689,22 +687,7 @@ function created<T extends { id: string }>(
   return {
     status: "created",
     value,
-    mutation: mutationMetadata(action, context, value.id),
-  };
-}
-
-function mutationMetadata(
-  action: OperationalRecordMutationAction,
-  context: AuthorizationContext,
-  subjectId: string,
-): OperationalRecordMutationMetadata {
-  return {
-    mutationId: randomUUID(),
-    action,
-    actorUserId: context.user.id,
-    organizationId: context.membership.organizationId,
-    subjectId,
-    occurredAt: new Date().toISOString(),
+    mutation: createMutationMetadata(action, context, value.id),
   };
 }
 

@@ -16,6 +16,8 @@
   - `apps/operational/tests/integration/tenancy.integration.test.ts`
   - `apps/operational/tests/unit/operational-records.validation.test.ts`
   - `apps/operational/tests/integration/operational-records.integration.test.ts`
+  - `apps/operational/tests/integration/dispatch-workflow.integration.test.ts`
+  - `apps/operational/tests/e2e/dispatch.spec.ts`
   - `.github/workflows/operational-ci.yml`
   - `DEVELOPER_NOTES.md`
   - `docs/cmtcommand-vnext/verification.md`
@@ -182,47 +184,41 @@ in, `HttpOnly` session cookie behavior, and fail-closed database-unavailable UI,
 in addition to the existing liveness/readiness checks. Full role-to-role browser
 acceptance requires the isolated migrated test database.
 
-## Operational vNext Durable Operational-Record Tests - Confirmed
+## Operational vNext Phase 5E Dispatch Tests - Confirmed
 
-Phase 5E unit tests cover:
+Phase 5E unit tests cover validation, lifecycle transition tables, half-open
+overlap semantics, daylight-saving operational dates, and the least-privilege
+role/permission matrix.
 
-- Source-system normalization, source-ID boundaries, trimming, and active-state
-  defaults.
-- UUID, contact-field, field-length, and timezone-aware date validation.
-- Work-order and dispatch-assignment interval ordering.
-- The least-privilege role matrix for all four record types while preserving
-  Phase 5D identity permissions.
+PostgreSQL integration coverage includes:
 
-The 17-case PostgreSQL integration suite covers:
+- Durable service-type uniqueness, tenant ownership, inactive selection denial,
+  and archived historical references.
+- Technician office eligibility, optional membership linkage, primary/support
+  relationships, one-active-primary and duplicate-active constraints, inactive
+  technician denial, and preserved reassignment history.
+- Valid/invalid assignment transitions, stale versions, own acknowledgment,
+  terminal-state protection, event append-only enforcement, and rollback when
+  event insertion fails.
+- Work-order ready/scheduled/in-progress/completed/cancelled reconciliation and
+  rollback when reconciliation fails.
+- Overlap, adjacency, cancelled-assignment exclusion, redacted cross-scope
+  conflicts, unauthorized overrides, and reasoned authorized overrides.
+- Direct composite-key rejection of cross-organization and cross-office
+  relationships plus non-leaking service results.
 
-- Presence of all four migrated tables.
-- A durable project -> work order -> dispatch assignment chain plus its
-  technician, with separate source and human identifiers.
-- Source-system normalization, same source IDs across organizations, and safe
-  same-organization conflict results.
-- Organization-wide, restricted-office, and empty-restricted scopes for all
-  four record types.
-- Service and composite-foreign-key rejection of cross-office and
-  cross-organization relationships.
-- Dispatcher assignment-only writes, viewer write denial, and field-technician
-  read denial.
-- In-transaction denial after actor suspension.
-- Organization-row serialization against a concurrent membership revocation.
-- Invalid interval rejection without persistence.
-- Direct database rejection of malformed source systems, whitespace-only text,
-  and invalid work-order/assignment intervals with named CHECK constraints.
-- Restrictive deletion for referenced projects, work orders, and technicians.
+Browser acceptance covers operations-manager dispatch, restricted-office
+dispatcher behavior, viewer/reviewer mutation denial, linked technician own
+assignments, cross-tenant rejection, stale-version recovery, persisted refresh,
+and 390px no-overflow behavior.
 
-Bounded local Phase 5E verification passed 27 focused unit tests, targeted lint
-and type checking, `drizzle-kit check`, repeated test migration, the 17-case
-operational-record PostgreSQL suite, and `npm.cmd run verify:db` across three
-integration files / 44 tests. `npm.cmd run verify` also passed lint, typecheck,
-12 unit-test files / 110 tests, and the production build. Root static
-verification passed, and relative Markdown validation found zero broken links
-across 154 links in 36 Bible/operational Markdown files. This is local phase
-evidence only. Scoped diff and untracked-source whitespace checks also passed.
-The separate Playwright command exercised all six scenarios but its wrapper
-timed out before exiting, so that command is not claimed as passed.
+Bounded local Phase 5E verification passed 13 unit files / 116 tests, four
+PostgreSQL integration files / 53 tests, and 10/10 Playwright scenarios.
+`npm run test:e2e` exits naturally with status 0 and leaves no listener on port
+3100. `npm run verify:db`, `npm run verify`, `npm run verify:full`, production
+build, repeated migration, `drizzle-kit check`, root verification, Markdown-link
+validation, scoped security scans, client-bundle scans, and diff checks passed.
+This is local/test evidence only and does not establish production readiness.
 
 ## Practical Testing Matrix
 

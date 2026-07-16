@@ -13,15 +13,15 @@ import {
 const officeId = "00000000-0000-4000-8000-000000000001";
 const projectId = "00000000-0000-4000-8000-000000000002";
 const workOrderId = "00000000-0000-4000-8000-000000000003";
-const technicianId = "00000000-0000-4000-8000-000000000004";
+const serviceTypeId = "00000000-0000-4000-8000-000000000004";
 
 const workOrderInput = {
   officeId,
   projectId,
+  serviceTypeId,
   sourceSystem: "dispatch.csv",
   sourceWorkOrderId: "wo-104",
   workOrderNumber: "TRD-104",
-  serviceType: "Concrete",
   jobSiteName: "Potomac Yard",
   scheduledStartAt: "2026-07-17T08:00:00-04:00",
   scheduledEndAt: "2026-07-17T12:00:00-04:00",
@@ -30,7 +30,6 @@ const workOrderInput = {
 const assignmentInput = {
   officeId,
   workOrderId,
-  technicianId,
   sourceSystem: "dispatch.csv",
   sourceAssignmentId: "assignment-104",
   assignmentStartAt: "2026-07-17T08:00:00-04:00",
@@ -57,7 +56,7 @@ describe("operational record validation", () => {
       sourceProjectId: "project-42",
       projectNumber: "P-0042",
       name: "Potomac Yard Expansion",
-      isActive: true,
+      status: "active",
     });
   });
 
@@ -80,7 +79,7 @@ describe("operational record validation", () => {
       operationalRole: null,
       workEmail: "maria.lopez@example.com",
       workPhone: "555-0107",
-      isActive: true,
+      status: "active",
     });
   });
 
@@ -88,7 +87,6 @@ describe("operational record validation", () => {
     const parsedWorkOrder = createWorkOrderInputSchema.parse({
       ...workOrderInput,
       workOrderNumber: "  TRD-104  ",
-      serviceType: "  Concrete  ",
       jobSiteName: "  Potomac Yard  ",
     });
     const assignmentStartAt = new Date("2026-07-17T13:00:00Z");
@@ -104,12 +102,10 @@ describe("operational record validation", () => {
     );
     expect(parsedWorkOrder.scheduledEndAt).toBeInstanceOf(Date);
     expect(parsedWorkOrder.workOrderNumber).toBe("TRD-104");
-    expect(parsedWorkOrder.serviceType).toBe("Concrete");
+    expect(parsedWorkOrder.serviceTypeId).toBe(serviceTypeId);
     expect(parsedWorkOrder.jobSiteName).toBe("Potomac Yard");
-    expect(parsedWorkOrder.isActive).toBe(true);
     expect(parsedAssignment.assignmentStartAt).toEqual(assignmentStartAt);
     expect(parsedAssignment.assignmentEndAt).toEqual(assignmentEndAt);
-    expect(parsedAssignment.isActive).toBe(true);
   });
 
   it("rejects invalid identifiers, source systems, and source IDs", () => {
@@ -136,7 +132,7 @@ describe("operational record validation", () => {
     expect(() =>
       createDispatchAssignmentInputSchema.parse({
         ...assignmentInput,
-        technicianId: "tech-7",
+        workOrderId: "work-order-7",
       }),
     ).toThrow();
   });

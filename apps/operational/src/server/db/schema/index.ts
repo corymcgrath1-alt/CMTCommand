@@ -1,3 +1,5 @@
+export * from "./assignment-events";
+export * from "./assignment-technicians";
 export * from "./dispatch-assignments";
 export * from "./external-identities";
 export * from "./office-assignments";
@@ -5,6 +7,8 @@ export * from "./offices";
 export * from "./organization-memberships";
 export * from "./organizations";
 export * from "./projects";
+export * from "./service-types";
+export * from "./technician-office-eligibilities";
 export * from "./technicians";
 export * from "./users";
 export * from "./work-orders";
