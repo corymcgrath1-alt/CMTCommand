@@ -9,6 +9,7 @@ export const auditCategoryValues = [
   "technician",
   "work_order",
   "dispatch_assignment",
+  "media_asset",
   "system",
 ] as const;
 
@@ -30,6 +31,9 @@ export const auditTargetTypeValues = [
   "work_order",
   "dispatch_assignment",
   "assignment_technician",
+  "media_upload_session",
+  "media_asset",
+  "media_derivative",
 ] as const;
 
 export type AuditTargetType = (typeof auditTargetTypeValues)[number];
@@ -73,6 +77,10 @@ export const auditActionValues = [
   "dispatch_assignment.completed",
   "dispatch_assignment.cancelled",
   "dispatch_assignment.conflict_overridden",
+  "media_upload.initiated",
+  "media_upload.completed",
+  "media_upload.failed",
+  "media_access.granted",
   "authorization.cross_office_mutation_denied",
   "authorization.conflict_override_denied",
   "authorization.membership_administration_denied",
@@ -120,6 +128,10 @@ export const auditActionCategory: Record<AuditAction, AuditCategory> = {
   "dispatch_assignment.completed": "dispatch_assignment",
   "dispatch_assignment.cancelled": "dispatch_assignment",
   "dispatch_assignment.conflict_overridden": "dispatch_assignment",
+  "media_upload.initiated": "media_asset",
+  "media_upload.completed": "media_asset",
+  "media_upload.failed": "media_asset",
+  "media_access.granted": "media_asset",
   "authorization.cross_office_mutation_denied": "authorization",
   "authorization.conflict_override_denied": "authorization",
   "authorization.membership_administration_denied": "authorization",

@@ -293,6 +293,24 @@ This architecture intentionally separates four concerns:
 
 See [ADR-009](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md).
 
+## Phase 5G Private Media Storage Foundation - Confirmed
+
+Operational vNext now has a bounded `src/server/object-storage/` and
+`src/server/media/` boundary for authorized assignment media uploads. Protected
+route handlers create upload sessions and read grants; tokenized object routes
+issue presigned private PUT grants and authorized private read access.
+Completion verifies object bytes server-side before creating immutable
+media-asset facts.
+
+The architecture remains provider-neutral, but only a guarded local/test storage
+provider exists. The provider is disabled by default, requires a loopback
+S3-compatible endpoint and exact bucket `cmtcommand-media-test` for test use,
+and is rejected in production runtimes. The module
+exposes no Field Sessions, reports, OCR/AI extraction, samples, Procore/email
+integration, production storage, or production identity behavior.
+
+See [ADR-010](decisions/ADR-010_PRIVATE_OBJECT_STORAGE_AND_AUTHORIZED_MEDIA_UPLOAD_FOUNDATION.md).
+
 ## Future Field Operations Architecture - Path B
 
 Field Operations Capture & Report Intelligence is documented as a future
@@ -354,10 +372,12 @@ The current architecture favors a low-friction local demo with tested pure utili
 - Import, availability, certification, clearance, equipment, calibration, and
   service-requirement foundations remain absent.
 - No durable readiness snapshot or Decision Log implementation exists.
-- Phase 5E routes/UI expose only operational dispatch; no deferred Field
-  Operations capability is exposed.
-- Field Operations remains architecture-only; no field session, evidence,
-  report, sample, media, extraction, export, or field UI implementation exists.
+- Phase 5E routes/UI expose only operational dispatch; Phase 5G exposes only
+  authorized assignment media upload/read primitives. No deferred Field Sessions
+  or reporting workflow is exposed.
+- Field Operations remains architecture-only beyond the Phase 5G media
+  foundation; no field session, report, sample, OCR/AI extraction, export, or
+  field UI implementation exists.
 
 ## Open Questions
 

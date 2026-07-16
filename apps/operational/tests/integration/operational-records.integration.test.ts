@@ -1805,6 +1805,8 @@ describe("Phase 5F append-only audit persistence", () => {
     const result = await listAuditEvents(db, admin, {
       targetType: inserted.targetType,
       targetId: inserted.targetId,
+      from: new Date(inserted.occurredAt.getTime() - 1_000).toISOString(),
+      to: new Date(inserted.occurredAt.getTime() + 1_000).toISOString(),
     });
 
     expect(result.status).toBe("ok");
@@ -2473,6 +2475,9 @@ async function cleanupTestRows(database: OperationalDatabase): Promise<void> {
       async () => {
         await transaction.execute(
           sql`truncate table
+            "media_derivatives",
+            "media_assets",
+            "media_upload_sessions",
             "audit_events",
             "assignment_events",
             "assignment_technicians",

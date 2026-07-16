@@ -40,7 +40,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: cmtcommand_test
-          POSTGRES_PASSWORD: cmtcommand_test_password
+          POSTGRES_PASSWORD: cmtcommand-test-${{ github.run_id }}-${{ github.run_attempt }}
           POSTGRES_DB: cmtcommand_operational_test
         ports:
           - "5432:5432"
@@ -54,10 +54,16 @@ jobs:
         working-directory: apps/operational
     env:
       APP_ENV: test
-      TEST_DATABASE_URL: postgresql://cmtcommand_test:cmtcommand_test_password@localhost:5432/cmtcommand_operational_test
+      TEST_DATABASE_URL: postgresql://cmtcommand_test:cmtcommand-test-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/cmtcommand_operational_test
       TEST_DATABASE_EXPECTED_NAME: cmtcommand_operational_test
       TEST_DATABASE_EXPECTED_HOST: localhost
       TEST_DATABASE_RESET_AUTHORIZATION: ALLOW_CMT_TEST_DATABASE_RESET
+      OBJECT_STORAGE_MODE: local-test
+      OBJECT_STORAGE_ENDPOINT: http://localhost:9000
+      OBJECT_STORAGE_BUCKET: cmtcommand-media-test
+      OBJECT_STORAGE_EXPECTED_BUCKET: cmtcommand-media-test
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_RESET_AUTHORIZATION: ALLOW_CMT_TEST_OBJECT_STORAGE_RESET
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -66,4 +72,29 @@ jobs:
           cache: npm
           cache-dependency-path: apps/operational/package-lock.json
       - run: npm ci
+      - name: Prepare private local object-storage credentials
+        run: |
+          {
+            echo "OBJECT_STORAGE_ACCESS_KEY_ID=cmtcommand-local-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            echo "OBJECT_STORAGE_SECRET_ACCESS_KEY=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
+      - name: Start private local object storage
+        run: |
+          docker run --rm -d \
+            --name cmtcommand-operational-ci-object-storage \
+            -p 127.0.0.1:9000:9000 \
+            -p 127.0.0.1:9001:9001 \
+            -e MINIO_ROOT_USER="$OBJECT_STORAGE_ACCESS_KEY_ID" \
+            -e MINIO_ROOT_PASSWORD="$OBJECT_STORAGE_SECRET_ACCESS_KEY" \
+            -e MINIO_API_CORS_ALLOW_ORIGIN=http://127.0.0.1:3100 \
+            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z \
+            server /data --console-address :9001
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs cmtcommand-operational-ci-object-storage
+          exit 1
       - run: npm run verify:db

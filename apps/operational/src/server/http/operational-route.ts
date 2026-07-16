@@ -9,7 +9,7 @@ export async function loadOperationalRequest() {
 }
 
 export function operationalJson(
-  result: { status: string; mutation?: { requestId?: string } },
+  result: { status: string; mutation?: { requestId?: string } } & Record<string, unknown>,
 ) {
   const statusByResult: Record<string, number> = {
     created: 201,

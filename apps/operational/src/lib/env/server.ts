@@ -11,6 +11,7 @@ const appEnvironmentSchema = z.enum([
 const nodeEnvironmentSchema = z.enum(["development", "test", "production"]);
 
 const authModeSchema = z.enum(["disabled", "development"]);
+const objectStorageModeSchema = z.enum(["disabled", "local-test"]);
 
 const optionalTrimmedStringSchema = z.preprocess(
   (value) => {
@@ -52,6 +53,14 @@ const serverEnvSchema = z
     AUTH_MODE: authModeSchema.default("disabled"),
     AUTH_SESSION_SECRET: optionalTrimmedStringSchema,
     AUTH_DEVELOPMENT_SUBJECTS: optionalTrimmedStringSchema,
+    OBJECT_STORAGE_MODE: objectStorageModeSchema.default("disabled"),
+    OBJECT_STORAGE_ENDPOINT: optionalTrimmedStringSchema,
+    OBJECT_STORAGE_BUCKET: optionalTrimmedStringSchema,
+    OBJECT_STORAGE_EXPECTED_BUCKET: optionalTrimmedStringSchema,
+    OBJECT_STORAGE_ACCESS_KEY_ID: optionalTrimmedStringSchema,
+    OBJECT_STORAGE_SECRET_ACCESS_KEY: optionalTrimmedStringSchema,
+    OBJECT_STORAGE_REGION: optionalTrimmedStringSchema,
+    OBJECT_STORAGE_RESET_AUTHORIZATION: optionalTrimmedStringSchema,
   })
   .passthrough();
 
@@ -65,6 +74,14 @@ export type ServerEnv = {
   AUTH_MODE: "disabled" | "development";
   AUTH_SESSION_SECRET?: string;
   AUTH_DEVELOPMENT_SUBJECTS?: string;
+  OBJECT_STORAGE_MODE: "disabled" | "local-test";
+  OBJECT_STORAGE_ENDPOINT?: string;
+  OBJECT_STORAGE_BUCKET?: string;
+  OBJECT_STORAGE_EXPECTED_BUCKET?: string;
+  OBJECT_STORAGE_ACCESS_KEY_ID?: string;
+  OBJECT_STORAGE_SECRET_ACCESS_KEY?: string;
+  OBJECT_STORAGE_REGION?: string;
+  OBJECT_STORAGE_RESET_AUTHORIZATION?: string;
 };
 
 export class ServerEnvError extends Error {
@@ -97,6 +114,16 @@ export function parseServerEnv(input: Record<string, string | undefined>): Serve
     AUTH_MODE: parsed.data.AUTH_MODE,
     AUTH_SESSION_SECRET: parsed.data.AUTH_SESSION_SECRET,
     AUTH_DEVELOPMENT_SUBJECTS: parsed.data.AUTH_DEVELOPMENT_SUBJECTS,
+    OBJECT_STORAGE_MODE: parsed.data.OBJECT_STORAGE_MODE,
+    OBJECT_STORAGE_ENDPOINT: parsed.data.OBJECT_STORAGE_ENDPOINT,
+    OBJECT_STORAGE_BUCKET: parsed.data.OBJECT_STORAGE_BUCKET,
+    OBJECT_STORAGE_EXPECTED_BUCKET: parsed.data.OBJECT_STORAGE_EXPECTED_BUCKET,
+    OBJECT_STORAGE_ACCESS_KEY_ID: parsed.data.OBJECT_STORAGE_ACCESS_KEY_ID,
+    OBJECT_STORAGE_SECRET_ACCESS_KEY:
+      parsed.data.OBJECT_STORAGE_SECRET_ACCESS_KEY,
+    OBJECT_STORAGE_REGION: parsed.data.OBJECT_STORAGE_REGION,
+    OBJECT_STORAGE_RESET_AUTHORIZATION:
+      parsed.data.OBJECT_STORAGE_RESET_AUTHORIZATION,
   };
 }
 

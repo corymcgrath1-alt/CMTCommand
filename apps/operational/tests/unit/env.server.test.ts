@@ -16,6 +16,14 @@ describe("parseServerEnv", () => {
       AUTH_MODE: "disabled",
       AUTH_SESSION_SECRET: undefined,
       AUTH_DEVELOPMENT_SUBJECTS: undefined,
+      OBJECT_STORAGE_MODE: "disabled",
+      OBJECT_STORAGE_ENDPOINT: undefined,
+      OBJECT_STORAGE_BUCKET: undefined,
+      OBJECT_STORAGE_EXPECTED_BUCKET: undefined,
+      OBJECT_STORAGE_ACCESS_KEY_ID: undefined,
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: undefined,
+      OBJECT_STORAGE_REGION: undefined,
+      OBJECT_STORAGE_RESET_AUTHORIZATION: undefined,
     });
   });
 
@@ -33,6 +41,14 @@ describe("parseServerEnv", () => {
       AUTH_MODE: "disabled",
       AUTH_SESSION_SECRET: undefined,
       AUTH_DEVELOPMENT_SUBJECTS: undefined,
+      OBJECT_STORAGE_MODE: "disabled",
+      OBJECT_STORAGE_ENDPOINT: undefined,
+      OBJECT_STORAGE_BUCKET: undefined,
+      OBJECT_STORAGE_EXPECTED_BUCKET: undefined,
+      OBJECT_STORAGE_ACCESS_KEY_ID: undefined,
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: undefined,
+      OBJECT_STORAGE_REGION: undefined,
+      OBJECT_STORAGE_RESET_AUTHORIZATION: undefined,
     });
   });
 

@@ -15,6 +15,7 @@
   - [Field Operations V1 Specification](specs/FIELD_OPERATIONS_V1.md)
   - [Field Operations Implementation Plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md)
   - [Phase 5E Durable Operational Records Report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md)
+  - [Phase 5G Private Object Storage Report](plans/PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md)
   - [ADR-008 Dispatch Assignments Are The Field Operations Handoff](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md)
 - Last Reviewed: 2026-07-16
 
@@ -47,20 +48,25 @@ Confirmed foundations:
   office-access, project, service-type, technician, work-order, and dispatch
   mutations, with tenant/office-scoped history and local PostgreSQL/browser
   evidence.
+- A local/test private media-storage foundation for authorized assignment upload
+  sessions, immutable original media assets, separate preview/thumbnail
+  derivatives, duplicate detection, signed short-lived reads, and media audit
+  events.
 - Zod, Vitest, Playwright, health routes, and a PostgreSQL integration-test lane.
 
 Missing foundations that block the concrete-inspection vertical slice:
 
 - A production identity provider and pilot-ready authentication verification.
-- A private object-storage abstraction and authorized upload lifecycle.
+- A production private object-storage provider, IAM policy, malware/media
+  inspection, retention, and controlled purge operations.
 - Approved report/template, retention, and technical-review requirements.
 
-Phase 5E closes the durable-record P2 gate and Phase 5F closes the bounded
-local/test P3 audit gate. These are shared prerequisites, not Field Operations
-behavior. Production identity, private storage, and approved report/retention
-policy still block FR-1. No
-field-reporting runtime, schema, route, upload, extraction, UI, or browser-local
-substitute is implemented.
+Phase 5E closes the durable-record P2 gate, Phase 5F closes the bounded
+local/test P3 audit gate, and Phase 5G closes the local/test private-media
+foundation. These are shared prerequisites, not Field Operations behavior.
+Production identity, production storage operations, and approved report/retention
+policy still block FR-1. No field-session, field-reporting, extraction, sample,
+or browser-local substitute is implemented.
 
 ## Product Problem
 
@@ -235,7 +241,7 @@ Production email ingestion and Procore synchronization are deferred. Future inbo
 
 ## Provider-Neutral Architecture Boundaries
 
-Future implementation should define ports for:
+Future implementation should build on or extend ports for:
 
 - Private object storage and short-lived authorized download/upload grants.
 - Media inspection and derivative generation.

@@ -241,6 +241,26 @@ tenant isolation, safe dispatcher/viewer/field denials, refresh persistence,
 filter persistence, no raw internal error disclosure, and 390px no-overflow.
 The test wrapper must exit naturally and leave no listener on port 3100.
 
+## Operational vNext Phase 5G Media Tests - Confirmed
+
+Phase 5G unit coverage proves object-storage environment defaults, exact
+local/test bucket and loopback endpoint identity, destructive cleanup
+authorization, signed upload/read grants, media-upload input limits, and
+byte-sniffed media type
+validation.
+
+PostgreSQL/service integration coverage covers media tables, append-only
+asset/derivative triggers, authorized own-assignment upload completion, separate
+original/preview/thumbnail objects, privacy-bounded audit rows, short-lived
+read grants, idempotency-key reuse, same-assignment duplicate detection,
+server-side size/checksum/media-type verification failure, viewer denial, and
+cross-tenant denial.
+
+Playwright covers the actual protected media APIs by creating a fresh assignment,
+initiating an upload, performing the signed PUT, completing verification,
+listing the asset, reading a thumbnail through a signed URL, and checking
+viewer/Beta denials.
+
 ## Practical Testing Matrix
 
 | Change type | Minimum expected verification |
@@ -255,6 +275,7 @@ The test wrapper must exit naturally and leave no listener on port 3100.
 | Pilot V1 API behavior | Success, validation, unauthorized, forbidden, not-found, conflict/stale snapshot, and persistence-failure tests. |
 | Pilot V1 database change | Migration tests plus affected integration tests, referential behavior checks, and rollback/recovery notes. |
 | General audit change | Taxonomy/serializer unit tests, PostgreSQL immutability and atomicity, tenant/office/security authorization, protected API/browser scenarios, and privacy scans. |
+| Private media-storage change | Storage guard unit tests, upload/complete/read service integration tests, immutable original/derivative database checks, audit privacy checks, and signed-route Playwright coverage. |
 | Pilot V1 permission change | Allowed and denied cases for each affected role, organization, and office boundary. |
 | Pilot V1 import behavior | Valid import, malformed file, missing required fields, duplicate records, sensitive columns, preview/apply flow, and import history. |
 | Bug fix | Regression test reproducing original failure when practical, plus related verifier/browser smoke. |
@@ -289,8 +310,9 @@ If not run, report:
 - No full screen-reader transcript or formal accessibility audit was found.
 - Prototype surfaces have limited direct tests.
 - Phase 5E has bounded persistence, permission, and isolation coverage for four
-  operational-record types. Import, readiness, coverage, Decision Log,
-  operational-impact, Field Operations, and deployment tests do not exist yet.
+  operational-record types and Phase 5G assignment media primitives. Import,
+  readiness, coverage, Decision Log, operational-impact, Field Sessions,
+  reports, samples, production storage, and deployment tests do not exist yet.
 - Operational database connectivity and migration behavior require a safe `TEST_DATABASE_URL` or the PostgreSQL CI service-container job.
 
 ## Open Questions

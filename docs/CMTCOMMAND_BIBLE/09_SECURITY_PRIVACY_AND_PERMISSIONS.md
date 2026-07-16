@@ -286,6 +286,35 @@ auditing, and SIEM export remain future policy/operations decisions.
 
 See [ADR-009](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md).
 
+## Phase 5G Media Authorization And Privacy - Confirmed
+
+Phase 5G extends the central policy with `media_asset.read`,
+`media_asset.create`, `media_asset.read_own`, and `media_asset.create_own`.
+
+| Role | Media capability |
+| --- | --- |
+| Organization admin, operations manager, dispatcher | Create/read media for authorized office-scope assignments. |
+| Technical reviewer | Read media for authorized office-scope assignments. |
+| Field technician | Create/read media only for assignments linked to their active technician relationship. |
+| Viewer | No media capability. |
+
+Upload initiation requires an authorized assignment in an active field handoff
+state and a caller-provided idempotency key. The signed direct-upload URL is
+short lived and bound to one upload session. Completion rechecks the actor and
+assignment authorization in the transaction, verifies object size, SHA-256, and
+detected media type server-side, then writes immutable original asset facts and
+separate derivative records. Reads require assignment authorization before
+issuing a short-lived content URL.
+
+Storage buckets, keys, signed tokens, original filenames, and media bytes are
+not returned in asset/list/audit payloads. Local/test storage is explicitly
+guarded by a loopback S3-compatible endpoint, exact bucket
+`cmtcommand-media-test`, matching expected bucket, and non-production
+credentials, and cannot be enabled in production runtimes. Production storage
+IAM, antivirus/malware scanning, retention,
+controlled purge, Field Sessions, reports, OCR/AI extraction, and samples remain
+future policy and implementation work.
+
 ## Pilot V1 Target Roles And Boundaries
 
 | Role | Allowed actions | Denied / constrained actions |
@@ -347,7 +376,8 @@ The demo must continue to use fictional or anonymized data. Pilot import validat
   the Operational vNext permission module is the enforced server boundary.
 - Browser/CDP security validation is not part of normal CI.
 - Production authentication, invitation delivery, audit retention/archival,
-  production database-role grants, and provider secret operations remain target requirements. Current RBAC covers the
+  production database-role grants, production object-storage provider/IAM,
+  media retention/purge, and provider secret operations remain target requirements. Current RBAC covers the
   identity/member/office surfaces and bounded Phase 5E dispatch workflow only.
 - Phase 5D proves isolation for identity and membership behavior. Phase 5E adds
   bounded organization/office/role isolation for projects, service types,

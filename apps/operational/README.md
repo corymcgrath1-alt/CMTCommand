@@ -5,8 +5,9 @@ It proves the app boundary, TypeScript/Next.js toolchain, health endpoints,
 environment validation, Drizzle/PostgreSQL wiring, organization/office tenancy
 persistence, provider-neutral identity, memberships, office assignments,
 server-enforced RBAC, a durable operational dispatch workflow, transactional
-append-only general audit history, unit testing, PostgreSQL integration testing,
-and browser acceptance coverage.
+append-only general audit history, a provider-neutral private media-storage
+foundation for authorized assignment uploads, unit testing, PostgreSQL
+integration testing, and browser acceptance coverage.
 
 It does not implement the end-to-end Pilot V1 business workflow.
 
@@ -36,6 +37,12 @@ Implemented in this scaffold:
 - Typed, privacy-bounded general audit events for existing material membership,
   office-access, project, service-type, technician, work-order, and dispatch
   mutations, with server request correlation and PostgreSQL immutability.
+- Provider-neutral private object-storage interfaces with local/test
+  S3-compatible semantics, exact cleanup guards, authorized assignment-based
+  media upload sessions, direct signed PUT uploads, server-side size/checksum/
+  media-type verification, immutable original media assets, separate preview
+  and thumbnail derivatives, short-lived read grants, duplicate detection, and
+  transactional audit events.
 - `/api/health` liveness endpoint.
 - `/api/ready` database-readiness endpoint.
 - Vitest unit tests.
@@ -49,7 +56,8 @@ Not implemented:
 - Invitation acceptance or email delivery. The administrator can prepare an
   invited membership only.
 - Imports, equipment/certification/clearance records, readiness rules, coverage,
-  Decision Log, operational impact, Field Operations, or deployment.
+  Decision Log, operational impact, Field Sessions, field reports, OCR/AI
+  extraction, samples, production storage, production identity, or deployment.
 
 ## Runtime
 
@@ -80,6 +88,14 @@ TEST_DATABASE_RESET_AUTHORIZATION=
 AUTH_MODE=disabled
 AUTH_SESSION_SECRET=
 AUTH_DEVELOPMENT_SUBJECTS=alpha-admin,alpha-dispatcher,alpha-viewer
+OBJECT_STORAGE_MODE=disabled
+OBJECT_STORAGE_ENDPOINT=
+OBJECT_STORAGE_BUCKET=
+OBJECT_STORAGE_EXPECTED_BUCKET=
+OBJECT_STORAGE_ACCESS_KEY_ID=
+OBJECT_STORAGE_SECRET_ACCESS_KEY=
+OBJECT_STORAGE_REGION=
+OBJECT_STORAGE_RESET_AUTHORIZATION=
 ```
 
 Leaving database values blank and `AUTH_MODE=disabled` is valid for linting,
@@ -138,6 +154,9 @@ foundation:
 - `src/server/db/schema/assignment-technicians.ts`
 - `src/server/db/schema/assignment-events.ts`
 - `src/server/db/schema/audit-events.ts`
+- `src/server/db/schema/media-upload-sessions.ts`
+- `src/server/db/schema/media-assets.ts`
+- `src/server/db/schema/media-derivatives.ts`
 
 Generate migrations after schema changes:
 
@@ -170,6 +189,26 @@ that merely contains `test`, an arbitrary remote host, or a URL that disagrees
 with the expected name or host is rejected. Diagnostics redact credentials and
 never print the unredacted connection string.
 
+Private media storage is disabled by default. Local/test media storage requires:
+
+```powershell
+$env:OBJECT_STORAGE_MODE="local-test"
+$env:OBJECT_STORAGE_ENDPOINT="http://127.0.0.1:59000"
+$env:OBJECT_STORAGE_BUCKET="cmtcommand-media-test"
+$env:OBJECT_STORAGE_EXPECTED_BUCKET="cmtcommand-media-test"
+$env:OBJECT_STORAGE_ACCESS_KEY_ID="<non-production local access key>"
+$env:OBJECT_STORAGE_SECRET_ACCESS_KEY="<non-production local secret key>"
+$env:OBJECT_STORAGE_REGION="us-east-1"
+$env:OBJECT_STORAGE_RESET_AUTHORIZATION="ALLOW_CMT_TEST_OBJECT_STORAGE_RESET"
+```
+
+The local/test provider accepts only the exact repository test bucket and a
+loopback S3-compatible endpoint and refuses production runtimes. It stores
+private original objects and generated derivatives behind short-lived upload and
+read grants; no public bucket or production provider is configured in Phase 5G.
+Browser uploads to local MinIO require the server-level CORS origin, for example
+`MINIO_API_CORS_ALLOW_ORIGIN=http://127.0.0.1:3100`.
+
 PostgreSQL integration tests also delete their own scoped test fixtures.
 That destructive cleanup requires an additional explicit authorization value:
 
@@ -180,9 +219,9 @@ npm run test:integration
 
 Immediately before cleanup, the integration test verifies PostgreSQL's live
 `current_database()` identity inside the same transaction. Cleanup enumerates
-the ten current operational, identity, and tenancy tables in dependency-first
-order and uses `RESTRICT`, so a future dependent table fails visibly instead of
-being silently removed by `CASCADE`.
+the current media, audit, operational, identity, and tenancy tables in
+dependency-first order and uses `RESTRICT`, so a future dependent table fails
+visibly instead of being silently removed by `CASCADE`.
 
 ## Development
 
@@ -245,8 +284,9 @@ authorization.
 tests. It is the database-dependent gate and is intentionally separate from
 `npm run verify`.
 
-`npm run test:e2e` runs protected shell and Phase 5E operational-dispatch
-browser acceptance tests and is intentionally not part of the default gate.
+`npm run test:e2e` runs protected shell, Phase 5E operational-dispatch, Phase 5F
+audit, and Phase 5G media-route browser acceptance tests and is intentionally
+not part of the default gate.
 
 `npm run verify:full` runs stable verification plus the Playwright protected
 workflow suite. It does not include the database gate.
@@ -292,6 +332,10 @@ Implemented:
 - General audit reads require `audit.read`; security categories additionally
   require `audit.read_security`. Query filters cannot override server-derived
   organization or restricted-office scope.
+- Media uploads require `media_asset.create` for authorized office-scope actors
+  or `media_asset.create_own` for the linked technician on their active
+  assignment. Media reads use the corresponding read permissions and return
+  short-lived private read grants rather than storage coordinates.
 
 Not implemented:
 
@@ -300,6 +344,8 @@ Not implemented:
 - PostgreSQL Row-Level Security.
 - Production audit retention, archival, legal hold, controlled purge,
   database-role grants, read auditing, and SIEM export.
+- Production object-storage provider configuration, malware scanning,
+  retention/purge operations, and storage-level IAM policy.
 - Import, readiness, coverage, Decision Log, Field Operations, and remaining
   readiness-data domains.
 
@@ -355,8 +401,9 @@ Start with the CMTCommand Bible:
 - [Phase 5D identity/RBAC report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_5D_IDENTITY_RBAC_REPORT.md)
 - [Phase 5E durable operational-records report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md)
 - [Phase 5F general audit-persistence report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_5F_GENERAL_AUDIT_PERSISTENCE_REPORT.md)
+- [Phase 5G private object-storage report](../../docs/CMTCOMMAND_BIBLE/plans/PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md)
 
 This scaffold is not ready for pilot use until later guarded phases add the
 remaining operational data domains, imports, readiness engine, coverage
-workflow, production identity provider, approved audit retention operations,
-private storage, and pilot operations.
+workflow, production identity provider, production storage provider, approved
+audit/media retention operations, and pilot operations.

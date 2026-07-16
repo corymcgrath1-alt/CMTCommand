@@ -23,6 +23,10 @@ export const permissionValues = [
   "dispatch_assignment.conflict_override",
   "dispatch_assignment.read_own",
   "dispatch_assignment.acknowledge_own",
+  "media_asset.read",
+  "media_asset.create",
+  "media_asset.read_own",
+  "media_asset.create_own",
   "audit.read",
   "audit.read_security",
 ] as const;
@@ -53,6 +57,9 @@ const dispatchWorkflowManagePermissions: Permission[] = [
   "dispatch_assignment.conflict_override",
 ];
 
+const mediaReadPermissions: Permission[] = ["media_asset.read"];
+const mediaCreatePermissions: Permission[] = ["media_asset.create"];
+
 const rolePermissions: Record<OrganizationRole, Permission[]> = {
   organization_admin: [
     ...readPermissions,
@@ -63,6 +70,8 @@ const rolePermissions: Record<OrganizationRole, Permission[]> = {
     ...domainReadPermissions,
     ...domainManagePermissions,
     ...dispatchWorkflowManagePermissions,
+    ...mediaReadPermissions,
+    ...mediaCreatePermissions,
     "audit.read",
     "audit.read_security",
   ],
@@ -71,6 +80,8 @@ const rolePermissions: Record<OrganizationRole, Permission[]> = {
     ...domainReadPermissions,
     ...domainManagePermissions,
     ...dispatchWorkflowManagePermissions,
+    ...mediaReadPermissions,
+    ...mediaCreatePermissions,
     "audit.read",
   ],
   dispatcher: [
@@ -80,12 +91,20 @@ const rolePermissions: Record<OrganizationRole, Permission[]> = {
     "dispatch_assignment.manage",
     "dispatch_assignment.assign",
     "dispatch_assignment.transition",
+    ...mediaReadPermissions,
+    ...mediaCreatePermissions,
   ],
-  technical_reviewer: [...readPermissions, ...domainReadPermissions],
+  technical_reviewer: [
+    ...readPermissions,
+    ...domainReadPermissions,
+    ...mediaReadPermissions,
+  ],
   field_technician: [
     ...readPermissions,
     "dispatch_assignment.read_own",
     "dispatch_assignment.acknowledge_own",
+    "media_asset.read_own",
+    "media_asset.create_own",
   ],
   viewer: [...readPermissions, ...domainReadPermissions],
 };

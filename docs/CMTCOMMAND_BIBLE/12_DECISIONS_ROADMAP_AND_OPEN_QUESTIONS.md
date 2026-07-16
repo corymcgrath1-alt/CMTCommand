@@ -23,6 +23,7 @@
   - `docs/CMTCOMMAND_BIBLE/13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md`
+  - `docs/CMTCOMMAND_BIBLE/decisions/ADR-010_PRIVATE_OBJECT_STORAGE_AND_AUTHORIZED_MEDIA_UPLOAD_FOUNDATION.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-16
@@ -70,6 +71,7 @@
 | Authorization scope is derived server-side from verified identity and active membership. | [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md), [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md) | Protected requests revalidate application user, membership, organization, office scope, and permissions; browser claims are untrusted. | Production auth provider remains a checkpoint; Phase 5F supplies bounded local/test audit persistence. | Yes |
 | Dispatch assignments and append-only assignment events are the durable operational handoff into future Field Operations. | [ADR-008](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md), [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md) | Phase 5E owns durable service types, primary/support relationships, lifecycle transitions, conflict policy, own-assignment access, and work-order reconciliation. | Assignment events are domain history, not the general audit platform; Field Operations remains unimplemented. | Yes |
 | Material mutations write transactional append-only general audit events. | [ADR-009](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md), [Phase 5F report](plans/PHASE_5F_GENERAL_AUDIT_PERSISTENCE_REPORT.md) | Existing Phase 5D/5E material mutations persist verified actor, taxonomy, bounded state, and request correlation atomically; scoped history is available to authorized roles. | Production retention, archival, database-role grants, read auditing, and SIEM remain unresolved. | Yes |
+| Assignment media uses private object storage and authorized upload/read grants. | [ADR-010](decisions/ADR-010_PRIVATE_OBJECT_STORAGE_AND_AUTHORIZED_MEDIA_UPLOAD_FOUNDATION.md), [Phase 5G report](plans/PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md) | Phase 5G owns local/test private storage, upload sessions, immutable original assets, derivatives, verification, duplicate detection, and media audit events. | Production storage, Field Sessions, reports, OCR/AI extraction, samples, and retention operations remain unresolved. | Yes |
 
 ## Field Operations Architecture Direction - 2026-07-15
 
@@ -117,6 +119,10 @@ Founder-approved Pilot V1 direction:
   and the [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md)
   for service-type ownership, dispatch lifecycle, technician relationships,
   conflict policy, and future Field Operations handoff decisions.
+- Use [ADR-010](decisions/ADR-010_PRIVATE_OBJECT_STORAGE_AND_AUTHORIZED_MEDIA_UPLOAD_FOUNDATION.md)
+  and the [Phase 5G report](plans/PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md)
+  for private media storage, upload sessions, short-lived reads, and storage
+  safety guards.
 
 Repository-supported candidate slices recorded in `docs/cmtcommand-vnext/plan.md` remain historical planning evidence:
 

@@ -1,5 +1,8 @@
 import type {
   DispatchAssignmentRecord,
+  MediaAssetRecord,
+  MediaDerivativeRecord,
+  MediaUploadSessionRecord,
   MembershipStatus,
   OfficeAccessPolicy,
   OrganizationRole,
@@ -100,5 +103,49 @@ export function assignmentAuditState(
     supportTechnicianIds: [...supportTechnicianIds].sort(),
     version: assignment.version,
     conflictOverride,
+  };
+}
+
+export function mediaUploadAuditState(
+  upload: Pick<
+    MediaUploadSessionRecord,
+    | "category"
+    | "declaredMediaType"
+    | "expectedByteSize"
+    | "expectedSha256"
+    | "status"
+    | "dispatchAssignmentId"
+  >,
+): SafeAuditState {
+  return {
+    category: upload.category,
+    declaredMediaType: upload.declaredMediaType,
+    expectedByteSize: upload.expectedByteSize,
+    expectedSha256: upload.expectedSha256,
+    status: upload.status,
+    dispatchAssignmentId: upload.dispatchAssignmentId,
+  };
+}
+
+export function mediaAssetAuditState(
+  asset: Pick<
+    MediaAssetRecord,
+    | "category"
+    | "detectedMediaType"
+    | "byteSize"
+    | "sha256"
+    | "status"
+    | "dispatchAssignmentId"
+  >,
+  derivatives: readonly Pick<MediaDerivativeRecord, "derivativeType">[] = [],
+): SafeAuditState {
+  return {
+    category: asset.category,
+    detectedMediaType: asset.detectedMediaType,
+    byteSize: asset.byteSize,
+    sha256: asset.sha256,
+    status: asset.status,
+    dispatchAssignmentId: asset.dispatchAssignmentId,
+    derivativeTypes: derivatives.map((derivative) => derivative.derivativeType).sort(),
   };
 }

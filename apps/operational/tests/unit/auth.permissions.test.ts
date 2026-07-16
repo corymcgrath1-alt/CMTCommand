@@ -27,6 +27,7 @@ const domainManagePermissions = [
   "technician.manage",
   "dispatch_assignment.manage",
 ] as const;
+const mediaManagePermissions = ["media_asset.read", "media_asset.create"] as const;
 
 describe("centralized permissions", () => {
   it("allows organization admins to manage memberships, office access, and all domain records", () => {
@@ -42,6 +43,7 @@ describe("centralized permissions", () => {
       "dispatch_assignment.assign",
       "dispatch_assignment.transition",
       "dispatch_assignment.conflict_override",
+      ...mediaManagePermissions,
       "audit.read",
       "audit.read_security",
     ]);
@@ -56,6 +58,7 @@ describe("centralized permissions", () => {
       "dispatch_assignment.assign",
       "dispatch_assignment.transition",
       "dispatch_assignment.conflict_override",
+      ...mediaManagePermissions,
       "audit.read",
     ]);
   });
@@ -69,6 +72,7 @@ describe("centralized permissions", () => {
       "dispatch_assignment.manage",
       "dispatch_assignment.assign",
       "dispatch_assignment.transition",
+      ...mediaManagePermissions,
     ]);
   });
 
@@ -77,6 +81,7 @@ describe("centralized permissions", () => {
       "organization.read",
       "office.read",
       ...domainReadPermissions,
+      "media_asset.read",
     ]);
   });
 
@@ -94,6 +99,8 @@ describe("centralized permissions", () => {
       "office.read",
       "dispatch_assignment.read_own",
       "dispatch_assignment.acknowledge_own",
+      "media_asset.read_own",
+      "media_asset.create_own",
     ]);
     expect(permissionsForRole("field_technician")).not.toContain(
       "dispatch_assignment.read",
@@ -107,6 +114,26 @@ describe("centralized permissions", () => {
     expect(permissionsForRole("dispatcher")).not.toContain(
       "dispatch_assignment.conflict_override",
     );
+  });
+
+  it("keeps media access explicit and assignment-scoped", () => {
+    expect(permissionsForRole("organization_admin")).toEqual(
+      expect.arrayContaining(["media_asset.read", "media_asset.create"]),
+    );
+    expect(permissionsForRole("operations_manager")).toEqual(
+      expect.arrayContaining(["media_asset.read", "media_asset.create"]),
+    );
+    expect(permissionsForRole("dispatcher")).toEqual(
+      expect.arrayContaining(["media_asset.read", "media_asset.create"]),
+    );
+    expect(permissionsForRole("technical_reviewer")).toContain("media_asset.read");
+    expect(permissionsForRole("technical_reviewer")).not.toContain(
+      "media_asset.create",
+    );
+    expect(permissionsForRole("field_technician")).toEqual(
+      expect.arrayContaining(["media_asset.read_own", "media_asset.create_own"]),
+    );
+    expect(permissionsForRole("viewer")).not.toContain("media_asset.read");
   });
 
   it("limits general and security audit history to the designated roles", () => {

@@ -26,7 +26,11 @@ export type OperationalRecordMutationAction =
   | "dispatch_assignment.support_added"
   | "dispatch_assignment.technician_removed"
   | "dispatch_assignment.schedule_updated"
-  | "dispatch_assignment.acknowledged";
+  | "dispatch_assignment.acknowledged"
+  | "media_upload.initiated"
+  | "media_upload.completed"
+  | "media_upload.failed"
+  | "media_access.granted";
 
 export type OperationalRecordMutationMetadata = {
   mutationId: string;

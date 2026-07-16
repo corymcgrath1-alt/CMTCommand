@@ -338,6 +338,29 @@ caller filters.
 
 See [ADR-009](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md).
 
+## Phase 5G Private Media Storage Foundation - Confirmed
+
+Phase 5G adds the first private media-storage data model without implementing
+Field Sessions or reports:
+
+| Table | Purpose | Ownership and key integrity |
+| --- | --- | --- |
+| `media_upload_sessions` | Mutable authorized direct-upload session and idempotency record. | Organization/office/dispatch-assignment scoped; unique per actor/idempotency key and storage key. |
+| `media_assets` | Immutable original uploaded media fact. | Organization/office/dispatch-assignment scoped; one per completed session; duplicate hash/size per assignment prevented. |
+| `media_derivatives` | Separate generated preview and thumbnail objects. | Organization/office/media-asset scoped; one derivative per type. |
+
+Server-side completion reads the private object and verifies byte size, SHA-256,
+and detected media type before inserting an asset. Original media rows and
+derivative rows reject ordinary update/delete through PostgreSQL triggers.
+Public API responses omit storage buckets, keys, upload URLs after completion,
+and original filenames. Audit serializers store only bounded media facts, never
+object coordinates or media contents.
+
+The provider-neutral storage interface currently has one local/test provider
+with private object semantics. Production storage, production IAM, malware
+scanning, OCR/AI extraction, retention/purge policy, Field Sessions, reports,
+samples, Procore, and email ingestion remain unimplemented.
+
 ## Derived Data
 
 Current demo derived data:
@@ -378,8 +401,9 @@ External integrations explicitly absent in current root evidence:
 
 - Persistent organization, office, user, external identity, membership,
   office-assignment, project, service-type, technician, work-order,
-  dispatch-assignment, assignment-technician, and assignment-event schemas
-  exist. The remaining Pilot V1 records do not.
+  dispatch-assignment, assignment-technician, assignment-event, audit-event,
+  media-upload-session, media-asset, and media-derivative schemas exist. The
+  remaining Pilot V1 records do not.
 - Operational vNext still has no import, readiness, coverage, Decision Log,
   equipment, availability, certification, clearance,
   calibration, service-requirement, or readiness-snapshot tables.

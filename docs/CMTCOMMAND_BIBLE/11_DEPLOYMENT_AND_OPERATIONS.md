@@ -173,6 +173,23 @@ request handling, audit-read monitoring, and external observability/SIEM export
 need approved runbooks before production use. Test cleanup remains limited to
 the exact loopback database guard and explicitly lists `audit_events` first.
 
+## Phase 5G Media Storage Operations - Confirmed
+
+Private object storage is disabled by default. Phase 5G adds only a local/test
+provider-neutral storage adapter and guarded media API foundation. The local/test
+provider requires `OBJECT_STORAGE_MODE=local-test`, a loopback
+S3-compatible `OBJECT_STORAGE_ENDPOINT`, bucket and expected bucket both equal
+to `cmtcommand-media-test`, non-production local credentials, and explicit reset
+authorization `ALLOW_CMT_TEST_OBJECT_STORAGE_RESET`. It is rejected in
+production runtimes.
+
+Test object cleanup is independent from database cleanup and deletes only the
+authorized local-test bucket under the exact guarded root. Production object
+storage, bucket policy/IAM, malware scanning, CDN behavior, retention, legal
+hold, controlled purge, backup/restore, key rotation, and provider monitoring
+remain unresolved and must be approved before pilot media is stored outside the
+local/test boundary.
+
 ## Phase 5D Authentication Operations - Confirmed
 
 No production identity provider is selected. Operational vNext defaults to

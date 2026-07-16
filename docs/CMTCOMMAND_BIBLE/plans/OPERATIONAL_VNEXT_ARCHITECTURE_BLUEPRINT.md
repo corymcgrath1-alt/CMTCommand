@@ -33,8 +33,9 @@ The selected architecture is:
 - Managed deployment category with development, staging, and pilot-production environments.
 
 The full blueprint is target-state architecture. Phase 4 implemented the app
-shell. Phase 5 implemented only organization/office tenancy persistence and
-scoped office access helpers.
+shell. Phase 5 through Phase 5G now implement local/test foundations for
+tenancy, identity/RBAC, operational dispatch records, general audit persistence,
+and private assignment media primitives.
 
 ## Selected Stack
 
@@ -86,6 +87,7 @@ flowchart TD
 | Readiness evaluation | Deterministic status and explanations. | Database queries or auth. |
 | Coverage decisions | Candidate eligibility, proposals, approval, cascading impact. | Authentication provider integration. |
 | Decision Log and audit | Business decision history and system audit events. | Mutable current operational state. |
+| Private media storage | Provider-neutral assignment media upload/read grants, immutable originals, and derivatives. | Field Sessions, reports, OCR/AI extraction, samples, and production storage/IAM. |
 | Data quality | Import and operational data issues. | User identity. |
 | Operational impact | Pilot issue caught/time saved measurements. | Pricing, billing, exact ROI. |
 
@@ -200,6 +202,9 @@ flowchart TD
 | Coverage decision | Approved/rejected action. | Organization, office. | Internal id, proposal id. | Append-only decision. | Corrections append new record. |
 | Decision Log entry | Business operational history. | Organization, office. | Internal id, decision id. | Append-only. | Founder-visible history. |
 | Audit event | System/security history. | Organization, optional office. | Internal id, actor id, event type. | Append-only. | Safe structured fields only. |
+| Media upload session | Authorized direct-upload intent. | Organization, office, dispatch assignment. | Internal id, idempotency key. | Mutable until completed or failed. | Storage coordinates hidden from public responses. |
+| Media asset | Immutable original assignment media fact. | Organization, office, dispatch assignment. | Internal id, upload session id, hash. | Append-only original fact. | Retention/delete-under-policy remains unresolved. |
+| Media derivative | Preview or thumbnail derived from an original. | Organization, office, media asset. | Internal id, derivative type. | Append-only derived fact. | Processor/version recorded. |
 | Data-quality issue | Import or operational data problem. | Organization, office/import. | Internal id, issue code. | Append-only or resolved with status. | Retain for pilot quality reporting. |
 | Operational-impact measurement | Issue caught/time saved snapshot. | Organization, office. | Internal id, snapshot id. | Append-only measurement. | Formula unresolved. |
 
@@ -269,7 +274,7 @@ Do not log forbidden sensitive data, raw imported row payloads, credentials, tok
 | Layer | Target |
 | --- | --- |
 | Domain unit | Vitest tests for readiness rules, precedence, coverage eligibility, ranking, cascading effects, decisions, data-quality rules. |
-| Persistence/integration | Database tests for constraints, organization/office scoping, imports, transactions, audit history, decision corrections, snapshots. |
+| Persistence/integration | Database tests for constraints, organization/office scoping, imports, transactions, audit history, media storage, decision corrections, snapshots. |
 | Authorization | Permitted and denied tests for every role and capability. |
 | UI | Playwright/component tests for readiness board, action queue, coverage, approval, import preview, failure states, decision history. |
 | End-to-end | Seeded TRD-104-equivalent imported scenario using generalized records. |
