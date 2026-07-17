@@ -108,7 +108,7 @@ This is an architecture recommendation and target-state decision. It is not impl
 | File storage | Do not retain raw files by default; persist metadata, checksum, row outcomes, and normalized records; optional private object storage only after retention approval | Minimizes sensitive raw-file retention while preserving auditability. | Store every raw upload indefinitely, never store any import evidence. | Raw-file retention duration remains a product/security decision. |
 | Background jobs | Start with in-app, database-tracked import jobs for confirmed imports; no distributed queue for Pilot V1 | Reliable enough for bounded pilot imports without queue infrastructure. | Synchronous-only request processing, managed queue. | Add queue only when measured imports exceed platform/runtime limits or need durable async workers. |
 | Logging/errors | Structured application logs with request id, organization id, office id, actor id, import id, decision id where safe | Supports audit and troubleshooting without logging sensitive rows. | Console-only logs, full payload logging. | Exact provider/export target remains deployment checkpoint. |
-| Deployment | Managed Next.js-capable platform plus managed PostgreSQL | Low operational burden, HTTPS, deployment history, rollback, env secrets. | Self-managed VM, Kubernetes, split frontend/backend hosting. | Vercel plus managed Postgres is the leading provider path, but account/vendor approval remains a checkpoint. |
+| Deployment | Managed Next.js-capable platform plus managed PostgreSQL | Low operational burden, HTTPS, deployment history, rollback, env secrets. | Self-managed VM, Kubernetes, split frontend/backend hosting. | Phase 5H approves managed-provider categories but not specific vendors; Phase 5I must compare current provider evidence before selection. |
 | Health checks | Route Handlers for app liveness and database connectivity | Simple deploy and monitoring target. | External synthetic only. | Must not disclose sensitive environment details. |
 | Backup/recovery | Managed PostgreSQL automated backups plus documented restore drill before pilot production | Meets founder backup/recovery requirement. | Manual exports only. | RPO/RTO and provider-specific restore steps remain approval items. |
 
@@ -193,7 +193,9 @@ Import processing belongs to an import module, not UI components or route handle
 
 Target deployment is one primary managed Next.js application plus managed PostgreSQL. The operational app must support separate development, staging, and pilot-production environments, HTTPS, secrets, deployment history, rollback, health checks, logs, monitoring, backups, and recovery procedure.
 
-Vercel plus a managed PostgreSQL provider is the leading provider path because it matches the selected Next.js architecture and low-operations pilot requirement. Exact provider selection remains a checkpoint before real deployment configuration.
+Phase 5H approves managed-provider categories for the production-readiness
+direction but does not approve specific vendors. Exact provider selection
+remains a Phase 5I checkpoint before real deployment configuration.
 
 ## Testing Implications
 

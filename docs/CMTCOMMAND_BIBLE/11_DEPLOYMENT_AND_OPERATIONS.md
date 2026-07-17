@@ -105,9 +105,43 @@ The provider and implementation stack remain unresolved until the guarded archit
 
 ## Architecture Selection - 2026-07-13
 
-Operational vNext should target a managed Next.js-capable deployment platform plus managed PostgreSQL. Vercel plus a managed PostgreSQL provider is the leading provider path because it aligns with the selected Next.js architecture and low-operations pilot requirement, but exact provider selection remains a checkpoint before real deployment configuration.
+Operational vNext should target a managed Next.js-capable deployment platform plus managed PostgreSQL, but exact provider selection remains a checkpoint before real deployment configuration.
 
 No deployment configuration is implemented yet.
+
+Phase 5H supersedes any implied vendor preference in this earlier note:
+specific vendors are not approved. Phase 5I must evaluate the smallest viable
+shortlist with current official provider evidence before any production
+configuration is implemented.
+
+## Phase 5H Production Governance Decisions - Confirmed
+
+Founder decisions recorded on 2026-07-16 approve Option A, the simplified
+managed pilot architecture, as the production-readiness direction. The approved
+categories are managed Next.js-compatible hosting, managed PostgreSQL, managed
+private object storage, and a managed identity provider. Specific vendors are
+not approved yet; Phase 5I must compare the smallest viable shortlist using
+current official pricing, capabilities, lock-in, security posture, and
+operational burden.
+
+The approved target controls include separate preview and production
+environments, TLS, controlled promotion and rollback, health checks, restricted
+production access, encrypted database connections, restricted database
+networking, separate application and migration roles, backups, point-in-time
+recovery, production-like restore testing, blocked public storage access,
+short-lived signed storage operations, restricted CORS, lifecycle support, MFA,
+revocation, stable identity subject IDs, multi-organization membership, and
+auditable emergency recovery.
+
+The provisional pilot recovery target is database RPO of one hour or less and
+service RTO of four hours or less, subject to Phase 5I provider-cost
+confirmation. A production-like database restore and media/database
+reconciliation exercise is mandatory before customer pilot authorization.
+
+Phase 5I production-readiness implementation is authorized after these
+decisions are recorded. Production deployment, internal Field Operations alpha,
+customer Field Operations pilot, and Field Operations FR-1 coding remain
+unauthorized.
 
 ## Operational vNext Scaffold - Confirmed
 
@@ -220,10 +254,11 @@ npm run dev
 The seed command is non-production gated and separate from migrations. It creates
 deterministic Alpha/Beta fixtures for authorization acceptance testing only.
 
-Production deployment remains blocked until a managed provider is selected and
-its issuer/audience/signature/expiration/state verification, secure session
-cookie behavior, invitation path, secret rotation, and incident/revocation
-operations are documented and tested.
+Production deployment remains blocked until a managed identity provider is
+selected through Phase 5I and its issuer/audience/signature/expiration/state
+verification, secure session cookie behavior, invitation path, MFA,
+revocation, stable subject IDs, multi-organization membership, emergency
+recovery, secret rotation, and incident operations are documented and tested.
 
 See `apps/operational/README.md` for subject fixtures, controlled failure states,
 and manual authorized-request verification.
@@ -232,6 +267,7 @@ and manual authorized-request verification.
 
 - No exact selected hosting provider.
 - No exact selected database provider.
+- No exact selected object-storage provider.
 - No selected auth provider.
 - No deployment pipeline.
 - No production auth-provider environment contract beyond the fail-closed
@@ -241,6 +277,8 @@ and manual authorized-request verification.
 - No structured logging or monitoring configuration.
 - No approved audit retention/archive/legal-hold/purge runbook or production
   database-role grant model.
+- No approved monthly infrastructure budget caps for internal alpha,
+  one-office customer pilot, or five-office pilot.
 
 ## Artifact Policy
 
@@ -258,6 +296,8 @@ Do not commit generated/local artifacts unless explicitly scoped:
 
 - [OPEN QUESTION - High Impact] Which exact managed Next.js hosting provider should satisfy Pilot V1 deployment and rollback requirements?
 - [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should satisfy Pilot V1 backup and recovery requirements?
-- [OPEN QUESTION - High Impact] What database recovery time and recovery point expectations apply to the pilot?
+- [OPEN QUESTION - High Impact] Which exact managed private object-storage provider should satisfy Pilot V1 media, lifecycle, export, and monitoring requirements?
+- [OPEN QUESTION - High Impact] Which exact managed identity provider should satisfy invitation, MFA, revocation, recovery, audit, and provider-migration requirements?
+- [OPEN QUESTION - High Impact] What monthly infrastructure budget caps apply to internal alpha, one-office customer pilot, and five-office pilot?
 - [OPEN QUESTION - Medium Impact] What structured log fields are safe and necessary for import failures and readiness decisions?
 - [OPEN QUESTION - Medium Impact] What provider-level monitor, alert, and dashboard should consume the scaffold health responses?

@@ -5,7 +5,7 @@
 - Status: Active Plan
 - Product Position: Future workstream after the founder-approved Tomorrow Readiness and Coverage pilot unless a later founder decision explicitly changes scope
 - Current Path: Path B
-- Current Phase: FR-0 complete at documentation/architecture level only; P2 durable-record, bounded local/test P3 audit, and bounded local/test P4 media-storage gates complete
+- Current Phase: FR-0 complete at documentation/architecture level only; P2 durable-record, bounded local/test P3 audit, and bounded local/test P4 media-storage gates complete; Phase 5H founder decisions recorded; Phase 5I production-readiness implementation authorized; internal Field Operations alpha, customer Field Operations pilot, and FR-1 coding remain unauthorized
 - Primary Evidence:
   - [Field Operations Capture And Reporting](../13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md)
   - [Field Operations V1 Specification](../specs/FIELD_OPERATIONS_V1.md)
@@ -16,6 +16,10 @@
   - [Phase 5E Durable Operational Records Report](PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md)
   - [Phase 5F General Audit Persistence Report](PHASE_5F_GENERAL_AUDIT_PERSISTENCE_REPORT.md)
   - [Phase 5G Private Object Storage Report](PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md)
+  - [Phase 5H Production Governance And Pilot Readiness](PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md)
+  - [Production Threat Model](../security/PRODUCTION_THREAT_MODEL.md)
+  - [Data Lifecycle And Retention Draft](../policies/DATA_LIFECYCLE_AND_RETENTION_DRAFT.md)
+  - [Pilot Production Readiness Checklist](../checklists/PILOT_PRODUCTION_READINESS.md)
 - Last Reviewed: 2026-07-16
 
 ## Purpose
@@ -42,6 +46,34 @@ FR-0 is complete only in the following sense:
 FR-0 did not add runtime field-reporting behavior, Field Sessions, reports,
 samples, production providers, UI, extraction, exports, or integrations.
 
+Phase 5H records founder decisions and authorizes Phase 5I production-readiness
+implementation only. It does not authorize customer media use, customer pilot,
+internal Field Operations alpha, or FR-1 coding.
+
+Phase 5H founder decisions establish:
+
+- Field Operations is excluded from the original Tomorrow Readiness and
+  Coverage pilot.
+- Field Operations starts as internal alpha, then a separately authorized
+  customer pilot.
+- Internal alpha is required before customer field technician use.
+- The first report type is concrete placement inspection report.
+- Assigned technician owns and attests the draft.
+- A designated technical reviewer must approve finalized/exported alpha and
+  pilot reports.
+- Operations managers may monitor status and return reports for correction but
+  do not receive technical approval by role alone.
+- AI remains advisory and cannot attest, approve, sign, or submit.
+- Approved reports are immutable; amendments create new linked versions.
+- Initial export is versioned PDF plus structured JSON.
+- The customer's existing reporting platform remains the official destination
+  during the pilot.
+- Initial alpha is one internal organization, one office, named users, concrete
+  placement only, images only, 25 MB maximum per image, no GPS, no external
+  integrations, and existing reporting workflow fallback.
+- Phase 5I production-readiness implementation is authorized after these
+  decisions are recorded.
+
 ## Hard Prerequisite Gate Before FR-1
 
 The following gates must be implemented and verified in the normal Operational vNext phase order before FR-1 begins:
@@ -52,8 +84,8 @@ The following gates must be implemented and verified in the normal Operational v
 | P1 | Authenticated identity, internal users, organization memberships, office access assignments, and server-enforced RBAC. | Local foundation implemented and tested in Phase 5D; production provider selection remains before pilot use. | Migrations, policy tests, denied cases, authenticated request context, production provider verification. |
 | P2 | Durable Project, Work Order, Assignment, Service Type, and Technician records with tenant/office ownership. | **Implemented and verified for the bounded local/test gate.** Phase 5E includes durable service types, primary/support technician relationships, assignment lifecycle/events, own-assignment access, protected APIs/UI, and tenant/isolation tests. | Migrations, source-ID model, PostgreSQL relationship/transition tests, protected API and Playwright workflow evidence. |
 | P3 | General append-only audit-event persistence linked to authenticated actor and request context. | **Implemented and verified for the bounded local/test gate.** Production retention/archival, database-role grants, read auditing, and external SIEM remain release work. | Schema, service, allowed/denied action tests. |
-| P4 | Private object-storage decision and provider-neutral authorized upload/read/delete-under-policy interface. | **Partially implemented and verified for the bounded local/test gate.** Phase 5G includes upload/read grants, exact storage cleanup guards, immutable originals, derivatives, server-side verification, idempotency, duplicates, and tests. Production provider/IAM, malware scanning, retention, and delete-under-policy remain missing. | Threat model, adapter contract, size/content validation, idempotency and cross-tenant tests. |
-| P5 | Report/template, retention, technical-review, and concrete field requirements approved for the pilot organization. | Missing product decisions. | Versioned configuration and acceptance fixtures. |
+| P4 | Private object-storage decision and provider-neutral authorized upload/read/delete-under-policy interface. | **Partially implemented and verified for the bounded local/test gate.** Phase 5G includes upload/read grants, exact storage cleanup guards, immutable originals, derivatives, server-side verification, idempotency, duplicates, and tests. Phase 5H approves managed private storage category, malware-before-customer-upload policy, image-only alpha limits, and 25 MB original image limit. Production provider/IAM, scanner implementation, retention, legal hold, object lock/versioning, backup/recovery, monitoring, and delete-under-policy remain missing. | Threat model, adapter contract, size/content validation, idempotency and cross-tenant tests, production storage proof, malware policy, retention/legal hold, controlled purge. |
+| P5 | Report/template, retention, technical-review, and concrete field requirements approved for the pilot organization. | **Partially approved.** Phase 5H approves concrete placement first, technician ownership/attestation, required technical reviewer approval, operations-manager non-approval boundary, AI advisory boundary, immutable amendments, PDF plus JSON export, and existing customer platform as official destination. Detailed concrete fields, template versioning, customer/client requirements, disclaimer language, alpha acceptance fixtures, and customer/legal retention remain missing. | Versioned configuration and acceptance fixtures. |
 
 Stop if any persistent field record can be created without trusted actor, organization, office, assignment, and audit context.
 
@@ -62,14 +94,19 @@ Stop if any persistent field record can be created without trusted actor, organi
 Phase 5D implements the local P1 data and authorization foundation without
 selecting a production provider. Phase 5E completes the bounded durable-record
 P2 gate. Phase 5F completes bounded local/test P3. Phase 5G completes bounded
-local/test P4 media primitives but not production storage operations. P1 is not
-pilot-complete until the production provider is selected and verified; P4 is not
-production-complete until storage/IAM/scanning/retention operations are approved;
-P5 remains unsatisfied. The next Field Operations work still must not be full
-field-session UI until the remaining gates are explicit.
+local/test P4 media primitives but not production storage operations. Phase 5H
+records founder decisions and authorizes Phase 5I production-readiness
+implementation. P1 is not pilot-complete until the production provider is
+selected and verified; P4 is not production-complete until
+storage/IAM/scanning/retention/backup/monitoring operations are implemented and
+verified; P5 is only partially approved until detailed report templates,
+retention, and acceptance fixtures exist. The next Field Operations work still
+must not be full field-session UI until the remaining gates are approved.
 
 Do not begin with Field Session/report tables or `My Day` screens merely because
-assignment media primitives exist.
+assignment media primitives exist. Production implementation and FR-1 coding are
+not authorized by Phase 5H. Phase 5I production-readiness implementation is the
+next authorized gate.
 
 ## FR-0 - Product And Architecture Definition
 
@@ -82,7 +119,7 @@ assignment media primitives exist.
 
 ## FR-1 - Concrete Inspection Vertical Slice
 
-- Status: Not Started / Blocked by P1-P5.
+- Status: Not Started / Blocked by Phase 5I, production P1/P4 controls, and detailed P5 report-governance specification.
 - Objective: One persistent concrete-placement assignment-to-reviewed-report workflow.
 - In scope:
   - Technician `My Day`, assignment, capture, report, samples, and review surfaces.
@@ -102,7 +139,7 @@ assignment media primitives exist.
 - Required verification:
   - Unit tests for all state machines, requirement resolution, and suggestion review.
   - Database migration, constraint, tenant isolation, transaction, idempotency, versioning, and audit tests.
-  - Media tests including >2.5 MB image, disguised media, duplicate retry, original/derivative separation, and private access.
+  - Media tests including JPEG, PNG, and WebP images up to 25 MB, disguised media, duplicate retry, original/derivative separation, and private access.
   - Authorization tests for technician, dispatcher, reviewer, admin, and lab receiver.
   - No-provider manual workflow.
   - Mobile browser validation including 390px and interruption/failure states.

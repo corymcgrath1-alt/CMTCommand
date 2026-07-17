@@ -10,13 +10,20 @@
   - [Field Operations Capture And Reporting](../13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md)
   - [ADR-006 Field Evidence Is Immutable And AI Extraction Is Advisory](../decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md)
   - [Field Operations Implementation Plan](../plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md)
-- Last Reviewed: 2026-07-15
+  - [Phase 5H Production Governance And Pilot Readiness](../plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md)
+- Last Reviewed: 2026-07-16
 
 ## Product Decision And Current Status
 
-This specification defines a future concrete-placement field-reporting slice. It does not expand or replace the founder-approved 90-day Tomorrow Readiness and Coverage pilot.
+This specification defines a future concrete-placement field-reporting slice. It does not expand or replace the founder-approved 90-day Tomorrow Readiness and Coverage pilot. Phase 5H founder decisions exclude Field Operations from that original pilot, require an internal alpha before customer field technician use, and require a separately authorized customer Field Operations pilot after internal-alpha acceptance and production-readiness gates.
 
-The repository does not yet have authenticated identity, memberships/RBAC, durable assignments/work orders, audit-event persistence, or private object storage. Therefore no endpoint, database entity, UI, upload, extraction job, or report workflow described here exists yet. Target API paths are contracts for later implementation, not callable routes.
+The repository now has local/test foundations for authenticated identity/RBAC,
+durable assignments/work orders, audit-event persistence, and private
+assignment media storage. It still has no production identity provider,
+production object storage, malware scanner, retention policy, Field Session,
+report workflow, extraction job, sample workflow, or production field-reporting
+runtime. Target API paths are contracts for later implementation, not callable
+routes.
 
 ## Goal
 
@@ -28,8 +35,8 @@ Connect an authorized dispatch assignment to field capture, advisory extraction,
 
 - As a technician, I can see my authorized assignments for the day.
 - I can start the assigned field session and continue manual entry without AI or GPS.
-- I can capture normal phone photos without cropping them to a 2.5 MB limit.
-- I can add tests, notes, voice/video summaries, and sample sets.
+- I can capture JPEG, PNG, or WebP images up to 25 MB in the alpha and initial pilot without mandatory cropping.
+- I can add tests, text notes, and sample sets.
 - I can review evidence-linked suggestions as unconfirmed values.
 - I can accept, edit, or reject suggestions while preserving provenance.
 - I can see missing/conflicting information, attest, and submit to the required destination.
@@ -62,8 +69,8 @@ Connect an authorized dispatch assignment to field capture, advisory extraction,
 
 ### Evidence
 
-- FO-010: Evidence supports general photo, truck ticket, test result, observation/deficiency, text note, voice note, video summary, and sample-related categories.
-- FO-011: Configured limits support normal phone images larger than 2.5 MB.
+- FO-010: The first release supports image evidence and text notes for general photo, truck ticket, test result, observation/deficiency, and sample-related categories; audio and video are deferred.
+- FO-011: Configured limits support JPEG, PNG, and WebP originals up to 25 MB for the alpha and initial pilot.
 - FO-012: Actual content/media type is validated server-side.
 - FO-013: The original asset is private, hashed, immutable, and distinct from derivatives.
 - FO-014: Upload initiation and completion are authorized and idempotent.
@@ -88,10 +95,11 @@ Connect an authorized dispatch assignment to field capture, advisory extraction,
 - FO-032: Manual entry is always available for required values.
 - FO-033: Missing required fields, conflicts, and unreviewed required suggestions block finalization.
 - FO-034: Technician attestation is an explicit authorized action.
-- FO-035: Technical review is required when the organization/template policy says so.
+- FO-035: A designated technical reviewer must approve a concrete report before it is treated as finalized or exported during the alpha and pilot.
 - FO-036: Finalization and immutable version creation are atomic.
 - FO-037: Amendments create later immutable versions with a reason and predecessor link.
 - FO-038: Draft, reviewed, approved, exported, and externally submitted are visibly distinct.
+- FO-039: Operations managers may monitor status and return reports for correction, but do not receive technical-approval authority solely because of their operational role.
 
 ### Samples
 
@@ -109,8 +117,8 @@ Connect an authorized dispatch assignment to field capture, advisory extraction,
 
 ### Export And Integration
 
-- FO-060: The first slice exports one immutable internal structured package and evidence manifest.
-- FO-061: PDF is included only when a supported generation approach is approved.
+- FO-060: The first slice exports one immutable versioned PDF plus structured JSON package and evidence manifest.
+- FO-061: The customer's existing reporting platform remains the official destination during the pilot.
 - FO-062: Every export references an exact report version and creates an audit event.
 - FO-063: External adapters use mappings and idempotent synchronization records.
 - FO-064: External success is recorded only after provider confirmation.
@@ -143,7 +151,10 @@ Connect an authorized dispatch assignment to field capture, advisory extraction,
 | `amended` | `draft` for a new version lineage |
 | `voided` | none; replacement is a new report/version lineage |
 
-`technician_reviewed -> approved` is permitted only when policy does not require a distinct technical reviewer. Every transition requires permission evaluation and audit. Finalizing transitions create a version atomically.
+`technician_reviewed -> approved` is not permitted for the alpha or initial
+pilot because Phase 5H requires designated technical-review approval before a
+concrete report is finalized or exported. Every transition requires permission
+evaluation and audit. Finalizing transitions create a version atomically.
 
 ### Evidence Processing
 
@@ -259,7 +270,7 @@ These contracts are design targets. No route is implemented in FR-0.
 | `PATCH /api/reports/{id}/fields/{fieldKey}` | Enter/edit a draft field. | `report_draft:edit`. | Optimistic concurrency/expected revision. |
 | `POST /api/reports/{id}/transitions` | Attest, submit, return, approve, reopen, amend, void. | State-specific report capability. | Approval/version creation is atomic. |
 | `GET /api/reports/{id}/versions/{version}` | Read immutable version. | `report:view`. | Returns versioned manifest/view model. |
-| `POST /api/reports/{id}/exports` | Create internal export. | `report:export`. | References exact immutable version. |
+| `POST /api/reports/{id}/exports` | Create versioned PDF plus structured JSON export. | `report:export`. | References exact immutable version; direct external submission remains deferred. |
 | `POST /api/field-sessions/{id}/sample-sets` | Create sample set. | `sample_set:create`. | Updates status projection transactionally. |
 | `POST /api/sample-sets/{id}/events` | Append sample state event. | State-specific sample capability. | Expected current state required. |
 
@@ -326,7 +337,7 @@ AND sample disposition recorded when samples exist
 
 ## Acceptance Criteria
 
-1. A normal configured camera image larger than 2.5 MB is accepted without mandatory cropping.
+1. A JPEG, PNG, or WebP image up to 25 MB is accepted without mandatory cropping.
 2. Original evidence remains distinct from thumbnail/preview derivatives and retains a hash.
 3. Disguised or invalid media is rejected safely.
 4. Cross-organization evidence, report, sample, and assignment access is denied.
@@ -355,19 +366,22 @@ AND sample disposition recorded when samples exist
 - Computer-vision engineering acceptance or autonomous professional judgment.
 - Fully autonomous report finalization/submission.
 - Production Procore/email synchronization.
+- Direct external system submission in the first release.
 - Every inspection/report template.
 - Full LIMS, billing, payroll, CRM, and customer portal replacement.
+- Audio, video, HEIC/HEIF, and GPS/location capture in the first release.
 - Unlimited/real-time video analytics.
 - Native mobile apps and full offline-first synchronization.
 - Automatic deletion/replacement of original evidence.
 
 ## Open Decisions Before FR-1
 
-- Exact auth/session foundation and role assignments.
+- Exact production auth/session foundation and role assignments.
 - Assignment/work-order/project schema and import boundary.
-- Audit-event schema.
-- Storage provider, content inspection, upload limits, and retention policy.
-- Required concrete fields, units, ranges, and technical-review rules.
-- PDF/export approach.
+- Production audit operations, retention, and monitoring.
+- Storage provider, malware/content inspection implementation, and retention policy.
+- Required concrete fields, units, ranges, and detailed technical-review rules.
+- Temporary internal-alpha retention policy.
+- Monthly infrastructure budget caps.
 - Minimum offline behavior.
 - Evidence/location/report retention and legal-hold requirements.

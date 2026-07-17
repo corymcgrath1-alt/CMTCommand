@@ -65,6 +65,9 @@ Founder decisions dated 2026-07-13 are authoritative product-direction evidence,
 | Deployment and operations | [11_DEPLOYMENT_AND_OPERATIONS](11_DEPLOYMENT_AND_OPERATIONS.md) |
 | Decisions, roadmap, questions | [12_DECISIONS_ROADMAP_AND_OPEN_QUESTIONS](12_DECISIONS_ROADMAP_AND_OPEN_QUESTIONS.md) |
 | Future field operations capture and reporting | [13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING](13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md) |
+| Production governance threat model | [security/PRODUCTION_THREAT_MODEL](security/PRODUCTION_THREAT_MODEL.md) |
+| Data lifecycle and retention draft | [policies/DATA_LIFECYCLE_AND_RETENTION_DRAFT](policies/DATA_LIFECYCLE_AND_RETENTION_DRAFT.md) |
+| Pilot production readiness checklist | [checklists/PILOT_PRODUCTION_READINESS](checklists/PILOT_PRODUCTION_READINESS.md) |
 
 Pilot V1 additions:
 
@@ -90,6 +93,7 @@ Operational vNext architecture:
 - [Phase 5E Durable Operational Records Report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md): read for the bounded project, technician, work-order, dispatch-assignment, source-identifier, scoped-service, and authorization foundation.
 - [Phase 5F General Audit Persistence Report](plans/PHASE_5F_GENERAL_AUDIT_PERSISTENCE_REPORT.md): read for PostgreSQL-backed material-mutation audit coverage, immutability, tenant/office query scope, privacy limits, and acceptance evidence.
 - [Phase 5G Private Object Storage Report](plans/PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md): read for the local/test private media-storage foundation, upload/read APIs, storage guard, database invariants, and bounded acceptance evidence.
+- [Phase 5H Production Governance And Pilot Readiness](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md): read before selecting production providers, approving pilot production, or authorizing Field Operations FR-1.
 
 Field Operations future workstream:
 
@@ -97,6 +101,7 @@ Field Operations future workstream:
 - [Field Operations V1 Specification](specs/FIELD_OPERATIONS_V1.md): target concrete-placement requirements, states, permissions, API contracts, provider-neutral interfaces, and acceptance criteria.
 - [ADR-006 Field Evidence Is Immutable And AI Extraction Is Advisory](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md): governs original evidence, derivatives, suggestion provenance, human review, and immutable report versions.
 - [Field Operations Implementation Plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md): Path B prerequisite gates and FR-0 through FR-6 sequencing.
+- [Production Threat Model](security/PRODUCTION_THREAT_MODEL.md), [Data Lifecycle And Retention Draft](policies/DATA_LIFECYCLE_AND_RETENTION_DRAFT.md), and [Pilot Production Readiness Checklist](checklists/PILOT_PRODUCTION_READINESS.md): governance gates before production pilot or FR-1.
 
 These documents do not change the founder-approved 90-day Tomorrow Readiness and Coverage pilot. Field Operations is a future workstream and has no runtime implementation.
 
@@ -158,10 +163,13 @@ Do not treat inferred statements as product commitments. Do not treat founder ta
   membership, office-access, project, service-type, technician, work-order, and
   dispatch mutations, plus protected tenant/office-scoped history API and UI.
   Phase 5G adds a local/test private media-storage foundation for authorized
-  assignment uploads and short-lived reads. No production auth provider,
+  assignment uploads and short-lived reads. Phase 5H records founder decisions
+  for production-governance categories and authorizes Phase 5I
+  production-readiness implementation. No production auth provider,
   import/readiness/coverage workflow, invitation delivery, production storage
-  provider, Field Sessions, reports, OCR/AI extraction, samples, or production
-  field-reporting runtime exists.
+  provider, malware scanner, internal Field Operations alpha, customer Field
+  Operations pilot, Field Sessions, reports, OCR/AI extraction, samples, or
+  production field-reporting runtime exists.
 - `euchre-platform/` and `brackethub/` are unrelated to root CMTCommand scope based on `AGENTS.md`, `MIGRATION_CLEANUP_REPORT.md`, and vNext docs.
 - `node scripts\verify-root.mjs` is the root verification command found in repository evidence.
 
@@ -219,5 +227,6 @@ The founder decisions resolved the previous highest-impact questions about stati
 - [OPEN QUESTION - High Impact] Which exact managed authentication provider should replace the disabled production boundary before pilot deployment?
 - [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should be selected before pilot deployment configuration?
 - [OPEN QUESTION - High Impact] Which exact managed Next.js hosting provider should be selected before pilot deployment configuration?
+- [OPEN QUESTION - High Impact] Which exact production object-storage provider, malware-scanning strategy, retention policy, legal-hold workflow, and backup/recovery targets should govern pilot media?
+- [OPEN QUESTION - High Impact] What monthly infrastructure budget caps apply to internal alpha, one-office customer pilot, and five-office pilot?
 - [OPEN QUESTION - High Impact] Should Pilot V1 imports replace complete source snapshots or support incremental updates?
-- [OPEN QUESTION - High Impact] Should Field Operations become the next major workstream after Pilot V1, or a later controlled extension after additional pilot learning?

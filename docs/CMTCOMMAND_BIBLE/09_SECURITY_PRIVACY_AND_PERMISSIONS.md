@@ -315,6 +315,33 @@ IAM, antivirus/malware scanning, retention,
 controlled purge, Field Sessions, reports, OCR/AI extraction, and samples remain
 future policy and implementation work.
 
+## Phase 5H Field Media And Privacy Decisions - Confirmed
+
+Founder decisions recorded on 2026-07-16 set the first Field Operations media
+boundary for future alpha and pilot planning:
+
+- Customer uploads require malware scanning before authorization.
+- Internal alpha may proceed without a commercial scanner only through explicit
+  temporary risk acceptance, image-only limits, private storage, and manual
+  operator review.
+- Permitted alpha media types are JPEG, PNG, and WebP; HEIC/HEIF, audio, video,
+  SVG, HTML, archives, and executables are not first-release upload formats.
+- The alpha and initial pilot maximum original image size is 25 MB.
+- GPS and location capture are deferred; continuous or background employee
+  location monitoring is prohibited.
+- Embedded GPS must not be used automatically. Preserve only metadata required
+  for evidentiary integrity and strip unnecessary metadata from derivatives.
+- No ordinary user deletion is approved. Controlled purge requires
+  organization-admin authorization plus a designated CMTCommand production
+  operator, with durable audit history.
+- A future legal-hold state is required in the architecture. A formal legal-hold
+  workflow is not required for internal alpha unless a customer contract makes
+  it necessary.
+
+Final customer retention periods require legal and customer review. No customer
+Field Operations pilot may begin until approved retention and deletion policy is
+in place. Internal-alpha data requires a separate temporary retention policy.
+
 ## Pilot V1 Target Roles And Boundaries
 
 | Role | Allowed actions | Denied / constrained actions |
@@ -377,7 +404,7 @@ The demo must continue to use fictional or anonymized data. Pilot import validat
 - Browser/CDP security validation is not part of normal CI.
 - Production authentication, invitation delivery, audit retention/archival,
   production database-role grants, production object-storage provider/IAM,
-  media retention/purge, and provider secret operations remain target requirements. Current RBAC covers the
+  malware scanning, media retention/purge, legal-hold state, and provider secret operations remain target requirements. Current RBAC covers the
   identity/member/office surfaces and bounded Phase 5E dispatch workflow only.
 - Phase 5D proves isolation for identity and membership behavior. Phase 5E adds
   bounded organization/office/role isolation for projects, service types,
@@ -391,5 +418,7 @@ The demo must continue to use fictional or anonymized data. Pilot import validat
 - [OPEN QUESTION - High Impact] Which exact managed authentication provider should replace the disabled production boundary and implement invite-only access?
 - [OPEN QUESTION - High Impact] What approval rules define significant operational changes?
 - [OPEN QUESTION - High Impact] What retention and deletion periods apply to customer data and Decision Log entries?
+- [OPEN QUESTION - High Impact] What temporary retention policy applies to internal Field Operations alpha media and reports?
+- [OPEN QUESTION - High Impact] What exact malware-scanning provider and quarantine workflow should Phase 5I implement before customer uploads?
 - [OPEN QUESTION - Medium Impact] What logging policy safely supports troubleshooting without exposing pilot data?
 - [OPEN QUESTION - Medium Impact] Can Project Managers directly edit imported records, or only propose corrections?

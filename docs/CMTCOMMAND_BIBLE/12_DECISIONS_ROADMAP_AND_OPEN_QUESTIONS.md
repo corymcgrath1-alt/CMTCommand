@@ -24,6 +24,10 @@
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md`
   - `docs/CMTCOMMAND_BIBLE/decisions/ADR-010_PRIVATE_OBJECT_STORAGE_AND_AUTHORIZED_MEDIA_UPLOAD_FOUNDATION.md`
+  - `docs/CMTCOMMAND_BIBLE/plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md`
+  - `docs/CMTCOMMAND_BIBLE/security/PRODUCTION_THREAT_MODEL.md`
+  - `docs/CMTCOMMAND_BIBLE/policies/DATA_LIFECYCLE_AND_RETENTION_DRAFT.md`
+  - `docs/CMTCOMMAND_BIBLE/checklists/PILOT_PRODUCTION_READINESS.md`
   - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
   - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
 - Last Reviewed: 2026-07-16
@@ -55,6 +59,23 @@
 | Pilot V1 needs managed deployment, backups, rollback, health, logging, and monitoring. | Founder decision, 2026-07-13 | Architecture selection must include operations, not just framework choice. | Vendor remains unresolved. | Target |
 | Browser validation becomes blocking only after stabilization; ten clean runs is the proposed threshold. | Founder decision, 2026-07-13 | Avoids turning flaky browser checks into merge gates. | Requires reliability tracking before enforcement. | Target policy |
 
+## Founder Decisions - 2026-07-16
+
+| Decision | Evidence | Consequence | Known tradeoff | Appears current |
+| --- | --- | --- | --- | --- |
+| Field Operations is excluded from the original Tomorrow Readiness and Coverage pilot. | [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Preserves the original pilot scope. | Field Operations requires separate alpha and customer pilot authorization. | Yes |
+| Field Operations starts as internal alpha, then a separately authorized customer pilot. | [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Prevents customer field-technician use before alpha acceptance. | Adds another gate before customer learning. | Yes |
+| Concrete placement inspection report is the first Field Operations report type. | [Field Operations V1](specs/FIELD_OPERATIONS_V1.md), [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Narrows template and field-design scope. | Other report types remain deferred. | Yes |
+| Assigned technician owns and attests draft; designated technical reviewer approves finalized/exported alpha and pilot reports. | [Field Operations V1](specs/FIELD_OPERATIONS_V1.md), [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Separates field accountability from technical approval. | Detailed concrete fields and reviewer workflow remain to be specified. | Yes |
+| Operations managers may monitor and return reports, but do not technically approve by role alone. | [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Prevents accidental authority expansion. | Organizations may later assign reviewer authority explicitly. | Yes |
+| AI remains advisory and cannot attest, approve, sign, or submit. | [ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md), [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Keeps professional review mandatory. | Requires review-state UI and audit. | Yes |
+| Initial media is image-only: JPEG, PNG, WebP, 25 MB per original. | [Field Operations V1](specs/FIELD_OPERATIONS_V1.md), [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Controls media risk and processing scope. | HEIC/HEIF, audio, video, SVG/HTML/archive/executable content remain deferred or excluded. | Yes |
+| GPS/location capture is deferred; continuous employee monitoring is prohibited. | [Field Operations chapter](13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md), [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Preserves privacy boundary. | Later event-based location proposal may still be evaluated. | Yes |
+| Customer's existing reporting platform remains the official destination during pilot. | [Field Operations V1](specs/FIELD_OPERATIONS_V1.md), [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | CMTCommand prepares, reviews, versions, and exports but does not replace the system of record. | Direct external submission remains deferred. | Yes |
+| Initial export is versioned PDF plus structured JSON. | [Field Operations V1](specs/FIELD_OPERATIONS_V1.md), [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Gives a concrete export target. | PDF generation approach still needs implementation proof. | Yes |
+| Option A simplified managed pilot architecture is approved as the category. | [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Phase 5I should compare a smallest viable provider shortlist. | Specific vendors and budget caps remain unresolved. | Yes |
+| Phase 5I production-readiness implementation is authorized after Phase 5H decisions are recorded. | [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Next executable gate is provider shortlist, secrets, identity, database, storage, malware scanning, monitoring, backup/restore, and incident response. | Internal alpha, customer pilot, and FR-1 coding remain unauthorized. | Yes |
+
 ## Architecture Decisions - 2026-07-13
 
 | Decision | Evidence | Consequence | Known tradeoff | Appears current |
@@ -71,7 +92,8 @@
 | Authorization scope is derived server-side from verified identity and active membership. | [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md), [Phase 5D report](plans/PHASE_5D_IDENTITY_RBAC_REPORT.md) | Protected requests revalidate application user, membership, organization, office scope, and permissions; browser claims are untrusted. | Production auth provider remains a checkpoint; Phase 5F supplies bounded local/test audit persistence. | Yes |
 | Dispatch assignments and append-only assignment events are the durable operational handoff into future Field Operations. | [ADR-008](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md), [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md) | Phase 5E owns durable service types, primary/support relationships, lifecycle transitions, conflict policy, own-assignment access, and work-order reconciliation. | Assignment events are domain history, not the general audit platform; Field Operations remains unimplemented. | Yes |
 | Material mutations write transactional append-only general audit events. | [ADR-009](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md), [Phase 5F report](plans/PHASE_5F_GENERAL_AUDIT_PERSISTENCE_REPORT.md) | Existing Phase 5D/5E material mutations persist verified actor, taxonomy, bounded state, and request correlation atomically; scoped history is available to authorized roles. | Production retention, archival, database-role grants, read auditing, and SIEM remain unresolved. | Yes |
-| Assignment media uses private object storage and authorized upload/read grants. | [ADR-010](decisions/ADR-010_PRIVATE_OBJECT_STORAGE_AND_AUTHORIZED_MEDIA_UPLOAD_FOUNDATION.md), [Phase 5G report](plans/PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md) | Phase 5G owns local/test private storage, upload sessions, immutable original assets, derivatives, verification, duplicate detection, and media audit events. | Production storage, Field Sessions, reports, OCR/AI extraction, samples, and retention operations remain unresolved. | Yes |
+| Assignment media uses private object storage and authorized upload/read grants. | [ADR-010](decisions/ADR-010_PRIVATE_OBJECT_STORAGE_AND_AUTHORIZED_MEDIA_UPLOAD_FOUNDATION.md), [Phase 5G report](plans/PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md) | Phase 5G owns local/test private storage, upload sessions, immutable original assets, derivatives, verification, duplicate detection, and media audit events. | Production storage provider/IAM, malware scanning, backup/recovery, Field Sessions, reports, OCR/AI extraction, samples, and retention operations remain unresolved. | Yes |
+| Production governance must be approved before pilot production or FR-1. | [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md), [Production Threat Model](security/PRODUCTION_THREAT_MODEL.md), [Pilot Production Readiness Checklist](checklists/PILOT_PRODUCTION_READINESS.md) | Founder decisions are recorded and Phase 5I production-readiness implementation is authorized. | Vendors, budget caps, legal/customer retention, detailed templates, alpha authorization, customer pilot, and FR-1 coding remain unresolved. | Yes |
 
 ## Field Operations Architecture Direction - 2026-07-15
 
@@ -83,7 +105,7 @@ This is a future-workstream architecture direction, not a change to the founder-
 | Original field evidence is immutable; derivatives are separate. | [ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md) | Preserves source integrity and allows safe previews/transcodes. | Higher storage, processing, and retention complexity. | Target |
 | AI extraction is advisory and every accepted value requires human review with provenance. | [ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md) | AI cannot attest, approve, finalize, or submit professional reports. | More review-state and UI complexity. | Target |
 | Approved reports and amendments are immutable versions. | [ADR-006](decisions/ADR-006_FIELD_EVIDENCE_IMMUTABLE_AI_EXTRACTION_ADVISORY.md) | Exports and external sync can reference exactly what was approved. | Requires atomic finalization/version/audit transactions. | Target |
-| FR-1 is blocked until every P1-P5 gate is complete; Phase 5E closes only P2. | [Field Operations plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md), [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md) | Durable assignment/service-type/technician handoff exists; field-reporting tables/UI still cannot begin. | Production identity, general audit, private storage, and approved report/retention policy remain unresolved. | Yes |
+| FR-1 is blocked until every P1-P5 gate is complete; Phase 5E closes P2, Phase 5F closes bounded local/test P3, and Phase 5G closes bounded local/test P4. | [Field Operations plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md), [Phase 5E report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md), [Phase 5F report](plans/PHASE_5F_GENERAL_AUDIT_PERSISTENCE_REPORT.md), [Phase 5G report](plans/PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md), [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md) | Durable assignment/service-type/technician handoff, audit, media primitives, and founder governance decisions exist; field-reporting tables/UI still cannot begin. | Phase 5I production foundation, detailed concrete report templates, retention, risk acceptance, alpha authorization, and customer-pilot authorization remain unresolved. | Yes |
 
 ## Resolved Or Partially Resolved Phase 1 Questions
 
@@ -123,6 +145,12 @@ Founder-approved Pilot V1 direction:
   and the [Phase 5G report](plans/PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md)
   for private media storage, upload sessions, short-lived reads, and storage
   safety guards.
+- Use the [Phase 5H governance package](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md)
+  before selecting production providers, accepting malware/retention risk,
+  approving pilot production, or authorizing Field Operations FR-1.
+- Phase 5I production-readiness implementation is the next authorized gate; do
+  not begin internal Field Operations alpha, customer Field Operations pilot, or
+  FR-1 coding in Phase 5I.
 
 Repository-supported candidate slices recorded in `docs/cmtcommand-vnext/plan.md` remain historical planning evidence:
 
@@ -136,11 +164,16 @@ Do not treat old candidate slices as committed roadmap unless they align with th
 Future Field Operations direction:
 
 - Complete the remaining shared Operational vNext prerequisites first:
-  production authentication, private storage/upload authorization, and approved
-  report/retention policy. The local identity/RBAC, durable-record P2, and
-  bounded local/test general-audit P3 gates are implemented.
+  production authentication, production private storage/upload authorization,
+  malware/file-safety controls, approved data lifecycle policy, monitoring,
+  incident response, and approved report/retention policy. The local
+  identity/RBAC, durable-record P2, bounded local/test general-audit P3, and
+  bounded local/test media-storage P4 gates are implemented.
 - Treat [FR-0](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md) as documentation/architecture complete only.
-- Do not begin the concrete-inspection FR-1 vertical slice until every prerequisite gate and organization-specific report requirement is verified.
+- Do not begin the concrete-inspection FR-1 vertical slice until Phase 5I
+  production-readiness implementation, detailed report governance, retention,
+  alpha risk acceptance, alpha authorization, and required verification are
+  complete.
 - Keep FR-2 offline/media resilience, FR-3 additional templates, FR-4 email/Procore adapters, FR-5 plan-location intelligence, and FR-6 advanced analytics deferred.
 
 ## Open Questions
@@ -148,7 +181,7 @@ Future Field Operations direction:
 ### Product
 
 - [OPEN QUESTION - High Impact] What exact operational-impact and time-saved formulas should Pilot V1 use?
-- [OPEN QUESTION - High Impact] Should Field Operations become the next major workstream after Pilot V1, or a later controlled extension?
+- [RESOLVED - 2026-07-16] Field Operations starts as internal alpha and then a separately authorized customer pilot; it is excluded from the original Tomorrow Readiness and Coverage pilot.
 - [OPEN QUESTION - Medium Impact] Which current static-demo prototype surfaces should remain visible while Pilot V1 is built?
 
 ### Domain
@@ -162,16 +195,17 @@ Future Field Operations direction:
 
 ### Architecture
 
-- [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should be selected before pilot deployment configuration?
-- [OPEN QUESTION - High Impact] Which exact managed authentication provider should replace the disabled production boundary before pilot deployment?
-- [OPEN QUESTION - High Impact] Which exact managed Next.js hosting provider should be selected before pilot deployment configuration?
-- [OPEN QUESTION - High Impact] Which private object-storage and media-inspection approach should Field Operations use after identity and assignment foundations exist?
+- [OPEN QUESTION - High Impact] Which exact managed PostgreSQL provider should be selected in Phase 5I before pilot deployment configuration?
+- [OPEN QUESTION - High Impact] Which exact managed authentication provider should replace the disabled production boundary in Phase 5I before pilot deployment?
+- [OPEN QUESTION - High Impact] Which exact managed Next.js-compatible hosting provider should be selected in Phase 5I before pilot deployment configuration?
+- [OPEN QUESTION - High Impact] Which production private object-storage provider, IAM model, object-lock/versioning policy, and malware/media-inspection implementation should Phase 5I select after identity and assignment foundations exist?
 - [OPEN QUESTION - Medium Impact] When should current demo logic be extracted or shared with operational vNext, if ever?
 
 ### Data
 
 - [OPEN QUESTION - High Impact] Should initial imports replace complete snapshots or support incremental updates?
 - [OPEN QUESTION - High Impact] What retention and deletion periods apply to customer pilot data?
+- [OPEN QUESTION - High Impact] What temporary retention period applies to internal-alpha data?
 - [OPEN QUESTION - Medium Impact] Can Project Managers edit imported records directly, or only submit corrections?
 
 ### UI
@@ -184,12 +218,16 @@ Future Field Operations direction:
 - [OPEN QUESTION - High Impact] What approval threshold distinguishes ordinary coverage decisions from significant operational changes?
 - [OPEN QUESTION - High Impact] What approved retention, archival, legal-hold,
   controlled-purge, and privacy-request policy applies to general audit events?
+- [OPEN QUESTION - High Impact] What approved malware-scanning, quarantine, file-type, and media-size policy applies before customer uploads?
+- [OPEN QUESTION - Medium Impact] What explicit temporary risk-acceptance record is required before any internal alpha proceeds without a commercial malware scanner?
 - [OPEN QUESTION - Medium Impact] What safe logging policy applies to pilot data and import failures?
 - [OPEN QUESTION - Medium Impact] Should PostgreSQL RLS be enabled before pilot production as defense in depth after the app-owned authorization model exists?
 
 ### Operations
 
 - [OPEN QUESTION - High Impact] What database recovery time and recovery point expectations apply to Pilot V1?
+- [OPEN QUESTION - High Impact] What media/object-storage recovery, backup, reconciliation, and cost-monitoring expectations apply to Pilot V1?
+- [OPEN QUESTION - High Impact] What monthly infrastructure budget caps apply to internal alpha, one-office customer pilot, and five-office pilot?
 - [OPEN QUESTION - Medium Impact] What exact health-check response should represent app and database readiness?
 
 ### Testing

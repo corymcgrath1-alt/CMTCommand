@@ -16,6 +16,7 @@
   - [Field Operations Implementation Plan](plans/FIELD_OPERATIONS_IMPLEMENTATION_PLAN.md)
   - [Phase 5E Durable Operational Records Report](plans/PHASE_5E_DURABLE_OPERATIONAL_RECORDS_REPORT.md)
   - [Phase 5G Private Object Storage Report](plans/PHASE_5G_PRIVATE_OBJECT_STORAGE_REPORT.md)
+  - [Phase 5H Production Governance And Pilot Readiness](plans/PHASE_5H_PRODUCTION_GOVERNANCE_AND_PILOT_READINESS.md)
   - [ADR-008 Dispatch Assignments Are The Field Operations Handoff](decisions/ADR-008_DISPATCH_ASSIGNMENTS_ARE_THE_FIELD_OPERATIONS_HANDOFF.md)
 - Last Reviewed: 2026-07-16
 
@@ -23,7 +24,7 @@
 
 Field Operations Capture & Report Intelligence is a future CMTCommand workstream that connects a dispatch assignment to field evidence, human-reviewed reporting, sample handoff, and an exportable report package.
 
-It does not change the founder-approved 90-day, single-office Tomorrow Readiness and Coverage pilot. Until an explicit founder decision changes that scope, Field Operations is positioned as the next major workstream after the initial operational wedge and may begin only after its prerequisite identity, authorization, assignment, audit, and storage foundations are complete.
+It does not change the founder-approved 90-day, single-office Tomorrow Readiness and Coverage pilot. Phase 5H founder decisions exclude Field Operations from that original pilot. Field Operations must begin as an internal alpha and may become a separately authorized customer pilot only after internal-alpha acceptance and all production-readiness blocking gates pass.
 
 The root static application remains the trusted demo and must not be used to simulate production field-report persistence.
 
@@ -59,14 +60,20 @@ Missing foundations that block the concrete-inspection vertical slice:
 - A production identity provider and pilot-ready authentication verification.
 - A production private object-storage provider, IAM policy, malware/media
   inspection, retention, and controlled purge operations.
-- Approved report/template, retention, and technical-review requirements.
+- Detailed concrete report/template fields, customer/client rules, retention,
+  and acceptance fixtures.
 
 Phase 5E closes the durable-record P2 gate, Phase 5F closes the bounded
 local/test P3 audit gate, and Phase 5G closes the local/test private-media
-foundation. These are shared prerequisites, not Field Operations behavior.
-Production identity, production storage operations, and approved report/retention
-policy still block FR-1. No field-session, field-reporting, extraction, sample,
-or browser-local substitute is implemented.
+foundation. Phase 5H records founder decisions for internal-alpha sequencing,
+concrete placement as the first report type, technician attestation, required
+technical review, image-only 25 MB alpha media, no GPS, PDF plus JSON export,
+and the customer reporting platform as the official destination. These are
+shared prerequisites and governance decisions, not Field Operations behavior.
+Production identity, production storage operations, malware scanning,
+retention, and detailed report-template policy still block FR-1. No
+field-session, field-reporting, extraction, sample, or browser-local substitute
+is implemented.
 
 ## Product Problem
 
@@ -135,7 +142,11 @@ Rules:
 
 - Do not overwrite an original with a compressed or normalized derivative.
 - Validate actual media type rather than trusting filename extension.
-- Use configurable size limits; normal phone images larger than 2.5 MB must have a supported path.
+- Use configurable size limits; Phase 5H sets 25 MB per original image for the
+  internal alpha and initial pilot.
+- The first Field Operations release is image-only: JPEG, PNG, and WebP.
+  HEIC/HEIF, audio, video, SVG, HTML, archive, executable content, and external
+  integrations remain deferred.
 - Store media privately and provide short-lived authorized access, not permanent public URLs.
 - Use hash plus assignment context and idempotency keys for deterministic duplicate/retry behavior.
 - Retention-policy deletion is an audited lifecycle action, not silent mutation.
@@ -175,18 +186,24 @@ Amendments create later versions. They do not overwrite or delete previously app
 
 ## Concrete-Placement Initial Slice
 
-The first future vertical slice begins with an existing authorized assignment and ends with a reviewed internal report package plus dispatcher-visible sample status.
+The first future vertical slice begins with an existing authorized assignment
+and ends with a reviewed internal concrete placement report package. Phase 5H
+approves versioned PDF plus structured JSON as the initial export and keeps the
+customer's existing reporting platform as the official destination during the
+pilot.
 
 It covers:
 
 - Mobile `My Day` assignment access.
-- Field-session start and event-based optional location.
+- Field-session start without GPS or location capture in the first release.
 - General, truck-ticket, test-result, and observation photos.
-- Text note, short voice note, optional short video summary, and manual-entry fallback.
+- Text notes and manual-entry fallback.
 - Manual concrete test values.
 - Advisory truck-ticket extraction.
 - Required-field, contradiction, and low-confidence review.
-- Technician attestation and optional technical review.
+- Technician draft ownership and attestation.
+- Required designated technical-review approval before a report is treated as
+  finalized or exported during the alpha and pilot.
 - Cylinder/sample-set creation, pickup, transit, and laboratory receipt visibility.
 - Immutable report version plus structured/evidence-manifest export.
 
@@ -209,10 +226,15 @@ This workflow establishes the field-to-laboratory handoff. It does not implement
 
 - No continuous background location tracking.
 - No productivity scoring from passive location history.
-- Location capture is optional, explicit, event-based, and scoped to an assignment action.
-- Denial or unavailability never blocks report completion.
-- Store permission state, source, reported accuracy, and capture time.
-- Allow manual correction and a plain-language placement description.
+- Phase 5H defers GPS and location from the first Field Operations release.
+- Do not use embedded GPS automatically.
+- A later proposal may support optional, explicit, event-based assignment
+  location.
+- If later approved, denial or unavailability never blocks report completion.
+- If later approved, store permission state, source, reported accuracy, and
+  capture time.
+- If later approved, allow manual correction and a plain-language placement
+  description.
 - Do not present low-accuracy or inferred location as exact.
 - Future plan-location suggestions require a specific plan revision, provenance, confidence, and human confirmation.
 
@@ -299,12 +321,12 @@ Failure isolation rules:
 
 ## Open Questions
 
-- [OPEN QUESTION - High Impact] Is Field Operations the next major workstream after Pilot V1, or a later controlled extension after additional pilot learning?
-- [OPEN QUESTION - High Impact] Which authenticated roles may attest, technically approve, reopen, amend, and void reports?
+- [RESOLVED - 2026-07-16] Field Operations starts as internal alpha and then a separately authorized customer pilot; it is excluded from the original Tomorrow Readiness and Coverage pilot.
+- [PARTIALLY RESOLVED - 2026-07-16] Assigned technician attests; designated technical reviewer approves; operations manager may return for correction but does not receive technical approval by operational role alone. Reopen/amend/void details remain to be specified.
 - [OPEN QUESTION - High Impact] What evidence, report, transcript, and location retention/deletion periods apply?
 - [OPEN QUESTION - High Impact] What private object-storage and malware/media-inspection providers meet pilot requirements?
-- [OPEN QUESTION - High Impact] What maximum image, voice, and video sizes/durations are operationally and financially acceptable?
+- [PARTIALLY RESOLVED - 2026-07-16] Alpha and initial pilot image limit is 25 MB for JPEG, PNG, and WebP; audio/video and HEIC/HEIF are deferred.
 - [OPEN QUESTION - High Impact] What concrete-report fields and technical-review rules are mandatory by organization/client/jurisdiction?
 - [OPEN QUESTION - Medium Impact] What minimum offline behavior is required for the first field pilot?
-- [OPEN QUESTION - Medium Impact] Which internal PDF/export format is approved before external adapters exist?
+- [RESOLVED - 2026-07-16] Initial export is versioned PDF plus structured JSON; direct external submission remains deferred.
 - [OPEN QUESTION - Medium Impact] Which plan-document revision system is authoritative before plan-location suggestions are enabled?

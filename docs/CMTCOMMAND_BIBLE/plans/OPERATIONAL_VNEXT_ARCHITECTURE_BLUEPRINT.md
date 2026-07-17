@@ -235,7 +235,11 @@ No environment variables or config files are created in this phase.
 
 ## Deployment Model
 
-Target a managed Next.js-capable host with deployment history, HTTPS, protected secrets, structured logs, rollback, and monitoring. Target managed PostgreSQL with automated backups and restore procedure. Vercel plus managed PostgreSQL is the leading provider path, but provider selection still requires account/security/vendor approval.
+Target a managed Next.js-capable host with deployment history, HTTPS,
+protected secrets, structured logs, rollback, and monitoring. Target managed
+PostgreSQL with automated backups and restore procedure. Phase 5H approves the
+managed-provider categories but not specific vendors; provider selection still
+requires Phase 5I evidence and founder approval.
 
 ## Backup And Recovery Model
 
