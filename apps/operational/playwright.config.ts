@@ -1,0 +1,51 @@
+import { defineConfig, devices } from "@playwright/test";
+
+export default defineConfig({
+  testDir: "./tests/e2e",
+  globalSetup: "./tests/e2e/global-setup.ts",
+  fullyParallel: false,
+  workers: 1,
+  timeout: 30_000,
+  expect: {
+    timeout: 5_000,
+  },
+  retries: process.env.CI ? 2 : 0,
+  reporter: process.env.CI ? "github" : "list",
+  use: {
+    baseURL: "http://127.0.0.1:3100",
+    trace: "retain-on-failure",
+  },
+  webServer: {
+    command:
+      "node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port 3100",
+    url: "http://127.0.0.1:3100/api/health",
+    reuseExistingServer: false,
+    timeout: 120_000,
+    env: {
+      APP_ENV: "test",
+      DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
+      TEST_DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
+      AUTH_MODE: "development",
+      AUTH_SESSION_SECRET: "playwright-only-session-secret-32-characters",
+      AUTH_DEVELOPMENT_SUBJECTS:
+        "alpha-admin,alpha-operations,alpha-dispatcher,alpha-reviewer,alpha-technician,alpha-viewer,beta-admin,beta-dispatcher",
+      OBJECT_STORAGE_MODE: "local-test",
+      OBJECT_STORAGE_ENDPOINT:
+        process.env.OBJECT_STORAGE_ENDPOINT ?? "http://127.0.0.1:59000",
+      OBJECT_STORAGE_BUCKET: "cmtcommand-media-test",
+      OBJECT_STORAGE_EXPECTED_BUCKET: "cmtcommand-media-test",
+      OBJECT_STORAGE_ACCESS_KEY_ID:
+        process.env.OBJECT_STORAGE_ACCESS_KEY_ID ?? "",
+      OBJECT_STORAGE_SECRET_ACCESS_KEY:
+        process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY ?? "",
+      OBJECT_STORAGE_REGION: process.env.OBJECT_STORAGE_REGION ?? "us-east-1",
+      OBJECT_STORAGE_RESET_AUTHORIZATION: "ALLOW_CMT_TEST_OBJECT_STORAGE_RESET",
+    },
+  },
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+    },
+  ],
+});

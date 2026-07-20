@@ -86,6 +86,11 @@ CSV previews are capped at 200,000 characters. Template/export values that could
 - `scripts/verify-root.mjs`: dependency-free root syntax/test runner used locally and in CI.
 - `.github/workflows/root-static-checks.yml`: focused CI for root static-app checks.
 
+## Contributor and Agent Documentation
+
+- [AGENTS.md](AGENTS.md): concise operating guide for future Codex sessions and contributors.
+- [docs/CMTCOMMAND_BIBLE/00_INDEX.md](docs/CMTCOMMAND_BIBLE/00_INDEX.md): durable repository Bible for architecture, domain, UI, testing, security, operations, feature status, and open questions.
+
 ## Verification Commands
 
 Run the commands that apply:

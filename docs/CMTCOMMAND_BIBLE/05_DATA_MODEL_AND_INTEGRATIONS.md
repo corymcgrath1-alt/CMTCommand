@@ -1,0 +1,422 @@
+# Data Model And Integrations
+
+## Document Status
+
+- Status: Partially Verified
+- Primary Evidence:
+  - `app.js`
+  - `pilotIntakeSafety.js`
+  - `operationalCompression.js`
+  - `operationalImpact.js`
+  - `demoControlCenter.js`
+  - `tests/pilotIntakeSafety.test.js`
+  - `tests/operationalImpact.test.js`
+  - `apps/operational/drizzle.config.ts`
+  - `apps/operational/src/server/db/`
+  - `apps/operational/src/server/tenancy/`
+  - `apps/operational/drizzle/0000_open_giant_girl.sql`
+  - `apps/operational/drizzle/0001_office-composite-key.sql`
+  - `apps/operational/drizzle/0002_identity-membership-rbac.sql`
+  - `apps/operational/drizzle/0003_vengeful_vapor.sql`
+  - `apps/operational/drizzle/0004_right_reavers.sql`
+  - `apps/operational/src/server/db/schema/users.ts`
+  - `apps/operational/src/server/db/schema/external-identities.ts`
+  - `apps/operational/src/server/db/schema/organization-memberships.ts`
+  - `apps/operational/src/server/db/schema/office-assignments.ts`
+  - `apps/operational/src/server/db/schema/projects.ts`
+  - `apps/operational/src/server/db/schema/technicians.ts`
+  - `apps/operational/src/server/db/schema/work-orders.ts`
+  - `apps/operational/src/server/db/schema/dispatch-assignments.ts`
+  - `apps/operational/src/server/operational-records/`
+  - `apps/operational/tests/integration/tenancy.integration.test.ts`
+  - `apps/operational/tests/integration/operational-records.integration.test.ts`
+  - `README.md`
+  - `docs/cmtcommand-vnext/plan.md`
+  - Founder decision recorded in the Phase 2 Founder Truth Capture task, 2026-07-13
+  - Founder decision recorded in the Phase 3 Guarded Operational Architecture Selection task, 2026-07-13
+- Last Reviewed: 2026-07-16
+
+## Current Demo - Confirmed
+
+No root database schemas, migrations, ORM models, seed files, or backend data services were found. Current data is JavaScript demo data and browser-local/session state.
+
+Core in-memory/demo entities in `app.js` include:
+
+- Technicians.
+- Work orders/readiness jobs.
+- Equipment.
+- Projects and preview records.
+- Coverage candidates.
+- Decision Log entries.
+- Pilot requests.
+- Pilot scorecard state.
+- Pilot Setup import previews and document metadata.
+
+## Current Import Entities
+
+`app.js` defines `intakeEntityConfig` for:
+
+- `technicians`
+- `certifications`
+- `equipment`
+- `workorders`
+- `partners`
+- `projects`
+
+Each import entity has required columns and demo rows. `pilotIntakeSafety.validateImport` evaluates required columns, row warnings, duplicate warnings, parse errors, and blocked state.
+
+## Current Identifiers And State
+
+Confirmed identifiers include work order IDs such as `TRD-104`, technician IDs, equipment IDs, project names/numbers, and generated local decision IDs.
+
+Confirmed localStorage keys:
+
+- `cmtcommand-ui-mode`
+- `cmtcommand-theme`
+- `cmtcommand-demo-walkthrough`
+- `cmtcommand-demo-control-checklist`
+
+## Current Data Lifecycle
+
+- Static demo data is created in `app.js` at page load.
+- Pilot Setup CSV input is read locally through `FileReader`.
+- Valid/acceptable imports can be applied to browser session state but do not overwrite the sample source arrays.
+- Staged document metadata is browser session state.
+- Demo reset clears known demo state keys only.
+- CSV export uses generated `blob:` URLs and formula-safe CSV serialization.
+
+## Founder Decision - 2026-07-13
+
+During Pilot V1, the customer's existing scheduling, work-order, personnel, certification, and equipment systems remain authoritative for underlying operational records.
+
+Potential source systems may include customer spreadsheets, scheduling exports, MetaField, QEST, LASTRADA, OpenGround, BoreDM, or AASHTOWare Project C&M. These products are not confirmed current integrations unless repository evidence is later added.
+
+Pilot V1 should use controlled CSV/XLSX imports rather than deep real-time integrations.
+
+CMTCommand becomes authoritative only for:
+
+- Generated readiness snapshots.
+- Detected readiness issues.
+- Coverage recommendations.
+- Approved coverage decisions.
+- Decision history.
+- Recorded pilot-impact measurements.
+
+CMTCommand must not silently write changes back to external source systems in Pilot V1.
+
+## Pilot V1 Target Data Domains
+
+Required input domains:
+
+- Technician roster.
+- Technician availability.
+- Certifications and expiration dates.
+- Security-clearance requirements and statuses.
+- Equipment inventory.
+- Equipment availability.
+- Calibration status and expiration dates.
+- Service-type requirements.
+- Upcoming work orders.
+- Relevant projects and job sites.
+- Assignment data.
+
+Required CMTCommand-owned records:
+
+- Import batches and validation results.
+- Readiness snapshots.
+- Rule-evaluation results.
+- Critical action queue items.
+- Coverage candidates and recommendations.
+- Approved coverage decisions.
+- Cascading-impact records.
+- Decision Log entries and corrections.
+- Data-quality reports.
+- Pilot operational-impact snapshots.
+
+## Relationships And Integrity - Pilot V1 Target
+
+The operational model must relate:
+
+- Organizations to offices, users, imports, and decisions.
+- Offices to technicians, equipment, work orders, users, and readiness snapshots.
+- Work orders to projects, job sites, service requirements, assigned technicians, required equipment, readiness issues, and decisions.
+- Technicians to availability, certifications, clearances, assignments, and coverage eligibility.
+- Equipment to availability, calibration records, assignments, and service requirements.
+- Decisions to actor, organization, office, previous and proposed state, affected work orders, approvals, corrections, and timestamps.
+
+Do not claim database-level enforcement until schemas and constraints exist.
+
+## Architecture Selection - 2026-07-13
+
+Operational vNext should use PostgreSQL or a PostgreSQL-compatible managed relational database with Drizzle ORM and Drizzle Kit migrations. Database rows are persistence models, not the complete domain model.
+
+The conceptual data model in [Operational vNext Architecture Blueprint](plans/OPERATIONAL_VNEXT_ARCHITECTURE_BLUEPRINT.md) identifies the required entities, ownership boundaries, identifiers, mutable versus append-only behavior, source-system identifiers, audit requirements, and retention implications.
+
+Internal primary keys should be stable internal identifiers. Customer source-system identifiers and human-readable operational numbers such as `TRD-104` should be stored separately and must not be the sole database primary key.
+
+## Phase 4 Scaffold - Confirmed
+
+`apps/operational/` configures Drizzle Kit and a lazy Drizzle/PostgreSQL client
+using `pg`. Phase 4 intentionally defined no Pilot V1 domain tables.
+
+## Phase 5 Tenancy Foundation - Confirmed
+
+Phase 5 creates the first operational data model:
+
+| Table | Purpose | Identifier | Ownership |
+| --- | --- | --- | --- |
+| `organizations` | Customer firm or isolated tenant boundary. | Internal UUID generated by PostgreSQL. | Global tenant boundary. |
+| `offices` | Operational office or branch. | Internal UUID generated by PostgreSQL. | Belongs to exactly one organization through `organization_id`. |
+
+Implemented constraints:
+
+- `organizations.id` primary key.
+- `organizations.slug` globally unique.
+- `organizations.status` constrained by the `organization_status` enum:
+  `active`, `inactive`.
+- Organization slug format check for normalized lowercase slugs.
+- `offices.id` primary key.
+- `offices.organization_id` required foreign key to `organizations.id`.
+- `offices.status` constrained by the `office_status` enum: `active`,
+  `inactive`.
+- `offices.code` unique within an organization through
+  `offices_organization_code_unique`.
+- Office code format check for normalized uppercase codes.
+- Required nonblank names and time zones.
+
+Foreign-key behavior:
+
+- `offices_organization_id_fk` uses `ON DELETE restrict` and
+  `ON UPDATE cascade`.
+- Deleting an organization that still owns offices is blocked; offices are not
+  silently cascade-deleted.
+
+Application validation:
+
+- Organization slugs are normalized in
+  `apps/operational/src/server/tenancy/validation.ts`.
+- Office codes are normalized in
+  `apps/operational/src/server/tenancy/validation.ts`.
+- Office time zones are validated with runtime `Intl` support rather than a
+  hand-written time-zone list.
+- Tenant access scopes are validated in
+  `apps/operational/src/server/tenancy/scope.ts`.
+
+Persistence:
+
+- Setup-level functions can create and find organizations.
+- Setup-level functions can create offices inside a specified organization.
+- Office reads require an explicit organization-wide or office-limited access
+  scope.
+- Inaccessible cross-organization offices are returned as
+  `not_found_or_inaccessible`, the same public result as nonexistent offices.
+
+No authentication, memberships, RBAC, users, imports, readiness snapshots,
+Decision Log entries, audit events, or customer pilot records are implemented in
+this phase.
+
+## Phase 5D Identity And Authorization Model - Confirmed
+
+Phase 5D adds four persistence models without changing the source-of-truth policy
+for operational customer records:
+
+| Table | Purpose | Lifecycle or key rule | Ownership |
+| --- | --- | --- | --- |
+| `users` | Provider-independent application identity. | `active`, `invited`, `suspended`, `disabled`; normalized email unique but not the immutable identity key. | Global application record. |
+| `external_identities` | Verified provider identity mapping. | `(provider, provider_subject)` unique. | Belongs to one user. |
+| `organization_memberships` | User role and access relationship to one organization. | `invited`, `active`, `suspended`, `revoked`; `(organization_id, user_id)` unique; optimistic `version`. | Belongs to one organization and user. |
+| `office_assignments` | Explicit office access for restricted memberships. | Membership/office pair unique. | Belongs to the same organization as both membership and office. |
+
+Membership roles are `organization_admin`, `operations_manager`, `dispatcher`,
+`technical_reviewer`, `field_technician`, and `viewer`. Office policy is `all`
+or `restricted`; the server additionally validates that the role may use `all`.
+
+Database integrity includes:
+
+- Explicit `RESTRICT`/`CASCADE UPDATE` foreign keys.
+- Composite `(id, organization_id)` unique keys on offices and memberships.
+- Composite office-assignment foreign keys that make cross-organization
+  assignment impossible even if application validation fails.
+- Indexes for user email, provider identity ownership, user/status membership
+  lookup, organization member lists, membership assignments, and
+  organization/office assignment lookup.
+- Created/updated actor fields on memberships and created actor on assignments.
+
+The application does not store passwords, provider tokens, SSNs, dates of birth,
+home addresses, banking, medical, immigration, or unnecessary provider-profile
+fields.
+
+Invitation delivery is not implemented. Preparing a membership creates or reuses
+an application user and creates an `invited` membership; it does not create a
+token or claim that email was sent.
+
+Development fixture data is created only by
+`npm run seed:identity:dev`; it is not present in the production migration.
+See [ADR-007](decisions/ADR-007_SERVER_DERIVED_AUTHORIZATION_SCOPE.md).
+
+## Phase 5E Operational Dispatch Records - Confirmed
+
+Phase 5E provides current state plus durable relationship/event history without
+changing the rule that customer source systems remain authoritative for their
+underlying source records:
+
+| Table | Purpose | Ownership and key integrity |
+| --- | --- | --- |
+| `projects` | Project context required by scheduled work. | Required organization/office; normalized source identity; optimistic version. |
+| `service_types` | Small durable catalog for work-order service identity. | Organization-owned key unique per organization; optional same-organization default office; status/version and actor fields. |
+| `technicians` | Minimal business-operational dispatch roster. | Required organization/home office; optional same-organization membership link; status/version. |
+| `technician_office_eligibilities` | Current offices where a technician may be dispatched. | Composite organization/technician/office constraints; unique current relationship. |
+| `work_orders` | Scheduled project work with a durable service type and historical name snapshot. | Required same-organization/office project and service type; lifecycle/status/version. |
+| `dispatch_assignments` | Scheduled handoff for one work order. | Required same-organization/office work order; lifecycle/status/version/timezone and actor fields. |
+| `assignment_technicians` | Primary/support technician relationships, including ended history. | Composite organization/office assignment and technician constraints; partial unique indexes prevent duplicate active relationships and more than one active primary. |
+| `assignment_events` | Append-only domain history for assignment and technician changes. | Composite tenant/office/assignment/technician/actor constraints; update/delete rejected by trigger. |
+
+Source uniqueness is `(organization_id, source_system, source-specific id)`, so
+the same source identifier may exist in different organizations. Source IDs and
+human-readable numbers are not primary keys.
+
+Database integrity includes:
+
+- Composite office/organization foreign keys for every Phase 5E record.
+- A composite work-order/project foreign key requiring the same organization
+  and office.
+- Composite dispatch-assignment and relationship foreign keys requiring work
+  order, eligible technician, office, membership, and history references to stay
+  within their organization/office boundary.
+- Durable service-type ownership and work-order/service-type agreement.
+- A partial unique active-primary index and active relationship de-duplication.
+- Append-only update/delete protection for assignment events.
+- Restrictive deletes and cascading key updates for owned relationships.
+- Required nonblank normalized source identifiers and required display fields.
+- Database checks requiring work-order and assignment end times after start,
+  valid terminal relationship timestamps, and nonblank override/cancellation
+  reasons where required by services.
+- Organization/office, schedule, project, technician, active-state, and display
+  lookup indexes.
+
+`apps/operational/src/server/operational-records/` validates catalog/current
+record creates and optimistic updates. `apps/operational/src/server/dispatch/`
+owns lifecycle transitions, half-open interval overlap checks, assignment
+technician changes, own acknowledgment, and work-order reconciliation.
+Organization scope is derived from authenticated context rather than accepted
+from input. Inaccessible and nonexistent resources share a public result.
+Mutations serialize on the organization and revalidate the actor, membership,
+role permission, and office access inside the transaction.
+
+Assignment events persist operational history and actor attribution, but they
+are not the general audit-event implementation. Phase 5E has no import path,
+hard-delete operation, readiness, coverage, Decision Log, field session,
+evidence, report, sample, or integration record.
+
+## Phase 5F General Audit Persistence - Confirmed
+
+`audit_events` is an organization-owned append-only accountability table. It
+stores a nullable same-organization office, verified actor user and optional
+composite actor membership, historical actor role, typed category/action/outcome,
+primary and optional secondary target, server-generated request/correlation/
+transaction identifiers, bounded reason/state/metadata, and server timestamp.
+
+PostgreSQL integrity includes:
+
+- composite office/organization and actor membership/organization/user foreign
+  keys;
+- paired secondary target columns and bounded nonblank reason checks;
+- JSON object-shape limits of 4,096 bytes for previous/resulting state and 8,192
+  bytes for metadata;
+- indexes for organization/time, office, actor, target, taxonomy, request, and
+  correlation lookups; and
+- one trigger that rejects both ordinary update and delete with SQLSTATE 55000.
+
+The server writer revalidates the current active actor in the source mutation
+transaction and derives category from the typed action. Explicit serializers
+persist status, version, schedule, relationship, and identifier facts only.
+They exclude full rows, contact details, credentials, documents, transcripts,
+media, and report contents. Query input defaults to 30 days and 25 rows, limits
+date ranges to 90 days and pages to 100 rows, uses `(occurred_at, id)` stable
+pagination, and always applies server organization and office scope before
+caller filters.
+
+See [ADR-009](decisions/ADR-009_MATERIAL_MUTATIONS_WRITE_TRANSACTIONAL_APPEND_ONLY_AUDIT_EVENTS.md).
+
+## Phase 5G Private Media Storage Foundation - Confirmed
+
+Phase 5G adds the first private media-storage data model without implementing
+Field Sessions or reports:
+
+| Table | Purpose | Ownership and key integrity |
+| --- | --- | --- |
+| `media_upload_sessions` | Mutable authorized direct-upload session and idempotency record. | Organization/office/dispatch-assignment scoped; unique per actor/idempotency key and storage key. |
+| `media_assets` | Immutable original uploaded media fact. | Organization/office/dispatch-assignment scoped; one per completed session; duplicate hash/size per assignment prevented. |
+| `media_derivatives` | Separate generated preview and thumbnail objects. | Organization/office/media-asset scoped; one derivative per type. |
+
+Server-side completion reads the private object and verifies byte size, SHA-256,
+and detected media type before inserting an asset. Original media rows and
+derivative rows reject ordinary update/delete through PostgreSQL triggers.
+Public API responses omit storage buckets, keys, upload URLs after completion,
+and original filenames. Audit serializers store only bounded media facts, never
+object coordinates or media contents.
+
+The provider-neutral storage interface currently has one local/test provider
+with private object semantics. Production storage, production IAM, malware
+scanning, OCR/AI extraction, retention/purge policy, Field Sessions, reports,
+samples, Procore, and email ingestion remain unimplemented.
+
+## Derived Data
+
+Current demo derived data:
+
+- Readiness summaries and copy packets are derived by `operationalCompression.js`.
+- Operational impact, data quality, issue counts, bottlenecks, and review-time estimates are derived by `operationalImpact.js`.
+- Demo QA report data is derived by `demoControlCenter.js`.
+
+Pilot V1 target derived data:
+
+- Readiness statuses and explanations.
+- Cascading impact after proposed coverage.
+- Data-quality findings from imported records.
+- Operational-impact measurements.
+
+## Integrations
+
+Implemented product integrations: none found.
+
+Local browser capabilities:
+
+- `FileReader`
+- `localStorage`
+- `navigator.clipboard`
+- generated `blob:` download URLs
+
+External integrations explicitly absent in current root evidence:
+
+- CRM/email sending.
+- Scheduling import beyond local CSV preview.
+- LIMS/ERP.
+- Authentication.
+- Analytics/monitoring SDK.
+- External AI/OCR.
+- Database persistence.
+
+## Implementation Gaps
+
+- Persistent organization, office, user, external identity, membership,
+  office-assignment, project, service-type, technician, work-order,
+  dispatch-assignment, assignment-technician, assignment-event, audit-event,
+  media-upload-session, media-asset, and media-derivative schemas exist. The
+  remaining Pilot V1 records do not.
+- Operational vNext still has no import, readiness, coverage, Decision Log,
+  equipment, availability, certification, clearance,
+  calibration, service-requirement, or readiness-snapshot tables.
+- Phase 5E pages and APIs expose only bounded operational dispatch workflows;
+  they do not expose deferred readiness, coverage, or Field Operations behavior.
+- No XLSX import implementation was found in the current static demo.
+- No import history or durable readiness snapshot exists.
+- No writeback protections exist because no external writeback integration exists.
+
+## Open Questions
+
+- [OPEN QUESTION - High Impact] Should initial imports replace complete source snapshots or support incremental updates?
+- [OPEN QUESTION - High Impact] What exact database schema should implement the conceptual readiness, snapshot, and recalculation model?
+- [OPEN QUESTION - High Impact] What retention and deletion periods apply to customer Pilot V1 data?
+- [OPEN QUESTION - Medium Impact] Can Project Managers edit imported records directly, or only submit corrections?
+- [OPEN QUESTION - Medium Impact] Should partner-firm personnel be represented as eligible coverage resources?
