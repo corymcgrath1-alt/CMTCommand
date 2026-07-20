@@ -378,7 +378,31 @@ Pilot V1 target derived data:
 
 ## Integrations
 
-Implemented product integrations: none found.
+Implemented live product integrations: none found.
+
+Locally verified contract foundation:
+
+- `contracts/cmtcommand-integration/v1/` defines the shared v1 event envelope,
+  event payload schemas, OpenAPI contract, happy-path fixture, negative
+  fixtures, and simulator for dispatch, offline field capture, concrete
+  specimen custody, lab break results, review, approval, amendments, and
+  operational notifications.
+- `apps/operational/src/server/integration/cmt-events.ts` is the Operational
+  vNext TypeScript/Zod adapter over the canonical JSON envelope schema.
+- The canonical isolation identifiers are `organizationId` and `officeId`.
+  Deprecated `tenantId` and `branchId` inputs are rejected by the operational
+  adapter and simulator.
+- A `testSetId` identifies the concrete sample/test set. Each physical
+  cylinder has one unique `specimenId` and one unique label. `SpecimenCreated`
+  represents exactly one physical specimen and intentionally has no
+  `specimenCount`.
+- Destructive compression tests consume the specimen: one planned break
+  assignment and one original `BreakResultRecorded` maximum are allowed per
+  specimen. Age-group averages are derived only from explicitly referenced
+  individual result-event IDs.
+
+This contract foundation is not production synchronization, production storage,
+or a deployed integration service.
 
 Local browser capabilities:
 
