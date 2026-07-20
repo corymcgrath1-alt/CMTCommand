@@ -1,4 +1,5 @@
 export * from "./bots";
+export * from "./bidding-timeline";
 export * from "./cards";
 export * from "./deck";
 export * from "./engine";
@@ -8,4 +9,5 @@ export * from "./models";
 export * from "./rule-summary";
 export * from "./rules";
 export * from "./table-view";
+export * from "./trick-animation";
 export * from "./types";

@@ -145,16 +145,13 @@ function startHand(state: GameState, dealer: PlayerIndex, seed: number, handNumb
   const dealt = dealHands(seed);
   const sortedHands = sortHands(dealt.hands);
   const upcard = dealt.kitty[0];
-  const farmersHandPlayer = state.config.farmersHandMode === "off"
-    ? undefined
-    : nextQualifyingFarmersHandPlayer(sortedHands, nextPlayer(dealer), []);
 
   return {
     ...state,
-    phase: farmersHandPlayer === undefined ? "ordering" : "farmersHand",
+    phase: "ordering",
     handNumber,
     dealer,
-    activePlayer: farmersHandPlayer ?? nextPlayer(dealer),
+    activePlayer: nextPlayer(dealer),
     hands: sortedHands,
     kitty: dealt.kitty,
     upcard,
@@ -174,7 +171,7 @@ function startHand(state: GameState, dealer: PlayerIndex, seed: number, handNumb
 
 function declineFarmersHand(state: GameState, player: PlayerIndex): GameState {
   assertActivePlayer(state, player);
-  assertPhase(state, "farmersHand");
+  assertFarmersHandPhase(state);
   if (!isFarmersHandQualifier(state.hands[player])) {
     throw new InvalidGameActionError("Player does not qualify for farmer's hand");
   }
@@ -202,7 +199,7 @@ function declineFarmersHand(state: GameState, player: PlayerIndex): GameState {
 
 function redealFarmersHand(state: GameState, player: PlayerIndex, seed: number): GameState {
   assertActivePlayer(state, player);
-  assertPhase(state, "farmersHand");
+  assertFarmersHandPhase(state);
   if (state.config.farmersHandMode !== "redeal") {
     throw new InvalidGameActionError("Farmer's hand redeal is not enabled");
   }
@@ -215,7 +212,7 @@ function redealFarmersHand(state: GameState, player: PlayerIndex, seed: number):
 
 function replaceFarmersHandCards(state: GameState, player: PlayerIndex, cards: Card[]): GameState {
   assertActivePlayer(state, player);
-  assertPhase(state, "farmersHand");
+  assertFarmersHandPhase(state);
   if (state.config.farmersHandMode !== "replaceThree") {
     throw new InvalidGameActionError("Farmer's hand replacement is not enabled");
   }
@@ -514,6 +511,12 @@ function assertActivePlayer(state: GameState, player: PlayerIndex): void {
 function assertPhase(state: GameState, phase: GameState["phase"]): void {
   if (state.phase !== phase) {
     throw new Error(`Expected phase ${phase}; got ${state.phase}`);
+  }
+}
+
+function assertFarmersHandPhase(state: GameState): void {
+  if (state.phase !== "farmersHand" && state.phase !== "ordering" && state.phase !== "calling") {
+    throw new Error(`Expected Farmer's Hand check during bidding; got ${state.phase}`);
   }
 }
 

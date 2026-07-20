@@ -51,10 +51,12 @@ score `10`, Standard bots, Default dealer, Farmer's Hand off, and `aloneOnly` lo
 Farmer's Hand v1 supports three modes:
 
 - `off`: current standard bidding flow; no Farmer's Hand phase.
-- `redeal`: after the deal and before bidding, a qualifying player may claim Farmer's
-  Hand and redeal the same hand number with the same dealer using a persisted seed.
-- `replaceThree`: a qualifying player may exchange one to three qualifying low cards
-  with the non-upcard kitty cards. The exchange is stored as an immutable move event.
+- `redeal`: when a qualifying player reaches their normal bidding decision, they may
+  claim Farmer's Hand and redeal the same hand number with the same dealer using a
+  persisted seed.
+- `replaceThree`: when a qualifying player reaches their normal bidding decision, they
+  may exchange one to three qualifying low cards with the non-upcard kitty cards. The
+  exchange is stored as an immutable move event.
 
 The conservative v1 Farmer's Hand qualifier is: the hand contains only 9s and 10s. In
 this 24-card deck that is equivalent to "no ace, king, queen, or jack." Regional variants
@@ -109,7 +111,7 @@ helpers are display-only: they read existing game state, move events, normalized
 and review data, and they do not change rules, scoring, persistence, bot strategy, replay
 reconstruction, or profile aggregation.
 
-The table explains the current phase, including Farmer's Hand checks, ordering up,
+The table explains the current phase, including Farmer's Hand availability during bidding, ordering up,
 round-two trump calls, dealer discard, trick play, hand completion, and game completion.
 Human turns include short action explanations such as dealer/upcard context during
 bidding, follow-suit or void-in-suit messaging during card play, and eligible-card counts
@@ -124,8 +126,55 @@ available through profile history and review.
 Recent bot activity is derived from the move log and shown compactly, for example passes,
 trump calls, discards, card plays, and Farmer's Hand actions.
 
-Deferred UX polish includes animations, sound/haptics, tutorial mode, card-by-card replay
-animation, an accessibility pass, and a mobile layout pass.
+Deferred UX polish includes sound/haptics, tutorial mode, card-by-card replay animation,
+an accessibility pass, and a mobile layout pass.
+
+## Gameplay Clarity v1
+
+The table now has dedicated presentation helpers for trick animation, trump-call clarity,
+and physical Euchre scoring. The trick panel maps each seat to a fixed landing slot
+around the center: South bottom, West left, North top, and East right. Played cards settle
+into those slots, completed tricks highlight the winning card/seat, and the displayed
+trick stack combines and travels toward the winner while the next leader label remains
+visible. Motion is implemented with CSS transitions/keyframes and respects
+`prefers-reduced-motion`.
+
+The Trump Call Strip is derived from the bidding events and current hand state. It shows
+dealer, upcard, current round, each seat's latest decision, order-up/assist/pickup/turn
+down/call language, alone status, final trump, and a compact hand log. This keeps
+round-one dealer pickup language distinct from round-two trump calls and avoids claiming
+that a non-dealer "turned down" the upcard.
+
+Scorekeeping uses the physical two-5s method. The North/South team uses the red 5s
+(`5H` and `5D`), and East/West uses the black 5s (`5S` and `5C`). Scores 1-4 reveal pips
+on the first 5 under the companion card, 5 shows the full base 5, 6-9 show 5 plus exposed
+pips from the second 5, and 10 shows both 5s complete. A small numeric label remains for
+quick scanning and accessibility, but the card-pip display is the primary score mechanic.
+
+## Headless Simulator v1
+
+The simulator runs bot-vs-bot games directly against the deterministic engine and bot
+policy without using React UI or normal persistence. Reports are written to
+`simulations/` as JSON and CSV.
+
+Example commands:
+
+```powershell
+npm run simulate -- --games 1000 --seed 12345
+npm run simulate -- --games 10000 --seed 12345 --stick-dealer true --target-score 10
+npm run simulate -- --games 5000 --seed 42 --bot-difficulty strong --verbose
+```
+
+The JSON report includes the config needed to reproduce the run, game-level records,
+hand-level records, and aggregate metrics: hands per game, points per hand, team win
+rates, initial-dealer-seat wins, dealer-team hand win rate, maker success/euchre rates,
+round-one and round-two call rates, passouts, stick-the-dealer forced calls, trump/upcard
+suit distributions, dealer pickups, loner attempts/successes, marches, euchres, final
+score distribution, hand score distribution, decision counts, illegal move count, and
+failed games.
+
+Simulator results reflect the current bot policy, not perfect Euchre play. They are meant
+for balance checks, regression detection, and future bot tuning.
 
 ## Single-Player Table Readability v1
 
@@ -137,8 +186,8 @@ counts, role badges, and recent move-log-derived actions instead of exposing bot
 The South hand is larger and action-oriented. Legal cards remain driven by the existing
 rules engine and display helpers; illegal cards are dimmed during follow-suit situations,
 and discard mode still marks every human card selectable when the dealer must discard.
-Farmer's Hand replacement controls remain in the existing bidding/control panel, with
-the same event-validated replacement flow as before.
+Farmer's Hand replacement controls appear in the normal bidding/control panel when South
+qualifies, with the same event-validated replacement flow as before.
 
 Current trick readability is also state-derived. The center panel shows the leader, led
 suit, trump suit, cards played in order, unplayed seats, current winning seat/card when
@@ -162,6 +211,82 @@ npm run lint
 npm run test
 npm run build
 ```
+
+## Euchre Playtesting
+
+The headless playtester runs bot-vs-bot games entirely in memory. It does not write to
+Supabase, local event persistence, or the UI game store. Use it for rule validation,
+early balance checks, and reproducible failure discovery.
+
+Small smoke run:
+
+```powershell
+npm run playtest -- --games 100 --seed 12345 --target-score 10 --stick-dealer true --bot-policy basic-v1 --out ./playtest-results/smoke --invariants strict
+```
+
+Larger run:
+
+```powershell
+npm run playtest -- --games 10000 --seed 12345 --target-score 10 --stick-dealer true --bot-policy basic-v1 --out ./playtest-results/10k --invariants strict
+```
+
+### Bot Policy Playtesting
+
+The playtester supports named bot policies so balance and rules data can be compared
+without muddying results across changing bot behavior.
+
+- `basic-v1`: the current deterministic heuristic bot behavior. This is the default and
+  is useful for regression and balance smoke tests. It is not expert human strategy.
+- `legal-random-v1`: a seeded legal-action baseline that chooses only legal moves. Use
+  it as a rule stress-test/control policy, not as competitive Euchre strategy.
+
+Run policy-specific comparisons with the same seed and config:
+
+```powershell
+npm run playtest -- --games 1000 --seed 12345 --target-score 10 --stick-dealer true --bot-policy basic-v1 --out ./playtest-results/basic-v1 --invariants strict
+```
+
+```powershell
+npm run playtest -- --games 1000 --seed 12345 --target-score 10 --stick-dealer true --bot-policy legal-random-v1 --out ./playtest-results/legal-random-v1 --invariants strict
+```
+
+`summary.json` includes a compact `comparison` block with policy id/version, failure
+count, team win rates, maker win/euchre/march rates, loner rates, bidding rates, stick
+dealer rate, close-game rate, and blowout rate. `metrics.json` includes the full
+Euchre-specific aggregates and bot policy metadata.
+
+Compare two completed playtest runs:
+
+```powershell
+npm run compare-playtests -- --a ./playtest-results/basic-v1-clean-1k/summary.json --a-label basic-v1 --b ./playtest-results/legal-random-v1-clean-1k/summary.json --b-label legal-random-v1
+```
+
+JSON comparison output can also be written to disk:
+
+```powershell
+npm run compare-playtests -- --a ./playtest-results/basic-v1-clean-1k/summary.json --b ./playtest-results/legal-random-v1-clean-1k/summary.json --format json --out ./playtest-results/comparison-clean-1k/report.json
+```
+
+Rate deltas are reported as percentage points, so a maker win rate move from `78.0%`
+to `48.4%` appears as `-29.6 pts`, not `-29.6%`. Comparison reports are only as
+meaningful as the policies being compared: `legal-random-v1` is a legal-action
+stress-test baseline, not a strategy bot, and `basic-v1` is still a basic heuristic
+policy rather than expert human play.
+
+Outputs:
+
+- `summary.json`: full playtest summary, metrics, and failures.
+- `metrics.json`: aggregate metrics only.
+- `failures.jsonl`: written only when failures occur.
+
+To reproduce a failure, use the same `seed`, config, and `gameIndex` from
+`failures.jsonl`. The failure record also includes the derived per-game seed, phase, hand
+number, dealer, active player, last attempted action, last successful action, invariant
+violations, move-log tail, and compact state summary.
+
+Current bots are basic deterministic heuristics. Playtest data is useful for finding rule
+bugs, stuck states, impossible card states, scoring issues, and early bot-policy skew. Do
+not treat the current output as expert-human balance data yet.
 
 ## Game Review v1
 

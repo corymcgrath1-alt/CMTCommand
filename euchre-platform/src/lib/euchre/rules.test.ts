@@ -266,6 +266,24 @@ describe("state machine", () => {
     expect(finished.scores).toEqual([2, 0]);
   });
 
+  it("starts the next trick with the previous trick winner as leader", () => {
+    let state = makePlayingState([
+      [c("A", "hearts"), c("9", "clubs"), c("10", "clubs"), c("Q", "clubs"), c("K", "clubs")],
+      [c("K", "hearts"), c("9", "diamonds"), c("10", "diamonds"), c("Q", "diamonds"), c("K", "diamonds")],
+      [c("J", "clubs"), c("9", "spades"), c("10", "spades"), c("Q", "spades"), c("K", "spades")],
+      [c("Q", "hearts"), c("10", "hearts"), c("9", "hearts"), c("A", "diamonds"), c("A", "spades")]
+    ]);
+
+    state = dispatchAction(state, { type: "PLAY_CARD", player: 0, card: c("A", "hearts") });
+    state = dispatchAction(state, { type: "PLAY_CARD", player: 1, card: c("K", "hearts") });
+    state = dispatchAction(state, { type: "PLAY_CARD", player: 2, card: c("J", "clubs") });
+    state = dispatchAction(state, { type: "PLAY_CARD", player: 3, card: c("Q", "hearts") });
+
+    expect(state.completedTricks[0].winner).toBe(2);
+    expect(state.currentTrick?.leader).toBe(2);
+    expect(state.activePlayer).toBe(2);
+  });
+
   it("completes the game at the selected target score", () => {
     const state = makePlayingState([
       [c("A", "clubs"), c("K", "clubs"), c("Q", "clubs"), c("10", "clubs"), c("9", "clubs")],
@@ -305,24 +323,15 @@ describe("farmer's hand rules", () => {
     expect(state.activePlayer).toBe(nextPlayer(state.dealer));
   });
 
-  it("offers farmer's hand only to qualifying players before bidding starts", () => {
+  it("offers farmer's hand during the active player's normal bidding turn", () => {
     const seed = findSeedWithFarmersHand("redeal");
-    let state = dispatchAction(createInitialGameState({ farmersHandMode: "redeal" }), { type: "START_HAND", seed });
-
-    expect(state.phase).toBe("farmersHand");
-    expect(isFarmersHandQualifier(state.hands[state.activePlayer])).toBe(true);
-
-    state = dispatchAction(state, { type: "FARMERS_HAND_DECLINE", player: state.activePlayer });
-
-    if (state.phase === "farmersHand") {
-      expect(isFarmersHandQualifier(state.hands[state.activePlayer])).toBe(true);
-    }
-
-    while (state.phase === "farmersHand") {
-      state = dispatchAction(state, { type: "FARMERS_HAND_DECLINE", player: state.activePlayer });
-    }
+    const state = dispatchAction(createInitialGameState({ farmersHandMode: "redeal" }), { type: "START_HAND", seed });
+    const legal = legalActionsForPlayer(state, state.activePlayer);
 
     expect(state.phase).toBe("ordering");
+    expect(isFarmersHandQualifier(state.hands[state.activePlayer])).toBe(true);
+    expect(legal.canClaimFarmersHand).toBe(true);
+    expect(legal.canDeclineFarmersHand).toBe(false);
     expect(state.activePlayer).toBe(nextPlayer(state.dealer));
   });
 
@@ -339,8 +348,8 @@ describe("farmer's hand rules", () => {
 
     expect(state.handNumber).toBe(1);
     expect(state.dealer).toBe(0);
-    expect(state.phase).toBe("farmersHand");
-    expect(isFarmersHandQualifier(state.hands[state.activePlayer])).toBe(true);
+    expect(state.phase).toBe("ordering");
+    expect(state.activePlayer).toBe(nextPlayer(state.dealer));
     expect(replayed.hands).toEqual(state.hands);
     expect(replayed.kitty).toEqual(state.kitty);
   });

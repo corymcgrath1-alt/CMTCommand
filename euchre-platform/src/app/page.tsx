@@ -19,21 +19,27 @@ import {
   formatLonerMode,
   buildHandResultExplanation,
   buildCurrentTrickView,
+  buildBiddingTimeline,
   buildEuchreScoreCardViews,
   buildFiveCardScoreView,
   buildHumanHandView,
-  buildLegalActionExplanation,
   buildTableSeatViews,
   buildTableStatusView,
+  buildLatestCompletedTrickKey,
+  buildTrickAnimationState,
   buildTurnPrompt,
+  createInitialTrickPresentationState,
   getAvailableGameControls,
   getRecentBotActions,
   legalActionsForPlayer,
   parsePracticeSeed,
   replacementSelectionLabel,
   selectedFarmersHandReplacementCards,
+  shouldPresentLatestCompletedTrick,
   suitColor,
   TABLE_PLAYER_NAMES,
+  TRICK_CLEAR_DELAY_MS,
+  TRICK_RESOLVE_DELAY_MS,
   toggleFarmersHandReplacementSelection,
   type BotDifficulty,
   type Card,
@@ -45,8 +51,10 @@ import {
   type MoveEvent,
   type PlayerIndex,
   type RuleSummary,
+  type SeatBiddingDecision,
   type TableSeatView,
-  type TargetScore
+  type TargetScore,
+  type TrickFlowPhase
 } from "@/lib/euchre";
 import type { LoadedGame } from "@/lib/persistence/event-store";
 import type { GameReviewSummary, HandReview, SeatReviewStats, TrickReview } from "@/lib/review/game-review";
@@ -114,8 +122,13 @@ export default function Home() {
   const bots = useMemo(() => createDefaultBotProfiles(), []);
   const lastBotActionKey = useRef<string | null>(null);
   const lastAutoNextHandKey = useRef<string | null>(null);
-  const [heldCompletedTrickKey, setHeldCompletedTrickKey] = useState<string | null>(null);
+  const [trickPresentation, setTrickPresentation] = useState(createInitialTrickPresentationState);
   const activeReviewSource = chooseActiveReviewSource({ currentReview: review, historicalReview });
+  const inPlayMode = state.phase !== "idle";
+  const latestCompletedTrickKey = buildLatestCompletedTrickKey(state);
+  const showCompletedTrick = shouldPresentLatestCompletedTrick(latestCompletedTrickKey, trickPresentation.clearedKey);
+  const trickInteractionLocked = showCompletedTrick;
+  const interactionDisabled = isSaving || trickInteractionLocked;
 
   const loadProfileStats = useCallback(async () => {
     try {
@@ -163,6 +176,7 @@ export default function Home() {
       setFarmersHandMode(loaded.game.config.farmersHandMode ?? "off");
       setLonerMode(loaded.game.config.lonerMode ?? "aloneOnly");
       setState(loaded.state);
+      setTrickPresentation(createInitialTrickPresentationState());
       setReview(null);
       setStatus(`Restored ${loaded.events.length} persisted event${loaded.events.length === 1 ? "" : "s"}`);
       window.localStorage.setItem(STORAGE_KEY, loaded.game.id);
@@ -178,7 +192,7 @@ export default function Home() {
   const act = useCallback(async (action: GameAction, actorLabel = "Human") => {
     if (!persistedGameId) {
       setStatus("Create a persisted game before playing moves");
-      return;
+      return false;
     }
 
     setIsSaving(true);
@@ -191,11 +205,18 @@ export default function Home() {
           action
         })
       });
+      if (action.type === "START_HAND" || action.type === "NEXT_HAND") {
+        setTrickPresentation(createInitialTrickPresentationState());
+        lastBotActionKey.current = null;
+        lastAutoNextHandKey.current = null;
+      }
       setState(result.state);
       setStatus(`${actorLabel} persisted event #${result.state.moveLog.length - 1}`);
       setAlone(false);
+      return true;
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Move could not be persisted");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -228,30 +249,59 @@ export default function Home() {
   }, [loadProfileDetail, loadProfileStats, persistedGameId, selectedProfileSeat, state.phase, state.moveLog.length]);
 
   useEffect(() => {
+    lastBotActionKey.current = null;
+    lastAutoNextHandKey.current = null;
     setSelectedReplacementIds([]);
   }, [state.handNumber, state.phase, state.activePlayer]);
 
   useEffect(() => {
-    const latestCompleted = state.completedTricks[state.completedTricks.length - 1];
-    if (!latestCompleted || latestCompleted.plays.length !== 4) {
-      setHeldCompletedTrickKey(null);
+    if (!latestCompletedTrickKey) {
+      setTrickPresentation((current) => (
+        current.key || current.clearedKey || current.phase !== "playing"
+          ? createInitialTrickPresentationState()
+          : current
+      ));
       return;
     }
 
-    const key = `${state.handNumber}:${state.completedTricks.length}:${latestCompleted.winner}:${latestCompleted.plays
-      .map((play) => `${play.player}-${cardId(play.card)}`)
-      .join("|")}`;
+    if (!shouldPresentLatestCompletedTrick(latestCompletedTrickKey, trickPresentation.clearedKey)) {
+      return;
+    }
 
-    setHeldCompletedTrickKey(key);
-    const timeout = window.setTimeout(() => {
-      setHeldCompletedTrickKey((current) => (current === key ? null : current));
-    }, 1800);
+    setTrickPresentation((current) => ({
+      ...current,
+      key: latestCompletedTrickKey,
+      phase: "resolvingTrick"
+    }));
 
-    return () => window.clearTimeout(timeout);
-  }, [state.completedTricks, state.handNumber]);
+    const resolveTimeout = window.setTimeout(() => {
+      setTrickPresentation((current) => (
+        current.key === latestCompletedTrickKey
+          ? { ...current, phase: "clearingTrick" }
+          : current
+      ));
+    }, TRICK_RESOLVE_DELAY_MS);
+
+    const clearTimeout = window.setTimeout(() => {
+      setTrickPresentation((current) => (
+        current.key === latestCompletedTrickKey
+          ? {
+              key: null,
+              clearedKey: latestCompletedTrickKey,
+              phase: state.phase === "handComplete" || state.phase === "gameComplete" ? "handComplete" : "betweenTricks"
+            }
+          : current
+      ));
+    }, TRICK_RESOLVE_DELAY_MS + TRICK_CLEAR_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(resolveTimeout);
+      window.clearTimeout(clearTimeout);
+    };
+  }, [latestCompletedTrickKey, state.phase, trickPresentation.clearedKey]);
 
   useEffect(() => {
-    if (!persistedGameId || isSaving || heldCompletedTrickKey) {
+    if (!persistedGameId || isSaving || trickInteractionLocked) {
       return;
     }
 
@@ -273,13 +323,13 @@ export default function Home() {
 
     const timeout = window.setTimeout(() => {
       void act(action, activeBot.name);
-    }, 450);
+    }, 650);
 
     return () => window.clearTimeout(timeout);
-  }, [act, bots, heldCompletedTrickKey, isSaving, persistedGameId, state]);
+  }, [act, bots, isSaving, persistedGameId, state, trickInteractionLocked]);
 
   useEffect(() => {
-    if (!persistedGameId || isSaving || state.phase !== "handComplete") {
+    if (!persistedGameId || isSaving || trickInteractionLocked || state.phase !== "handComplete") {
       return;
     }
 
@@ -290,11 +340,15 @@ export default function Home() {
     lastAutoNextHandKey.current = actionKey;
 
     const timeout = window.setTimeout(() => {
-      void act({ type: "NEXT_HAND", seed: Date.now() % 1_000_000 }, "Auto deal");
-    }, 2200);
+      void act({ type: "NEXT_HAND", seed: Date.now() % 1_000_000 }, "Auto deal").then((success) => {
+        if (!success) {
+          lastAutoNextHandKey.current = null;
+        }
+      });
+    }, 2600);
 
     return () => window.clearTimeout(timeout);
-  }, [act, isSaving, persistedGameId, state.handNumber, state.moveLog.length, state.phase]);
+  }, [act, isSaving, persistedGameId, state.handNumber, state.moveLog.length, state.phase, trickInteractionLocked]);
 
   async function startNewGame() {
     setIsSaving(true);
@@ -312,6 +366,7 @@ export default function Home() {
       });
       setPersistedGameId(created.game.id);
       lastBotActionKey.current = null;
+      setTrickPresentation(createInitialTrickPresentationState());
       setReview(null);
       window.localStorage.setItem(STORAGE_KEY, created.game.id);
 
@@ -338,6 +393,8 @@ export default function Home() {
     setState(next);
     setPersistedGameId(null);
     lastBotActionKey.current = null;
+    lastAutoNextHandKey.current = null;
+    setTrickPresentation(createInitialTrickPresentationState());
     setReview(null);
     setAlone(false);
     window.localStorage.removeItem(STORAGE_KEY);
@@ -403,16 +460,20 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#071411]">
-      <section className="mx-auto flex w-full max-w-[112rem] flex-col gap-3 px-3 py-3 sm:px-4 lg:px-5">
-        <header className="flex flex-col gap-3 border-b border-white/10 pb-3 lg:flex-row lg:items-end lg:justify-between">
+      <section className="mx-auto flex w-full max-w-[118rem] flex-col gap-2 px-2 py-2 sm:px-3 lg:px-4">
+        <header className={`flex flex-col gap-2 border-b border-white/10 pb-2 lg:flex-row lg:items-end lg:justify-between ${
+          inPlayMode ? "lg:items-center" : ""
+        }`}>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">Phase 1 foundation</p>
-            <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Euchre Platform</h1>
-            <p className="mt-1 text-sm text-white/55">You are South. West, North, and East are deterministic bots.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brass">Phase 1 foundation</p>
+            <h1 className={`${inPlayMode ? "mt-0 text-xl sm:text-2xl" : "mt-1 text-2xl sm:text-3xl"} font-semibold text-white`}>
+              Euchre Platform
+            </h1>
+            <p className="mt-0.5 text-xs text-white/55">You are South. West, North, and East are deterministic bots.</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+            <label className={`${inPlayMode ? "hidden" : "flex"} items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white`}>
               Target
               <select
                 className="rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
@@ -427,7 +488,7 @@ export default function Home() {
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+            <label className={`${inPlayMode ? "hidden" : "flex"} items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white`}>
               Bot difficulty
               <select
                 className="rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
@@ -442,7 +503,7 @@ export default function Home() {
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+            <label className={`${inPlayMode ? "hidden" : "flex"} items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white`}>
               Dealer
               <select
                 className="rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
@@ -457,7 +518,7 @@ export default function Home() {
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+            <label className={`${inPlayMode ? "hidden" : "flex"} items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white`}>
               <input
                 type="checkbox"
                 checked={stickDealer}
@@ -466,7 +527,7 @@ export default function Home() {
               />
               Stick dealer
             </label>
-            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+            <label className={`${inPlayMode ? "hidden" : "flex"} items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white`}>
               Farmer
               <select
                 className="rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
@@ -481,7 +542,7 @@ export default function Home() {
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+            <label className={`${inPlayMode ? "hidden" : "flex"} items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white`}>
               Loner
               <select
                 className="rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
@@ -496,7 +557,7 @@ export default function Home() {
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+            <label className={`${inPlayMode ? "hidden" : "flex"} items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 text-sm text-white`}>
               Seed
               <input
                 className="w-28 rounded border border-white/15 bg-[#071411] px-2 py-1 text-white"
@@ -508,12 +569,19 @@ export default function Home() {
               />
             </label>
             <button
-              className="rounded border border-white/20 px-3 py-2 text-sm font-semibold text-white"
+              className={`${inPlayMode ? "hidden" : ""} rounded border border-white/20 px-3 py-2 text-sm font-semibold text-white`}
               onClick={copySeed}
               type="button"
             >
               Copy seed
             </button>
+            {inPlayMode ? (
+              <div className="rounded border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/60">
+                <span className="font-semibold text-white">Hand {state.handNumber}</span>
+                <span className="mx-2 text-white/25">|</span>
+                Team 0 {state.scores[0]} - {state.scores[1]} Team 1
+              </div>
+            ) : null}
             <button
               className="rounded bg-brass px-4 py-2 text-sm font-semibold text-[#201602]"
               disabled={isSaving}
@@ -532,27 +600,28 @@ export default function Home() {
           />
         ) : null}
 
-        <section className="rounded border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70">
+        <section className={`${inPlayMode ? "hidden" : ""} rounded border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70`}>
           <span className="font-semibold text-white">Persistence:</span>{" "}
           {persistedGameId ? `Game ${persistedGameId}` : "No persisted game selected"} | {status}
         </section>
 
-        <div className="flex flex-col gap-3">
-          <section className="flex flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
+          <section className="flex min-w-0 flex-col gap-2">
             <TableSurface
               state={state}
-              showCompletedTrick={Boolean(heldCompletedTrickKey)}
+              showCompletedTrick={showCompletedTrick}
+              trickPhase={showCompletedTrick ? trickPresentation.phase : "playing"}
               alone={alone}
               setAlone={setAlone}
               act={act}
-              disabled={isSaving}
+              disabled={interactionDisabled}
               selectedReplacementIds={selectedReplacementIds}
               setSelectedReplacementIds={setSelectedReplacementIds}
             />
             <BiddingControls
               state={state}
               act={act}
-              disabled={isSaving}
+              disabled={interactionDisabled}
               onStartNewGame={confirmStartNewGame}
             />
             {activeReviewSource ? (
@@ -564,7 +633,7 @@ export default function Home() {
             ) : null}
           </section>
 
-          <aside className="grid gap-4 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.25fr)_minmax(18rem,0.9fr)_minmax(18rem,1fr)]">
+          <aside className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.25fr)_minmax(18rem,0.9fr)_minmax(18rem,1fr)]">
             <TurnPromptPanel state={state} />
             <GameSummary state={state} />
             <section className="rounded border border-white/10 bg-white/[0.04] p-4">
@@ -610,7 +679,7 @@ function GameSummary({ state }: { state: GameState }) {
   });
 
   return (
-    <section className="grid gap-3 rounded border border-white/10 bg-table p-4 sm:grid-cols-2 lg:grid-cols-4">
+    <section className="grid min-w-0 grid-cols-1 gap-3 rounded border border-white/10 bg-table p-4 sm:grid-cols-2 lg:grid-cols-4">
       <SummaryItem label="Hand" value={state.handNumber ? String(state.handNumber) : "Not dealt"} />
       <SummaryItem label="Score" value={`Team 0 ${state.scores[0]} - ${state.scores[1]} Team 1`} />
       <SummaryItem label="Target" value={String(state.config.targetScore)} />
@@ -670,7 +739,7 @@ function SetupHelp({
   lastSeed: number | null;
 }) {
   return (
-    <section className="grid gap-3 rounded border border-white/10 bg-white/[0.035] px-4 py-3 text-sm text-white/65 lg:grid-cols-3">
+    <section className="grid min-w-0 grid-cols-1 gap-3 rounded border border-white/10 bg-white/[0.035] px-4 py-3 text-sm text-white/65 lg:grid-cols-3">
       <div>
         <p className="font-semibold text-white">Farmer&apos;s Hand</p>
         <p className="mt-1">{farmersHandHelp(farmersHandMode)}</p>
@@ -716,7 +785,7 @@ function RuleSummaryPanel({ summary, tone = "dark" }: { summary: RuleSummary; to
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Rules</p>
         {summary.defaultsApplied ? <p className="text-xs text-white/40">Normalized defaults applied where needed</p> : null}
       </div>
-      <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
         {summary.items.map((item) => (
           <div key={item.label} className="rounded border border-white/10 px-2 py-2">
             <p className="uppercase tracking-[0.12em] text-white/35">{item.label}</p>
@@ -740,14 +809,13 @@ function RuleSummaryPanel({ summary, tone = "dark" }: { summary: RuleSummary; to
 
 function TurnPromptPanel({ state }: { state: GameState }) {
   const prompt = buildTurnPrompt(state, 0);
-  const explanation = buildLegalActionExplanation(state, 0);
 
   if (state.phase === "idle") {
     return null;
   }
 
   return (
-    <section className="rounded border border-brass/30 bg-brass/10 p-4">
+    <section className="min-w-0 rounded border border-brass/30 bg-brass/10 p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass">Current turn</p>
@@ -760,12 +828,6 @@ function TurnPromptPanel({ state }: { state: GameState }) {
           {prompt.humanTurn ? "Human turn" : "Bot / table state"}
         </span>
       </div>
-      {explanation.details.length ? (
-        <div className="mt-3 rounded border border-white/10 bg-[#071411]/35 px-3 py-2 text-sm text-white/60">
-          <p className="font-semibold text-white">{explanation.primary}</p>
-          <p className="mt-1">{explanation.details.join(" ")}</p>
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -820,7 +882,7 @@ function GameReviewPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <ReviewMetric label="Euchres" value={review.totalEuchres} />
         <ReviewMetric label="Maker wins" value={review.totalSuccessfulMakerHands} />
         <ReviewMetric label="Maker fails" value={review.totalFailedMakerHands} />
@@ -929,7 +991,7 @@ function ProfileStatsPanel({
             </table>
           </div>
 
-          <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-1">
+          <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 text-xs sm:grid-cols-2 lg:grid-cols-1">
             {profiles.teams.map((team) => (
               <div key={team.team} className="rounded border border-white/10 px-3 py-2 text-white/70">
                 <p className="font-semibold text-white">{team.label}: {team.wins}-{team.losses}</p>
@@ -1137,7 +1199,7 @@ function HandReplayViewer({
       </div>
 
       {hand ? (
-        <div className="mt-4 grid gap-3 text-sm text-white/70 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 text-sm text-white/70 sm:grid-cols-2 lg:grid-cols-4">
           <ReviewDetail label="Dealer" value={PLAYER_NAMES[hand.dealer]} />
           <ReviewDetail label="Upcard" value={hand.upcard ? cardLabel(hand.upcard) : "None"} />
           <ReviewDetail label="Trump" value={hand.trumpSuit ?? "None"} />
@@ -1179,7 +1241,7 @@ function HandReplayViewer({
 
       {trick ? (
         <div className="mt-4 rounded border border-white/10 bg-[#071411]/50 p-3 text-sm">
-          <div className="grid gap-3 text-white/70 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-1 gap-3 text-white/70 sm:grid-cols-2 lg:grid-cols-4">
             <HighlightedReviewDetail label="Leader" value={PLAYER_NAMES[trick.leader]} />
             <HighlightedReviewDetail label="Led suit" value={trick.ledSuit} />
             <HighlightedReviewDetail label="Trump suit" value={trick.trumpSuit ?? "None"} />
@@ -1191,7 +1253,7 @@ function HandReplayViewer({
             <ReviewDetail label="Caller relation" value={trick.winnerRelationToCaller} />
           </div>
 
-          <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid min-w-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
             {trick.cardsPlayed.map((play) => {
               const isLeader = play.player === trick.leader;
               const isWinner = play.player === trick.winningSeat && winningPlay && cardId(play.card) === cardId(winningPlay.card);
@@ -1256,7 +1318,7 @@ function HandReviewCard({ hand }: { hand: HandReview }) {
       <summary className="cursor-pointer text-white">
         Hand {hand.handNumber}: dealer {PLAYER_NAMES[hand.dealer]}, caller {hand.maker !== undefined ? PLAYER_NAMES[hand.maker] : "None"}, trump {hand.trumpSuit ?? "None"} | {formatScoringResult(hand)}
       </summary>
-      <div className="mt-3 grid gap-2 text-white/70 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 text-white/70 sm:grid-cols-2 lg:grid-cols-4">
         <ReviewDetail label="Score after" value={`${hand.teamScoreAfterHand[0]} - ${hand.teamScoreAfterHand[1]}`} />
         <ReviewDetail label="Upcard" value={hand.upcard ? cardLabel(hand.upcard) : "None"} />
         <ReviewDetail label="Maker tricks" value={String(hand.makerTricks)} />
@@ -1360,7 +1422,7 @@ function BiddingControls({
   onStartNewGame
 }: {
   state: GameState;
-  act: (action: GameAction) => void | Promise<void>;
+  act: (action: GameAction) => boolean | Promise<boolean>;
   disabled: boolean;
   onStartNewGame: () => void;
 }) {
@@ -1422,6 +1484,7 @@ function BiddingControls({
 function TableSurface({
   state,
   showCompletedTrick,
+  trickPhase,
   alone,
   setAlone,
   act,
@@ -1431,9 +1494,10 @@ function TableSurface({
 }: {
   state: GameState;
   showCompletedTrick: boolean;
+  trickPhase: TrickFlowPhase;
   alone: boolean;
   setAlone: (value: boolean) => void;
-  act: (action: GameAction) => void | Promise<void>;
+  act: (action: GameAction) => boolean | Promise<boolean>;
   disabled: boolean;
   selectedReplacementIds: string[];
   setSelectedReplacementIds: Dispatch<SetStateAction<string[]>>;
@@ -1443,13 +1507,15 @@ function TableSurface({
   const status = buildTableStatusView(state);
   const humanHand = buildHumanHandView(state, 0);
   const trick = buildCurrentTrickView(state, { showLatestCompleted: showCompletedTrick });
+  const biddingTimeline = buildBiddingTimeline(state);
   const humanLegal = legalActionsForPlayer(state, 0);
-  const farmersSelectionActive = state.phase === "farmersHand"
+  const farmersSelectionActive = (state.phase === "farmersHand" || state.phase === "ordering" || state.phase === "calling")
     && state.activePlayer === 0
+    && humanLegal.canClaimFarmersHand
     && state.config.farmersHandMode === "replaceThree";
 
   function onHumanCard(card: Card, legal: boolean) {
-    if (!legal) {
+    if (disabled || !legal) {
       return;
     }
 
@@ -1472,24 +1538,41 @@ function TableSurface({
 
   return (
     <section className="flex flex-col gap-2">
-      <div className="euchre-table-rail rounded-[2rem] p-2 shadow-xl shadow-black/20">
-        <div className="euchre-felt rounded-[1.55rem] p-2 lg:p-3">
+      <div className="euchre-table-rail rounded-[2rem] p-1.5 shadow-xl shadow-black/20 sm:p-2">
+        <div className="euchre-felt rounded-[1.55rem] p-1.5 sm:p-2 lg:p-2.5">
           <div className="grid gap-2">
-            <NorthSeatScoreRow seat={seatByPosition.north} scores={status.scores} />
+            <NorthSeatScoreRow
+              seat={seatByPosition.north}
+              scores={status.scores}
+              decision={biddingTimeline.decisions.find((decision) => decision.seat === seatByPosition.north.seat)}
+            />
 
-            <div className="grid gap-2 lg:grid-cols-[minmax(16rem,28rem)_minmax(32rem,1fr)_minmax(16rem,28rem)] xl:grid-cols-[minmax(18rem,28rem)_minmax(40rem,1fr)_minmax(18rem,28rem)] lg:items-center">
-              <div className="w-full max-w-md lg:justify-self-end">
-                <SeatCard seat={seatByPosition.west} />
+            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(12rem,18rem)_minmax(30rem,1fr)_minmax(12rem,18rem)] xl:grid-cols-[minmax(13rem,20rem)_minmax(36rem,1fr)_minmax(13rem,20rem)] lg:items-center">
+              <div className="w-full lg:justify-self-end">
+                <SeatCard
+                  seat={seatByPosition.west}
+                  decision={biddingTimeline.decisions.find((decision) => decision.seat === seatByPosition.west.seat)}
+                />
               </div>
-              <CurrentTrickPanel trick={trick} />
-              <div className="w-full max-w-md lg:justify-self-start">
-                <SeatCard seat={seatByPosition.east} />
+              <CurrentTrickPanel
+                trick={trick}
+                trickPhase={trickPhase}
+                dealer={state.dealer}
+                kitty={state.kitty}
+                upcard={state.upcard}
+              />
+              <div className="w-full lg:justify-self-start">
+                <SeatCard
+                  seat={seatByPosition.east}
+                  decision={biddingTimeline.decisions.find((decision) => decision.seat === seatByPosition.east.seat)}
+                />
               </div>
             </div>
 
             <HumanSeatPanel
               state={state}
               seat={seatByPosition.south}
+              decision={biddingTimeline.decisions.find((decision) => decision.seat === seatByPosition.south.seat)}
               hand={humanHand}
               alone={alone}
               setAlone={setAlone}
@@ -1503,7 +1586,58 @@ function TableSurface({
           </div>
         </div>
       </div>
+      <BiddingTimelineStrip timeline={biddingTimeline} />
       <TableStatusBar status={status} trick={trick} />
+    </section>
+  );
+}
+
+function BiddingTimelineStrip({ timeline }: { timeline: ReturnType<typeof buildBiddingTimeline> }) {
+  const trumpSuit = timeline.finalTrumpSuit ?? null;
+  const upcardSuit = timeline.upcard?.suit ?? null;
+
+  return (
+    <section className="rounded border border-brass/20 bg-[#071411]/65 px-3 py-2 shadow-inner shadow-black/25">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">
+            <span className="font-semibold uppercase tracking-[0.14em] text-brass">Trump call</span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1">Dealer: {timeline.dealerLabel}</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1">
+              Upcard {timeline.upcardLabel}
+              <SuitIcon suit={upcardSuit} label="Upcard suit" compact />
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1">Round {timeline.currentRound}</span>
+          </div>
+          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm font-semibold text-white">
+            <span>{timeline.summaryText}</span>
+            <SuitIcon suit={trumpSuit} label="Final trump" compact />
+            {timeline.aloneSeat !== undefined ? <Badge tone="brass">{TABLE_PLAYER_NAMES[timeline.aloneSeat]} alone</Badge> : null}
+          </p>
+        </div>
+        <div className="grid min-w-0 grid-cols-1 gap-1 sm:grid-cols-4 lg:min-w-[28rem]">
+          {timeline.decisions.map((decision) => (
+            <div
+              key={decision.seat}
+              className={`rounded border px-2 py-1 text-xs ${
+                decision.label === "none" ? "border-white/10 bg-white/[0.03] text-white/35" : "border-brass/25 bg-brass/10 text-white/75"
+              }`}
+            >
+              <p className="font-semibold text-white">{decision.playerLabel}</p>
+              <p>{decision.label === "none" ? "Waiting" : decisionBadgeText(decision)}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      {timeline.persistentLog.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-white/45">
+          {timeline.persistentLog.slice(-5).map((line, index) => (
+            <span key={`${line}-${index}`} className="rounded border border-white/10 bg-white/[0.03] px-2 py-1">
+              {line}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -1516,37 +1650,48 @@ function TableStatusBar({
   trick: ReturnType<typeof buildCurrentTrickView>;
 }) {
   const items = [
-    ["Trick", `Trick ${trick.trickNumber}`],
-    ["Leader", trick.leaderLabel],
-    ["Led suit", trick.ledSuitLabel],
-    ["Trump", trick.trumpLabel],
-    ["Current winner", trick.currentWinnerLabel && trick.winningCardLabel ? `${trick.currentWinnerLabel} with ${trick.winningCardLabel}` : "None"],
-    ["Waiting on", waitingOnLabel(trick)],
-    ["Score", status.scoreLabel],
-    ["Dealer", status.dealerLabel]
+    ["Hand", status.handLabel],
+    ["Phase", status.phaseLabel],
+    ["Makers", status.makersLabel],
+    ["Tricks", status.trickScoreLabel],
+    ["Dealer", status.dealerLabel],
+    ["Score", status.scoreLabel]
   ];
+  const ledSuit = suitFromLabel(trick.ledSuitLabel);
+  const trumpSuit = suitFromLabel(trick.trumpLabel);
 
   return (
     <div className="rounded border border-white/10 bg-[#071411]/55 px-3 py-2">
-      <div className="grid gap-2 xl:grid-cols-[minmax(14rem,0.35fr)_minmax(0,1.65fr)] xl:items-start">
-        <div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brass">Table status</p>
-              <p className="mt-1 text-xs text-white/60">{status.handLabel} | {status.phaseLabel} | {status.targetLabel} | Makers: {status.makersLabel}</p>
-            </div>
-          </div>
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+        <div className="text-xs text-white/60">
+          <span className="font-semibold uppercase tracking-[0.15em] text-brass">Table status</span>
+          <span className="mx-2 text-white/25">|</span>
+          <span>{status.targetLabel}</span>
+          <span className="mx-2 text-white/25">|</span>
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <span>
+              Trick {trick.trickNumber}: {trick.isShowingCompletedTrick && trick.nextLeaderLabel
+                ? `${trick.currentWinnerLabel ?? trick.nextLeaderLabel} won, ${trick.nextLeaderLabel} leads next`
+                : `${trick.leaderLabel} led`}
+            </span>
+            <SuitIcon suit={ledSuit} label="Led suit" />
+            <span>trump</span>
+            <SuitIcon suit={trumpSuit} label="Trump" />
+            <span>
+              {trick.currentWinnerLabel && trick.winningCardLabel ? `${trick.currentWinnerLabel} winning with ${trick.winningCardLabel}` : waitingOnLabel(trick)}
+            </span>
+          </span>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-3 xl:w-[42rem] xl:grid-cols-6">
           {items.map(([label, value]) => (
             <div
               key={label}
-              className={`rounded border px-3 py-2 ${
+              className={`rounded border px-2 py-1.5 ${
                 label === "Dealer" ? "border-brass/50 bg-brass/15" : "border-white/10 bg-white/[0.035]"
               }`}
             >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40">{label}</p>
-              <p className="mt-1 text-sm font-semibold text-white">{value}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">{label}</p>
+              <p className="mt-0.5 text-xs font-semibold text-white">{value}</p>
             </div>
           ))}
         </div>
@@ -1556,6 +1701,10 @@ function TableStatusBar({
 }
 
 function waitingOnLabel(trick: ReturnType<typeof buildCurrentTrickView>) {
+  if (trick.isShowingCompletedTrick && trick.nextLeaderLabel) {
+    return `Next lead: ${trick.nextLeaderLabel}`;
+  }
+
   if (trick.unplayedSeats.length) {
     return trick.unplayedSeats.map((seat) => TABLE_PLAYER_NAMES[seat]).join(", ");
   }
@@ -1565,14 +1714,14 @@ function waitingOnLabel(trick: ReturnType<typeof buildCurrentTrickView>) {
     : "Everyone played";
 }
 
-function NorthSeatScoreRow({ seat, scores }: { seat: TableSeatView; scores: [number, number] }) {
+function NorthSeatScoreRow({ seat, scores, decision }: { seat: TableSeatView; scores: [number, number]; decision?: SeatBiddingDecision }) {
   const teams = buildEuchreScoreCardViews(scores);
 
   return (
-    <div className="grid items-center gap-3 lg:grid-cols-[minmax(14rem,1fr)_minmax(16rem,28rem)_minmax(14rem,1fr)]">
+    <div className="grid min-w-0 grid-cols-1 items-center gap-2 lg:grid-cols-[1fr_minmax(13rem,18rem)_1fr]">
       <TeamScoreStack team={teams[0]} align="right" />
-      <div className="mx-auto w-full max-w-md">
-        <SeatCard seat={seat} />
+      <div className="mx-auto w-full">
+        <SeatCard seat={seat} decision={decision} />
       </div>
       <TeamScoreStack team={teams[1]} align="left" />
     </div>
@@ -1591,16 +1740,15 @@ function TeamScoreStack({
 
   return (
     <section
-      className={`hidden rounded-2xl border border-brass/25 bg-[#071411]/50 px-3 py-2 shadow-inner shadow-black/30 sm:flex sm:items-center sm:gap-3 ${
-      align === "right" ? "sm:justify-end" : "sm:justify-start"
+      className={`hidden w-fit rounded-xl border border-brass/25 bg-[#071411]/50 px-1.5 py-1 shadow-inner shadow-black/30 sm:flex sm:items-center sm:gap-1.5 ${
+      align === "right" ? "justify-self-end" : "justify-self-start"
     }`}
       aria-label={`${teamColor === "red" ? "Red" : "Black"} team score ${Math.max(0, Math.min(team.score, 10))} of 10`}
     >
       {align === "left" ? <StackedScoreCards score={team.score} teamColor={teamColor} /> : null}
       <div className={align === "right" ? "text-right" : "text-left"}>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brass">{label}</p>
-        <p className="mt-1 text-lg font-black leading-none text-white">{Math.max(0, Math.min(team.score, 10))}</p>
-        <p className="mt-1 text-[11px] text-white/45">{teamColor} 5s</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-brass">{label}</p>
+        <p className="mt-0.5 text-base font-black leading-none text-white">{Math.max(0, Math.min(team.score, 10))}</p>
       </div>
       {align === "right" ? <StackedScoreCards score={team.score} teamColor={teamColor} /> : null}
     </section>
@@ -1611,32 +1759,45 @@ function StackedScoreCards({ score, teamColor }: { score: number; teamColor: "re
   const scoreView = buildFiveCardScoreView(score, teamColor);
 
   return (
-    <div className="relative h-24 w-28" aria-hidden="true">
-      <MiniFiveCard card={scoreView.cards[0]} className="absolute left-0 top-1 z-20 -rotate-3" />
-      <MiniFiveCard card={scoreView.cards[1]} className="absolute left-10 top-0 z-10 rotate-3" />
+    <div className="five-card-score-stack relative h-24 w-28" aria-label={scoreView.accessibleLabel}>
+      <CoveredFiveCard card={scoreView.cards[0]} className={`score-card-base ${scoreView.clampedScore === 0 ? "score-card-unused" : ""}`} />
+      <CoveredFiveCard card={scoreView.cards[1]} className={`score-card-cover ${scoreSecondCardClass(scoreView.clampedScore)}`} />
+      {scoreView.isWinningScore ? (
+        <span className="absolute -right-1 -top-1 rounded-full border border-brass/40 bg-brass px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.1em] text-[#201602]">
+          Win
+        </span>
+      ) : null}
     </div>
   );
 }
 
-function MiniFiveCard({
+function CoveredFiveCard({
   card,
   className = "",
 }: {
   card: ReturnType<typeof buildFiveCardScoreView>["cards"][number];
   className?: string;
 }) {
-  const pipPositions = [
-    "left-3 top-6",
-    "right-3 top-6",
-    "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
-    "left-3 bottom-6",
-    "right-3 bottom-6"
-  ];
+  return (
+    <div className={`score-five-card absolute h-[5.35rem] w-[3.85rem] transition-transform ${className}`} aria-hidden="true">
+      {card.faceUp ? <FiveScoreFace card={card} /> : <div className="playing-card playing-card-back absolute inset-0 border border-brass/45 shadow-lg shadow-black/25" />}
+    </div>
+  );
+}
+
+function FiveScoreFace({ card }: { card: ReturnType<typeof buildFiveCardScoreView>["cards"][number] }) {
   const suit = displaySuitSymbol(card.suit);
   const colorClass = card.color === "red" ? "text-[#b42318]" : "text-[#111827]";
+  const pipPositions = [
+    "left-[0.42rem] top-[1.42rem]",
+    "right-[0.42rem] top-[1.42rem]",
+    "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+    "left-[0.42rem] bottom-[1.42rem]",
+    "right-[0.42rem] bottom-[1.42rem]"
+  ];
 
   return (
-    <div className={`playing-card relative w-16 border border-slate-300 bg-[#fffdf6] shadow-lg shadow-black/30 ${colorClass} ${className}`}>
+    <div className={`playing-card absolute inset-0 border border-slate-300 bg-[#fffdf6] shadow-lg shadow-black/30 ${colorClass}`}>
       <div className="absolute left-1 top-1 flex flex-col items-center text-xs font-black leading-none">
         <span>5</span>
         <span className="text-sm">{suit}</span>
@@ -1648,7 +1809,7 @@ function MiniFiveCard({
       {pipPositions.map((position, index) => (
         <span
           key={position}
-          className={`absolute ${position} text-lg leading-none ${index < card.visiblePips ? "opacity-100" : "opacity-0"}`}
+          className={`absolute ${position} text-lg leading-none ${index < card.visiblePips ? "opacity-100" : "opacity-10"}`}
         >
           {suit}
         </span>
@@ -1657,47 +1818,82 @@ function MiniFiveCard({
   );
 }
 
-function SeatCard({ seat }: { seat: TableSeatView }) {
+function SeatCard({ seat, decision }: { seat: TableSeatView; decision?: SeatBiddingDecision }) {
+  const showDecision = decision && decision.label !== "none";
+  const highlighted = seat.isActive || seat.isDealer;
+
   return (
-    <section className={`relative z-10 flex min-h-28 flex-col justify-between rounded-xl border p-2.5 shadow-lg shadow-black/15 ${
-      seat.isActive || seat.isDealer ? "border-brass bg-[#102f25]/90" : "border-white/10 bg-[#071411]/55"
+    <section className={`relative z-10 flex ${seat.isHuman ? "min-h-14" : "min-h-24"} flex-col justify-between rounded-xl border ${seat.isHuman ? "px-3 py-2" : "p-2"} shadow-lg shadow-black/15 ${
+      highlighted ? "border-brass bg-[#0c3d30]/80" : "border-white/10 bg-[#071411]/55"
     }`}>
-      {seat.isDealer ? (
-        <span className="absolute -right-2 -top-2 rounded-full border border-brass bg-brass px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#201602] shadow-lg shadow-black/30">
-          Dealer
-        </span>
-      ) : null}
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="text-base font-semibold text-white">{seat.name}</h2>
-          <p className="text-xs uppercase tracking-[0.12em] text-white/45">
+      <div className={`flex items-start gap-2 ${seat.isHuman ? "justify-center text-center" : "justify-between"}`}>
+        <div className={seat.isHuman ? "min-w-0" : undefined}>
+          <h2 className="text-sm font-semibold text-white">{seat.name}</h2>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-white/45">
             Team {seat.team} | {seat.isHuman ? "Human" : "Bot"}
           </p>
         </div>
         {seat.isActive ? <Badge tone="brass">Turn</Badge> : null}
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {seat.isDealer ? <Badge tone="brass">Dealer</Badge> : null}
-        {seat.isCaller ? <Badge>Caller</Badge> : null}
-        {!seat.isCaller && seat.isPartnerOfCaller ? <Badge>Caller partner</Badge> : null}
-        {seat.isMaker ? <Badge>Maker team</Badge> : null}
-      </div>
-
-      <div className="mt-2">
-        <CardBackFan count={seat.cardCount} compact />
-      </div>
+      {(seat.isDealer || showDecision) ? (
+        <div className={`mt-1 flex flex-wrap gap-1 ${seat.isHuman ? "justify-center" : ""}`}>
+          {seat.isDealer ? <Badge tone="brass">Dealer</Badge> : null}
+          {showDecision ? <Badge tone={decision.label === "pass" ? "neutral" : "brass"}>{decisionBadgeText(decision)}</Badge> : null}
+        </div>
+      ) : null}
 
       {!seat.isHuman ? (
-        <p className="mt-2 min-h-6 text-xs text-white/55">{seat.recentAction ?? "No bot action yet."}</p>
+        <div className="mt-1">
+          <CardBackFan count={seat.cardCount} compact />
+        </div>
       ) : null}
     </section>
   );
 }
 
+function decisionBadgeText(decision: SeatBiddingDecision): string {
+  switch (decision.label) {
+    case "ordered-up":
+    case "assist":
+      return "Ordered up";
+    case "picked-up":
+      return "Picked up";
+    case "turned-down":
+      return "Turned down";
+    case "called":
+      return decision.suit ? `Called ${displaySuitSymbol(decision.suit)}` : "Called";
+    case "pass":
+      return "Pass";
+    case "none":
+      return "Waiting";
+    default:
+      return "Decision";
+  }
+}
+
+function scoreSecondCardClass(score: number): string {
+  const classes = [
+    "translate-x-[0.28rem] translate-y-[0.2rem] rotate-2",
+    "translate-x-[1.95rem] translate-y-[0.35rem] rotate-3",
+    "translate-x-[1.25rem] translate-y-[0.72rem] rotate-3",
+    "translate-x-[0.72rem] translate-y-[1.05rem] rotate-2",
+    "translate-x-[0.22rem] translate-y-[1.38rem] rotate-1",
+    "translate-x-[2.25rem] translate-y-[0.25rem] rotate-5",
+    "translate-x-[1.95rem] translate-y-[0.35rem] rotate-3",
+    "translate-x-[1.25rem] translate-y-[0.72rem] rotate-3",
+    "translate-x-[0.72rem] translate-y-[1.05rem] rotate-2",
+    "translate-x-[0.22rem] translate-y-[1.38rem] rotate-1",
+    "translate-x-[2.25rem] translate-y-[0.25rem] rotate-5"
+  ];
+
+  return classes[Math.max(0, Math.min(score, 10))];
+}
+
 function HumanSeatPanel({
   state,
   seat,
+  decision,
   hand,
   alone,
   setAlone,
@@ -1710,68 +1906,56 @@ function HumanSeatPanel({
 }: {
   state: GameState;
   seat: TableSeatView;
+  decision?: SeatBiddingDecision;
   hand: ReturnType<typeof buildHumanHandView>;
   alone: boolean;
   setAlone: (value: boolean) => void;
-  act: (action: GameAction) => void | Promise<void>;
+  act: (action: GameAction) => boolean | Promise<boolean>;
   disabled: boolean;
   onCard: (card: Card, legal: boolean) => void;
   selectedReplacementIds: string[];
   setSelectedReplacementIds: Dispatch<SetStateAction<string[]>>;
   farmersSelectionActive: boolean;
 }) {
+  const decisionPhase = state.phase === "farmersHand" || state.phase === "ordering" || state.phase === "calling";
+  const highlighted = seat.isActive || seat.isDealer;
+
   return (
-    <section className={`relative z-10 rounded-xl border p-4 shadow-lg shadow-black/20 ${seat.isActive ? "border-brass bg-[#0c3d30]/80" : "border-white/10 bg-[#071411]/55"}`}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-white">{seat.name}</h2>
-            {seat.isActive ? <Badge tone="brass">Turn</Badge> : null}
-            {seat.isDealer ? <Badge tone="brass">Dealer</Badge> : null}
-            {seat.isCaller ? <Badge>Caller</Badge> : null}
-            {seat.isMaker ? <Badge>Maker team</Badge> : null}
-          </div>
-          <p className="mt-1 text-xs uppercase tracking-[0.12em] text-white/45">Team {seat.team} | Human</p>
+    <section className={`relative z-10 mx-auto w-fit max-w-full rounded-xl border px-2 py-1.5 shadow-lg shadow-black/20 ${highlighted ? "border-brass bg-[#0c3d30]/80" : "border-white/10 bg-[#071411]/55"}`}>
+      <div className="flex flex-col items-center justify-center gap-1.5">
+        <div className="w-full max-w-[11rem]">
+          <SeatCard seat={seat} decision={decision} />
         </div>
-        <div className="rounded border border-white/10 bg-[#071411]/35 px-3 py-2 text-sm text-white/65 lg:max-w-md">
-          <p className="font-semibold text-white">{hand.actionLabel}</p>
-          <p className="mt-1">{hand.helperText}</p>
-          {farmersSelectionActive ? (
-            <p className="mt-1 text-xs font-semibold text-brass">
-              Select 1-3 highlighted low cards here, then press Replace Selected.
-            </p>
-          ) : null}
-          {hand.detailText ? <p className="mt-1 text-xs text-white/45">{hand.detailText}</p> : null}
-        </div>
+        <HumanHandActionControls
+          state={state}
+          alone={alone}
+          setAlone={setAlone}
+          act={act}
+          disabled={disabled}
+          selectedReplacementIds={selectedReplacementIds}
+          setSelectedReplacementIds={setSelectedReplacementIds}
+        />
       </div>
 
-      <HumanHandActionControls
-        state={state}
-        alone={alone}
-        setAlone={setAlone}
-        act={act}
-        disabled={disabled}
-        selectedReplacementIds={selectedReplacementIds}
-        setSelectedReplacementIds={setSelectedReplacementIds}
-      />
-
-      <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:flex lg:flex-wrap lg:justify-center">
+      <div className="mt-2 grid grid-cols-3 justify-center gap-1.5 sm:grid-cols-5 lg:flex lg:flex-wrap lg:justify-center">
         {hand.cards.map((card) => {
           const selected = selectedReplacementIds.includes(card.id);
+          const showBrightCard = decisionPhase && !farmersSelectionActive;
+          const cardDisabled = disabled || (!showBrightCard && !card.legal);
           return (
             <button
               key={card.id}
               data-seat={seat.seat}
               data-testid={`seat-${seat.seat}-card-${card.id}`}
-              className={`group rounded-xl p-0 transition ${
+              className={`group rounded-xl p-0 transition disabled:opacity-100 ${
                 card.legal
                   ? "hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass"
                   : ""
               } ${selected ? "-translate-y-1" : ""} disabled:cursor-not-allowed disabled:hover:translate-y-0`}
-              disabled={disabled || !card.legal}
+              disabled={cardDisabled}
               onClick={() => onCard(card.card, card.legal)}
             >
-              <PlayingCard card={card.card} playable={card.legal} size="hand" selected={selected} />
+              <PlayingCard card={card.card} playable={showBrightCard || card.legal} size="hand" selected={selected} />
             </button>
           );
         })}
@@ -1792,7 +1976,7 @@ function HumanHandActionControls({
   state: GameState;
   alone: boolean;
   setAlone: (value: boolean) => void;
-  act: (action: GameAction) => void | Promise<void>;
+  act: (action: GameAction) => boolean | Promise<boolean>;
   disabled: boolean;
   selectedReplacementIds: string[];
   setSelectedReplacementIds: Dispatch<SetStateAction<string[]>>;
@@ -1803,119 +1987,114 @@ function HumanHandActionControls({
 
   const humanTurn = state.activePlayer === 0;
   const legal = legalActionsForPlayer(state, state.activePlayer);
-  const explanation = buildLegalActionExplanation(state, 0);
+  const canUseFarmersHand = humanTurn && legal.canClaimFarmersHand;
+  const eligibleIds = new Set(legal.farmersHandReplaceableCards.map(cardId));
+  const selectedCards = selectedFarmersHandReplacementCards(state.hands[state.activePlayer], selectedReplacementIds);
+  const selectedCount = selectedCards.length;
 
-  if (state.phase === "farmersHand") {
-    const eligibleIds = new Set(legal.farmersHandReplaceableCards.map(cardId));
-    const selectedCards = selectedFarmersHandReplacementCards(state.hands[state.activePlayer], selectedReplacementIds);
-    const selectedCount = selectedCards.length;
-
-    function toggleReplacementCard(card: Card) {
-      const id = cardId(card);
-      if (!eligibleIds.has(id)) {
-        return;
-      }
-
-      setSelectedReplacementIds((current) => toggleFarmersHandReplacementSelection({
-        selectedIds: current,
-        card,
-        eligibleCards: legal.farmersHandReplaceableCards
-      }));
+  function toggleReplacementCard(card: Card) {
+    const id = cardId(card);
+    if (!eligibleIds.has(id)) {
+      return;
     }
 
-    return (
-      <section className="mt-3 rounded-xl border border-brass/30 bg-[#071411]/55 px-3 py-3">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-white">{PLAYER_NAMES[state.activePlayer]} to check Farmer&apos;s Hand</p>
-            <p className="mt-1 text-xs text-white/50">
-              {humanTurn ? explanation.details.join(" ") : "Bot checking..."}
-            </p>
+    setSelectedReplacementIds((current) => toggleFarmersHandReplacementSelection({
+      selectedIds: current,
+      card,
+      eligibleCards: legal.farmersHandReplaceableCards
+    }));
+  }
+
+  const farmersHandControls = canUseFarmersHand ? (
+    <div className="rounded border border-brass/30 bg-brass/10 px-2 py-1.5">
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
+        <span className="px-1 text-xs font-semibold uppercase tracking-[0.12em] text-brass">Farmer&apos;s Hand</span>
+        {state.phase === "farmersHand" ? (
+          <button
+            className="rounded border border-white/20 px-3 py-1.5 text-sm text-white"
+            disabled={disabled || !legal.canDeclineFarmersHand}
+            onClick={() => act({ type: "FARMERS_HAND_DECLINE", player: state.activePlayer })}
+          >
+            Decline
+          </button>
+        ) : null}
+        {state.config.farmersHandMode === "redeal" ? (
+          <button
+            className="rounded bg-brass px-3 py-1.5 text-sm font-semibold text-[#201602]"
+            disabled={disabled}
+            onClick={() => act({ type: "FARMERS_HAND_REDEAL", player: state.activePlayer, seed: Date.now() % 1_000_000 })}
+          >
+            Claim redeal
+          </button>
+        ) : null}
+        {state.config.farmersHandMode === "replaceThree" ? (
+          <button
+            className="rounded bg-brass px-3 py-1.5 text-sm font-semibold text-[#201602]"
+            disabled={disabled || selectedCount === 0}
+            onClick={() => act({ type: "FARMERS_HAND_REPLACE", player: state.activePlayer, cards: selectedCards })}
+          >
+            Replace selected
+          </button>
+        ) : null}
+      </div>
+      {state.config.farmersHandMode === "replaceThree" ? (
+        <div className="mt-1.5 rounded border border-white/10 bg-[#071411]/35 px-2 py-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Eligible low cards</p>
+            <span className="text-sm font-semibold text-brass">{selectedCount}/3 selected</span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="rounded border border-white/20 px-3 py-2 text-sm text-white"
-              disabled={disabled || !humanTurn || !legal.canDeclineFarmersHand}
-              onClick={() => act({ type: "FARMERS_HAND_DECLINE", player: state.activePlayer })}
-            >
-              Decline
-            </button>
-            {state.config.farmersHandMode === "redeal" ? (
-              <button
-                className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
-                disabled={disabled || !humanTurn || !legal.canClaimFarmersHand}
-                onClick={() => act({ type: "FARMERS_HAND_REDEAL", player: state.activePlayer, seed: Date.now() % 1_000_000 })}
-              >
-                Claim redeal
-              </button>
-            ) : null}
-            {state.config.farmersHandMode === "replaceThree" ? (
-              <button
-                className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
-                disabled={disabled || !humanTurn || !legal.canClaimFarmersHand || selectedCount === 0}
-                onClick={() => act({ type: "FARMERS_HAND_REPLACE", player: state.activePlayer, cards: selectedCards })}
-              >
-                Replace Selected
-              </button>
-            ) : null}
+          <p className="mt-1 text-xs text-white/45">{replacementSelectionLabel(selectedCards)}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {state.hands[state.activePlayer].map((card) => {
+              const id = cardId(card);
+              const eligible = eligibleIds.has(id);
+              const selected = selectedReplacementIds.includes(id);
+              const selectionBlocked = !selected && selectedCount >= 3;
+
+              return (
+                <button
+                  key={id}
+                  className={`rounded border px-3 py-1.5 text-sm font-bold shadow-sm ${
+                    selected
+                      ? "border-brass bg-brass text-[#201602]"
+                      : eligible
+                        ? "border-white/30 bg-white text-[#071411]"
+                        : "border-white/10 bg-white/10 text-white/30"
+                  }`}
+                  disabled={disabled || !eligible || selectionBlocked}
+                  onClick={() => toggleReplacementCard(card)}
+                >
+                  {cardLabel(card)}
+                </button>
+              );
+            })}
           </div>
         </div>
-        {state.config.farmersHandMode === "replaceThree" && humanTurn ? (
-          <div className="mt-2 rounded border border-white/10 bg-[#071411]/35 px-3 py-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Eligible low cards</p>
-              <span className="text-sm font-semibold text-brass">{selectedCount}/3 selected</span>
-            </div>
-            <p className="mt-1 text-xs text-white/45">{replacementSelectionLabel(selectedCards)}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {state.hands[state.activePlayer].map((card) => {
-                const id = cardId(card);
-                const eligible = eligibleIds.has(id);
-                const selected = selectedReplacementIds.includes(id);
-                const selectionBlocked = !selected && selectedCount >= 3;
+      ) : null}
+    </div>
+  ) : null;
 
-                return (
-                  <button
-                    key={id}
-                    className={`rounded border px-3 py-2 text-sm font-bold shadow-sm ${
-                      selected
-                        ? "border-brass bg-brass text-[#201602]"
-                        : eligible
-                          ? "border-white/30 bg-white text-[#071411]"
-                          : "border-white/10 bg-white/10 text-white/30"
-                    }`}
-                    disabled={disabled || !eligible || selectionBlocked}
-                    onClick={() => toggleReplacementCard(card)}
-                  >
-                    {cardLabel(card)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
+  if (state.phase === "farmersHand") {
+    return (
+      <section className="mt-1 w-fit max-w-full rounded-lg border border-brass/25 bg-[#071411]/45 px-2 py-1.5">
+        {farmersHandControls}
       </section>
     );
   }
 
   return (
-    <section className="mt-3 rounded-xl border border-brass/30 bg-[#071411]/55 px-3 py-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-white">{PLAYER_NAMES[state.activePlayer]} to bid</p>
-          <p className="mt-1 text-xs text-white/50">
-            {humanTurn ? explanation.primary : "Bot thinking..."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <section className="mt-1 w-fit max-w-full rounded-lg border border-brass/25 bg-[#071411]/45 px-2 py-1.5">
+      <div className="flex flex-col items-center justify-center gap-1.5">
+        {farmersHandControls}
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
           {humanTurn ? (
-            <label className="flex items-center gap-2 rounded border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70">
+            <label className="flex items-center gap-2 rounded border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-white/70">
               <input type="checkbox" checked={alone} onChange={(event) => setAlone(event.target.checked)} />
               Alone
             </label>
           ) : null}
           <button
-            className="rounded border border-white/20 px-3 py-2 text-sm font-semibold text-white"
+            className="rounded border border-white/20 px-3 py-1.5 text-sm font-semibold text-white"
             disabled={disabled || !humanTurn || !legal.canPass}
             onClick={() => act({ type: "PASS", player: state.activePlayer })}
           >
@@ -1923,95 +2102,235 @@ function HumanHandActionControls({
           </button>
           {state.phase === "ordering" ? (
             <button
-              className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
+              className="inline-flex items-center gap-2 rounded bg-brass px-3 py-1.5 text-sm font-semibold text-[#201602]"
               disabled={disabled || !humanTurn || !legal.canOrderUp}
               onClick={() => act({ type: "ORDER_UP", player: state.activePlayer, alone })}
             >
-              Order up {state.upcard ? state.upcard.suit : ""}
+              <span>Order up</span>
+              <SuitIcon suit={state.upcard?.suit ?? null} label="Upcard suit" light />
             </button>
           ) : null}
           {state.phase === "calling"
             ? legal.callableSuits.map((suit) => (
                 <button
                   key={suit}
-                  className="rounded bg-brass px-3 py-2 text-sm font-semibold text-[#201602]"
+                  className="inline-flex items-center gap-2 rounded bg-brass px-3 py-1.5 text-sm font-semibold text-[#201602]"
                   disabled={disabled || !humanTurn}
                   onClick={() => act({ type: "CALL_TRUMP", player: state.activePlayer, suit, alone })}
                 >
-                  Call {suit}
+                  <span>Call</span>
+                  <SuitIcon suit={suit} label="Trump suit" light />
                 </button>
               ))
             : null}
         </div>
       </div>
-      {humanTurn && explanation.details.length ? (
-        <p className="mt-2 text-xs text-white/45">{explanation.details.join(" ")}</p>
+    </section>
+  );
+}
+
+function CurrentTrickPanel({
+  trick,
+  trickPhase,
+  dealer,
+  kitty,
+  upcard
+}: {
+  trick: ReturnType<typeof buildCurrentTrickView>;
+  trickPhase: TrickFlowPhase;
+  dealer: PlayerIndex;
+  kitty: Card[];
+  upcard?: Card;
+}) {
+  const playBySeat = new Map(trick.plays.map((play, index) => [play.seat, { play, index }]));
+  const animation = buildTrickAnimationState(trick);
+  const animationBySeat = new Map(animation.cards.map((card) => [card.seat, card]));
+  const showingCompletedTrick = trick.isShowingCompletedTrick;
+  const ledSuit = suitFromLabel(trick.ledSuitLabel);
+  const trumpSuit = suitFromLabel(trick.trumpLabel);
+  const statusText = showingCompletedTrick
+    ? `${trick.currentWinnerLabel ?? "Winner"} took it${trick.winningCardLabel ? ` with ${trick.winningCardLabel}` : ""}`
+    : trick.plays.length
+      ? `${trick.plays.length}/4 played`
+      : "Awaiting lead";
+
+  return (
+    <section
+      className="relative z-10 overflow-hidden rounded-[1.5rem] border border-brass/25 bg-[#08271f]/55 p-2 shadow-inner shadow-black/35"
+      data-trick-phase={animation.phase}
+      data-ui-trick-phase={trickPhase}
+      data-collect-target={animation.collectTarget ?? "none"}
+    >
+      <div className="pointer-events-none absolute left-3 top-3 z-20 flex items-start gap-1.5 text-xs">
+        <span className="rounded-full border border-brass/30 bg-[#071411]/70 px-3 py-1 font-semibold text-brass">
+          Trick {trick.trickNumber}
+        </span>
+        <span className="flex flex-col items-start gap-1 rounded-xl border border-white/10 bg-[#071411]/60 px-2 py-1 text-white/70">
+          <span className="inline-flex items-center gap-1.5">
+            <span>{showingCompletedTrick && trick.nextLeaderLabel ? `Next lead ${trick.nextLeaderLabel}` : `Lead ${trick.leaderLabel}`}</span>
+            <SuitIcon suit={ledSuit} label="Led suit" compact />
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span>Trump</span>
+            <SuitIcon suit={trumpSuit} label="Trump" compact />
+          </span>
+        </span>
+      </div>
+      <KittyStack dealer={dealer} kitty={kitty} upcard={upcard} />
+      <div className="grid min-h-56 grid-cols-[minmax(5.5rem,1fr)_minmax(8rem,1.1fr)_minmax(5.5rem,1fr)] grid-rows-[minmax(5.5rem,1fr)_minmax(5rem,0.8fr)_minmax(5.5rem,1fr)] items-center gap-1.5 sm:min-h-60">
+        <div className="col-start-2 row-start-1 self-end">
+          <TrickSeatCard seat={2} entry={playBySeat.get(2)} position="north" animationCard={animationBySeat.get(2)} />
+        </div>
+        <div className="col-start-1 row-start-2 justify-self-end">
+          <TrickSeatCard seat={1} entry={playBySeat.get(1)} position="west" animationCard={animationBySeat.get(1)} />
+        </div>
+        <div className="col-start-2 row-start-2 mx-auto rounded-full border border-brass/20 bg-[#071411]/50 px-4 py-2 text-center shadow-inner shadow-black/40">
+          <p className="text-sm font-semibold text-white">{statusText}</p>
+          <p className="mt-0.5 text-[11px] uppercase tracking-[0.12em] text-white/40">
+            {showingCompletedTrick && trick.nextLeaderLabel
+              ? `Next lead: ${trick.nextLeaderLabel}`
+              : trick.currentWinnerLabel
+                ? `Winning: ${trick.currentWinnerLabel}`
+                : waitingOnLabel(trick)}
+          </p>
+        </div>
+        <div className="col-start-3 row-start-2 justify-self-start">
+          <TrickSeatCard seat={3} entry={playBySeat.get(3)} position="east" animationCard={animationBySeat.get(3)} />
+        </div>
+        <div className="col-start-2 row-start-3 self-start">
+          <TrickSeatCard seat={0} entry={playBySeat.get(0)} position="south" animationCard={animationBySeat.get(0)} />
+        </div>
+      </div>
+      {animation.phase === "collecting" && animation.winner.winnerLabel ? (
+        <div className={`trick-collect-stack trick-collect-${animation.collectTarget ?? "center"}`} aria-hidden="true">
+          {animation.cards.map((card) => (
+            <span
+              key={`${card.seat}-${card.cardLabel}`}
+              className={`playing-card absolute h-16 w-12 border border-white bg-[#fffaf0] shadow-lg shadow-black/35 trick-stack-card-${card.playOrder}`}
+            />
+          ))}
+        </div>
       ) : null}
     </section>
   );
 }
 
-function CurrentTrickPanel({ trick }: { trick: ReturnType<typeof buildCurrentTrickView> }) {
-  const playBySeat = new Map(trick.plays.map((play, index) => [play.seat, { play, index }]));
-  const showingCompletedTrick = trick.plays.length === 4 && trick.unplayedSeats.length === 0;
+function KittyStack({
+  dealer,
+  kitty,
+  upcard
+}: {
+  dealer: PlayerIndex;
+  kitty: Card[];
+  upcard?: Card;
+}) {
+  if (!kitty.length && !upcard) {
+    return null;
+  }
+
+  const hiddenCount = Math.max(0, kitty.length - (upcard ? 1 : 0));
 
   return (
-    <section className="relative z-10 rounded-[1.25rem] border border-brass/25 bg-[#08271f]/68 p-3 shadow-inner shadow-black/35">
-      <div className="grid min-h-48 grid-cols-[minmax(5.5rem,1fr)_minmax(7.5rem,1.1fr)_minmax(5.5rem,1fr)] grid-rows-[auto_auto_auto] items-center gap-2">
-        <div className="col-start-2 row-start-1">
-          <TrickSeatCard seat={2} entry={playBySeat.get(2)} />
-        </div>
-        <div className="col-start-1 row-start-2">
-          <TrickSeatCard seat={1} entry={playBySeat.get(1)} />
-        </div>
-        <div className="col-start-2 row-start-2 rounded-full border border-brass/25 bg-[#071411]/45 px-3 py-4 text-center shadow-inner shadow-black/40">
-          <p className="mt-1 text-sm font-semibold text-white">
-            {showingCompletedTrick
-              ? `${trick.currentWinnerLabel ?? "Winner"} took it`
-              : trick.plays.length
-                ? `${trick.plays.length}/4 played`
-                : "Awaiting lead"}
-          </p>
-        </div>
-        <div className="col-start-3 row-start-2">
-          <TrickSeatCard seat={3} entry={playBySeat.get(3)} />
-        </div>
-        <div className="col-start-2 row-start-3">
-          <TrickSeatCard seat={0} entry={playBySeat.get(0)} />
+    <div className={`pointer-events-none absolute z-10 ${dealerKittyPositionClass(dealer)}`} aria-label={`Kitty in front of ${PLAYER_NAMES[dealer]}`}>
+      <div className="rounded-xl border border-brass/20 bg-[#071411]/60 px-2 py-1.5 shadow-lg shadow-black/35">
+        <div className="relative h-20 w-16">
+          <div aria-hidden="true">
+            {Array.from({ length: Math.max(1, Math.min(hiddenCount, 3)) }).map((_, index) => (
+              <span
+                key={index}
+                className="playing-card playing-card-back absolute left-1 top-2 w-10 border border-brass/45"
+                style={{ transform: `translate(${index * 4}px, ${index * 2}px) rotate(${(index - 1) * 4}deg)` }}
+              />
+            ))}
+          </div>
+          {upcard ? (
+            <MiniTableCard card={upcard} className="absolute left-4 top-1 rotate-6" />
+          ) : (
+            <span className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded border border-white/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
+              Kitty
+            </span>
+          )}
         </div>
       </div>
-    </section>
+    </div>
+  );
+}
+
+function dealerKittyPositionClass(dealer: PlayerIndex): string {
+  const positions: Record<PlayerIndex, string> = {
+    0: "bottom-5 right-[23%]",
+    1: "bottom-8 left-5",
+    2: "right-[23%] top-12",
+    3: "bottom-8 right-5"
+  };
+
+  return positions[dealer];
+}
+
+function MiniTableCard({ card, className = "" }: { card: Card; className?: string }) {
+  const red = suitColor(card.suit) === "red";
+  const suit = displaySuitSymbol(card.suit);
+
+  return (
+    <span className={`playing-card relative inline-flex w-10 flex-col justify-between overflow-hidden border border-white bg-[#fffaf0] p-1 text-left shadow-md shadow-black/30 ${
+      red ? "text-[#b71c2b]" : "text-[#111827]"
+    } ${className}`} aria-label={`Upcard ${cardLabel(card)}`}>
+      <span className="flex flex-col leading-none">
+        <span className="text-xs font-black">{card.rank}</span>
+        <span className="text-sm">{suit}</span>
+      </span>
+      <span className="absolute inset-0 flex items-center justify-center text-xl font-black opacity-90">{suit}</span>
+      <span className="flex rotate-180 flex-col self-end leading-none">
+        <span className="text-xs font-black">{card.rank}</span>
+        <span className="text-sm">{suit}</span>
+      </span>
+    </span>
   );
 }
 
 function TrickSeatCard({
   seat,
-  entry
+  entry,
+  position,
+  animationCard
 }: {
   seat: PlayerIndex;
   entry?: { play: ReturnType<typeof buildCurrentTrickView>["plays"][number]; index: number };
+  position: "north" | "west" | "east" | "south";
+  animationCard?: ReturnType<typeof buildTrickAnimationState>["cards"][number];
 }) {
   const play = entry?.play;
+  const rotation = position === "west" ? "-rotate-6" : position === "east" ? "rotate-6" : position === "north" ? "rotate-2" : "-rotate-2";
 
   return (
-    <div className={`min-h-28 rounded-xl border px-2 py-2 text-center ${
-      play?.isWinningCard ? "border-brass bg-brass/15 shadow-lg shadow-brass/10" : "border-white/10 bg-[#071411]/35"
-    }`}>
-      <div className="flex min-h-5 items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-white/55">{TABLE_PLAYER_NAMES[seat]}</p>
-        {play?.isLeader ? <Badge>Leader</Badge> : null}
-      </div>
+    <div
+      className={`trick-seat-slot min-h-24 min-w-24 px-2 py-1.5 text-center ${
+      play?.isWinningCard
+        ? "rounded-xl border border-brass bg-brass/15 shadow-lg shadow-brass/10"
+        : play
+          ? "rounded-xl border border-white/10 bg-[#071411]/25"
+          : ""
+    }`}
+      data-seat={position}
+      data-slot={animationCard?.slot ?? "empty"}
+      data-winning={play?.isWinningCard ? "true" : "false"}
+    >
       {play ? (
         <>
-          <div className="mx-auto mt-1 w-14 sm:w-16">
+          <div className="flex min-h-5 items-center justify-center gap-1.5">
+            <p className="text-[11px] font-semibold text-white/70">{TABLE_PLAYER_NAMES[seat]}</p>
+            {play.isLeader ? <Badge>Lead</Badge> : null}
+          </div>
+          <div
+            className={`trick-play-card mx-auto mt-1 w-14 transition-transform sm:w-16 ${rotation}`}
+            style={{ animationDelay: `${animationCard?.animationDelayMs ?? 0}ms` }}
+          >
             <PlayingCard card={play.card} playable size="trick" winning={play.isWinningCard} />
           </div>
-          {play.isWinningCard ? <p className="mt-1 text-xs font-semibold text-brass">Winning</p> : null}
+          {play.isWinningCard ? <p className="mt-1 text-[11px] font-semibold text-brass">Winning</p> : null}
         </>
       ) : (
-        <div className="mt-2 rounded-lg border border-dashed border-white/15 px-2 py-6 text-xs text-white/35">
-          No card yet
-        </div>
+        <div className="h-24" aria-hidden="true" />
       )}
     </div>
   );
@@ -2032,26 +2351,26 @@ function PlayingCard({
 }) {
   const red = suitColor(card.suit) === "red";
   const suit = displaySuitSymbol(card.suit);
-  const sizeClass = size === "hand" ? "w-full max-w-28 lg:w-24" : "w-full";
+  const sizeClass = size === "hand" ? "w-full max-w-24 lg:w-20 xl:w-24" : "w-full";
   const colorClass = red ? "text-[#b71c2b]" : "text-[#111827]";
 
   return (
     <span
-      className={`playing-card relative inline-flex ${sizeClass} select-none flex-col justify-between overflow-hidden border bg-[#fffaf0] p-2 text-left ${colorClass} ${
-        playable ? "border-white" : "border-white/25 grayscale opacity-45"
+      className={`playing-card relative inline-flex ${sizeClass} select-none flex-col justify-between overflow-hidden border bg-[#fffaf0] p-1.5 text-left ${colorClass} ${
+        playable ? "border-white" : "border-white/25 grayscale brightness-90"
       } ${winning || selected ? "ring-2 ring-brass ring-offset-2 ring-offset-[#08271f]" : ""}`}
       aria-label={cardLabel(card)}
     >
       <span className="flex flex-col leading-none">
-        <span className="text-lg font-black">{card.rank}</span>
-        <span className="text-xl">{suit}</span>
+        <span className="text-base font-black">{card.rank}</span>
+        <span className="text-lg">{suit}</span>
       </span>
-      <span className="absolute inset-0 flex items-center justify-center text-4xl font-black opacity-90">
+      <span className="absolute inset-0 flex items-center justify-center text-3xl font-black opacity-90 xl:text-4xl">
         {suit}
       </span>
       <span className="flex rotate-180 flex-col self-end leading-none">
-        <span className="text-lg font-black">{card.rank}</span>
-        <span className="text-xl">{suit}</span>
+        <span className="text-base font-black">{card.rank}</span>
+        <span className="text-lg">{suit}</span>
       </span>
     </span>
   );
@@ -2062,18 +2381,15 @@ function CardBackFan({ count, compact = false }: { count: number; compact?: bool
 
   return (
     <div>
-      <div className="flex min-h-16 items-center justify-center">
+      <div className="flex min-h-12 items-center justify-center">
         {Array.from({ length: visible }).map((_, index) => (
           <span
             key={index}
-            className={`playing-card playing-card-back -ml-7 first:ml-0 ${compact ? "w-10" : "w-14"} border border-brass/45`}
+            className={`playing-card playing-card-back ${compact ? "-ml-6 w-9" : "-ml-7 w-14"} first:ml-0 border border-brass/45`}
             style={{ transform: `rotate(${(index - Math.floor(visible / 2)) * 4}deg)` }}
           />
         ))}
       </div>
-      <p className="mt-1 text-center text-xs uppercase tracking-[0.12em] text-white/45">
-        {count} card{count === 1 ? "" : "s"}
-      </p>
     </div>
   );
 }
@@ -2085,6 +2401,50 @@ function displaySuitSymbol(suit: Card["suit"]): string {
     hearts: "♥",
     spades: "♠"
   }[suit];
+}
+
+function SuitIcon({
+  suit,
+  label,
+  compact = false,
+  light = false
+}: {
+  suit: Card["suit"] | null;
+  label: string;
+  compact?: boolean;
+  light?: boolean;
+}) {
+  if (!suit) {
+    return (
+      <span className={`inline-flex items-center justify-center rounded-full border ${
+        compact ? "h-6 min-w-6 px-1.5 text-[10px]" : "h-7 min-w-7 px-2 text-xs"
+      } ${light ? "border-[#201602]/20 bg-[#201602]/10 text-[#201602]/65" : "border-white/10 bg-white/[0.04] text-white/45"}`}>
+        -
+      </span>
+    );
+  }
+
+  const red = suitColor(suit) === "red";
+  const symbol = displaySuitSymbol(suit);
+  const colorClass = light
+    ? red ? "text-[#9f1239]" : "text-[#111827]"
+    : red ? "text-[#ff7b8a]" : "text-white";
+
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-full border font-black leading-none shadow-sm ${
+        compact ? "h-6 min-w-6 px-1.5 text-base" : "h-7 min-w-7 px-2 text-lg"
+      } ${light ? "border-[#201602]/20 bg-white/80" : "border-white/15 bg-[#fffaf0]/10"} ${colorClass}`}
+      aria-label={`${label}: ${suit}`}
+      title={`${label}: ${suit}`}
+    >
+      {symbol}
+    </span>
+  );
+}
+
+function suitFromLabel(value: string): Card["suit"] | null {
+  return value === "clubs" || value === "diamonds" || value === "hearts" || value === "spades" ? value : null;
 }
 
 function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "brass" }) {

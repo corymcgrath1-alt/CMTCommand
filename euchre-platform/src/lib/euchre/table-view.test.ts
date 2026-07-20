@@ -117,9 +117,11 @@ describe("five-card score view models", () => {
     expect(buildFiveCardScoreView(7, "red")).toMatchObject({
       teamColor: "red",
       score: 7,
+      clampedScore: 7,
+      accessibleLabel: "North/South team score: 7",
       cards: [
-        { suit: "hearts", color: "red", visiblePips: 5, isBaseFive: true },
-        { suit: "diamonds", color: "red", visiblePips: 2, isBaseFive: false }
+        { suit: "hearts", cardLabel: "5H", color: "red", faceUp: true, visiblePips: 5, isBaseFive: true, state: "complete" },
+        { suit: "diamonds", cardLabel: "5D", color: "red", faceUp: true, visiblePips: 2, isBaseFive: false, state: "partial" }
       ]
     });
   });
@@ -129,10 +131,28 @@ describe("five-card score view models", () => {
       teamColor: "black",
       score: 4,
       cards: [
-        { suit: "spades", color: "black", visiblePips: 4, isBaseFive: false },
-        { suit: "clubs", color: "black", visiblePips: 0, isBaseFive: false }
+        { suit: "spades", cardLabel: "5S", color: "black", faceUp: true, visiblePips: 4, isBaseFive: false, state: "partial" },
+        { suit: "clubs", cardLabel: "5C", color: "black", faceUp: false, visiblePips: 0, isBaseFive: false, state: "unused" }
       ]
     });
+  });
+
+  it.each([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])("maps every red score state %i to physical five-card pips", (score) => {
+    const view = buildFiveCardScoreView(score, "red");
+    const expected: [number, number] = [Math.min(score, 5), Math.max(0, score - 5)] as [number, number];
+
+    expect(view.cards.map((card) => card.visiblePips)).toEqual(expected);
+    expect(view.cards.map((card) => card.cardLabel)).toEqual(["5H", "5D"]);
+    expect(view.cards[0].faceUp).toBe(score > 0);
+    expect(view.cards[1].faceUp).toBe(score > 5);
+  });
+
+  it.each([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])("maps every black score state %i to physical five-card pips", (score) => {
+    const view = buildFiveCardScoreView(score, "black");
+    const expected: [number, number] = [Math.min(score, 5), Math.max(0, score - 5)] as [number, number];
+
+    expect(view.cards.map((card) => card.visiblePips)).toEqual(expected);
+    expect(view.cards.map((card) => card.cardLabel)).toEqual(["5S", "5C"]);
   });
 
   it("clamps visible pips while preserving the source score", () => {
@@ -204,8 +224,11 @@ describe("current trick view models", () => {
 
     expect(view).toMatchObject({
       trickNumber: 1,
+      isShowingCompletedTrick: true,
       leaderSeat: 1,
       leaderLabel: "West",
+      nextLeaderSeat: 2,
+      nextLeaderLabel: "North",
       ledSuitLabel: "hearts",
       currentWinnerSeat: 2,
       currentWinnerLabel: "North",

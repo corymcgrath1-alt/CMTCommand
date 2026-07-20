@@ -67,14 +67,23 @@ export interface EuchreTeamScoreView {
 export interface ScoreFiveCard {
   suit: "hearts" | "diamonds" | "spades" | "clubs";
   color: "red" | "black";
+  cardLabel: "5H" | "5D" | "5S" | "5C";
+  role: "base" | "cover" | "bonus";
+  faceUp: boolean;
   visiblePips: number;
+  coveredPips: number;
   isBaseFive: boolean;
+  isComplete: boolean;
+  state: "unused" | "partial" | "complete";
 }
 
 export interface FiveCardScoreView {
   teamColor: "red" | "black";
   cards: [ScoreFiveCard, ScoreFiveCard];
   score: number;
+  clampedScore: number;
+  isWinningScore: boolean;
+  accessibleLabel: string;
 }
 
 export interface HumanHandView {
@@ -100,8 +109,11 @@ export interface TablePlayView {
 
 export interface CurrentTrickView {
   trickNumber: number;
+  isShowingCompletedTrick: boolean;
   leaderSeat?: PlayerIndex;
   leaderLabel: string;
+  nextLeaderSeat?: PlayerIndex;
+  nextLeaderLabel?: string;
   ledSuitLabel: string;
   trumpLabel: string;
   plays: TablePlayView[];
@@ -177,22 +189,40 @@ export function buildFiveCardScoreView(score: number, teamColor: "red" | "black"
   const suits: [ScoreFiveCard["suit"], ScoreFiveCard["suit"]] = teamColor === "red"
     ? ["hearts", "diamonds"]
     : ["spades", "clubs"];
+  const labels: [ScoreFiveCard["cardLabel"], ScoreFiveCard["cardLabel"]] = teamColor === "red"
+    ? ["5H", "5D"]
+    : ["5S", "5C"];
 
   return {
     teamColor,
     score,
+    clampedScore,
+    isWinningScore: clampedScore >= 10,
+    accessibleLabel: `${teamColor === "red" ? "North/South" : "East/West"} team score: ${clampedScore}`,
     cards: [
       {
         suit: suits[0],
         color: teamColor,
+        cardLabel: labels[0],
+        role: "base",
+        faceUp: clampedScore > 0,
         visiblePips: firstCardVisible,
-        isBaseFive: firstCardVisible === 5
+        coveredPips: 5 - firstCardVisible,
+        isBaseFive: firstCardVisible === 5,
+        isComplete: firstCardVisible === 5,
+        state: firstCardVisible === 0 ? "unused" : firstCardVisible === 5 ? "complete" : "partial"
       },
       {
         suit: suits[1],
         color: teamColor,
+        cardLabel: labels[1],
+        role: clampedScore <= 5 ? "cover" : "bonus",
+        faceUp: clampedScore > 5,
         visiblePips: secondCardVisible,
-        isBaseFive: false
+        coveredPips: 5 - secondCardVisible,
+        isBaseFive: false,
+        isComplete: secondCardVisible === 5,
+        state: secondCardVisible === 0 ? "unused" : secondCardVisible === 5 ? "complete" : "partial"
       }
     ]
   };
@@ -204,8 +234,9 @@ export function buildHumanHandView(state: GameState, seat: PlayerIndex = 0): Hum
   const farmersHandEligible = new Set(legal.farmersHandReplaceableCards.map(cardId));
   const explanation = buildLegalActionExplanation(state, seat);
   const mustDiscard = legal.mustDiscard;
-  const canSelectFarmersHandReplacement = state.phase === "farmersHand"
+  const canSelectFarmersHandReplacement = (state.phase === "farmersHand" || state.phase === "ordering" || state.phase === "calling")
     && state.activePlayer === seat
+    && legal.canClaimFarmersHand
     && state.config.farmersHandMode === "replaceThree";
 
   return {
@@ -248,8 +279,11 @@ export function buildCurrentTrickView(state: GameState, options: { showLatestCom
 
   return {
     trickNumber,
+    isShowingCompletedTrick: showingCompleted,
     leaderSeat: trick?.leader,
     leaderLabel: trick ? TABLE_PLAYER_NAMES[trick.leader] : "Not started",
+    nextLeaderSeat: showingCompleted ? state.currentTrick?.leader : undefined,
+    nextLeaderLabel: showingCompleted && state.currentTrick ? TABLE_PLAYER_NAMES[state.currentTrick.leader] : undefined,
     ledSuitLabel: ledSuit ?? "Not led",
     trumpLabel: trump ?? "Not set",
     plays: plays.map((play) => ({
