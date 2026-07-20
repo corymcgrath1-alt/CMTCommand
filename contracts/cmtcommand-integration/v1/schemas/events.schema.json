@@ -1,0 +1,540 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cmtcommand.local/contracts/cmtcommand-integration/v1/schemas/events.schema.json",
+  "title": "CMTCommand Integration Events v1",
+  "oneOf": [
+    { "$ref": "#/$defs/WorkOrderCreated" },
+    { "$ref": "#/$defs/AssignmentPublished" },
+    { "$ref": "#/$defs/AssignmentAccepted" },
+    { "$ref": "#/$defs/FieldVisitStarted" },
+    { "$ref": "#/$defs/FieldVisitCompleted" },
+    { "$ref": "#/$defs/ConcreteFreshPropertiesRecorded" },
+    { "$ref": "#/$defs/SpecimenCreated" },
+    { "$ref": "#/$defs/SpecimenCustodyTransferred" },
+    { "$ref": "#/$defs/SpecimenReceivedByLab" },
+    { "$ref": "#/$defs/BreakScheduled" },
+    { "$ref": "#/$defs/BreakResultRecorded" },
+    { "$ref": "#/$defs/LabResultReviewed" },
+    { "$ref": "#/$defs/LabResultApproved" },
+    { "$ref": "#/$defs/LabResultAmended" },
+    { "$ref": "#/$defs/NonconformanceRaised" },
+    { "$ref": "#/$defs/OperationalStatusChanged" },
+    { "$ref": "#/$defs/WorkOrderClosed" }
+  ],
+  "$defs": {
+    "BaseEnvelope": {
+      "$ref": "./event-envelope.schema.json"
+    },
+    "Measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": { "type": "number" },
+        "unit": { "type": "string", "minLength": 1 },
+        "method": { "type": "string" }
+      }
+    },
+    "MethodReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identifier", "title"],
+      "properties": {
+        "identifier": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "version": { "type": "string" }
+      }
+    },
+    "CalibrationReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["equipmentId", "calibrationReference", "calibrationStatus"],
+      "properties": {
+        "equipmentId": { "type": "string", "minLength": 1 },
+        "calibrationReference": { "type": "string", "minLength": 1 },
+        "calibrationStatus": {
+          "type": "string",
+          "enum": ["current", "expired", "missing", "unknown"]
+        }
+      }
+    },
+    "EvidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceId", "evidenceType", "provenance", "capturedAt"],
+      "properties": {
+        "evidenceId": { "type": "string", "minLength": 1 },
+        "evidenceType": {
+          "type": "string",
+          "enum": ["field_entry", "custody_log", "lab_machine_reading", "review_note", "attachment_metadata", "system_status"]
+        },
+        "provenance": { "type": "string", "minLength": 1 },
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "attachmentMetadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fileName": { "type": "string" },
+            "contentType": { "type": "string" },
+            "byteSize": { "type": "integer", "minimum": 0 },
+            "digest": { "type": "string" }
+          }
+        }
+      }
+    },
+    "WorkOrderCreated": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["projectId"],
+          "properties": {
+            "eventType": { "const": "WorkOrderCreated" },
+            "sourceSystem": { "const": "CMTCommandDispatch" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["projectName", "serviceType", "placementLocation", "readinessRequirements"],
+              "properties": {
+                "projectName": { "type": "string" },
+                "serviceType": { "type": "string" },
+                "placementLocation": { "type": "string" },
+                "readinessRequirements": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AssignmentPublished": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["assignmentId"],
+          "properties": {
+            "eventType": { "const": "AssignmentPublished" },
+            "sourceSystem": { "const": "CMTCommandDispatch" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["technicianId", "scheduledStart", "requiredServiceType", "requiredEquipment"],
+              "properties": {
+                "technicianId": { "type": "string" },
+                "scheduledStart": { "type": "string", "format": "date-time" },
+                "requiredServiceType": { "type": "string" },
+                "requiredEquipment": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AssignmentAccepted": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["assignmentId"],
+          "properties": {
+            "eventType": { "const": "AssignmentAccepted" },
+            "sourceSystem": { "const": "CMTFieldApp" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["acceptedAt", "deviceId"],
+              "properties": {
+                "acceptedAt": { "type": "string", "format": "date-time" },
+                "deviceId": { "type": "string" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "FieldVisitStarted": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["assignmentId", "fieldVisitId"],
+          "properties": {
+            "eventType": { "const": "FieldVisitStarted" },
+            "sourceSystem": { "const": "CMTFieldApp" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["startedAt", "deviceId"],
+              "properties": {
+                "startedAt": { "type": "string", "format": "date-time" },
+                "deviceId": { "type": "string" },
+                "offlineCaptured": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "FieldVisitCompleted": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["fieldVisitId"],
+          "properties": {
+            "eventType": { "const": "FieldVisitCompleted" },
+            "sourceSystem": { "const": "CMTFieldApp" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["completedAt", "completionStatus"],
+              "properties": {
+                "completedAt": { "type": "string", "format": "date-time" },
+                "completionStatus": { "type": "string" },
+                "remarks": { "type": "string" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ConcreteFreshPropertiesRecorded": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["fieldVisitId", "testSetId"],
+          "properties": {
+            "eventType": { "const": "ConcreteFreshPropertiesRecorded" },
+            "sourceSystem": { "const": "CMTFieldApp" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sampledAt", "supplier", "truckTicket", "mixDesignId", "freshProperties", "methodReferences", "calibrationReferences"],
+              "properties": {
+                "sampledAt": { "type": "string", "format": "date-time" },
+                "supplier": { "type": "string" },
+                "truckTicket": { "type": "string" },
+                "batchTicket": { "type": "string" },
+                "mixDesignId": { "type": "string" },
+                "freshProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["slump", "airContent", "concreteTemperature", "ambientTemperature"],
+                  "properties": {
+                    "slump": { "$ref": "#/$defs/Measurement" },
+                    "airContent": { "$ref": "#/$defs/Measurement" },
+                    "concreteTemperature": { "$ref": "#/$defs/Measurement" },
+                    "ambientTemperature": { "$ref": "#/$defs/Measurement" },
+                    "unitWeight": { "$ref": "#/$defs/Measurement" },
+                    "yield": { "$ref": "#/$defs/Measurement" },
+                    "waterAdded": { "$ref": "#/$defs/Measurement" }
+                  }
+                },
+                "methodReferences": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "$ref": "#/$defs/MethodReference" }
+                },
+                "calibrationReferences": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "$ref": "#/$defs/CalibrationReference" }
+                },
+                "remarks": { "type": "string" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SpecimenCreated": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["fieldVisitId", "testSetId", "specimenId"],
+          "properties": {
+            "eventType": { "const": "SpecimenCreated" },
+            "sourceSystem": { "const": "CMTFieldApp" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["specimenLabel", "specimenCount", "dimensions", "curingMethod", "createdAt"],
+              "properties": {
+                "specimenLabel": { "type": "string" },
+                "specimenCount": { "type": "integer", "minimum": 1 },
+                "dimensions": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["diameter", "height"],
+                  "properties": {
+                    "diameter": { "$ref": "#/$defs/Measurement" },
+                    "height": { "$ref": "#/$defs/Measurement" }
+                  }
+                },
+                "curingMethod": { "type": "string" },
+                "createdAt": { "type": "string", "format": "date-time" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SpecimenCustodyTransferred": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["specimenId"],
+          "properties": {
+            "eventType": { "const": "SpecimenCustodyTransferred" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["transferredAt", "fromActorId", "toActorId", "condition"],
+              "properties": {
+                "transferredAt": { "type": "string", "format": "date-time" },
+                "fromActorId": { "type": "string" },
+                "toActorId": { "type": "string" },
+                "condition": { "type": "string" },
+                "custodyRemarks": { "type": "string" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SpecimenReceivedByLab": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["testSetId", "specimenId"],
+          "properties": {
+            "eventType": { "const": "SpecimenReceivedByLab" },
+            "sourceSystem": { "const": "CMTLabSystem" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["receivedAt", "receivedBy", "condition"],
+              "properties": {
+                "receivedAt": { "type": "string", "format": "date-time" },
+                "receivedBy": { "type": "string" },
+                "condition": { "type": "string" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "BreakScheduled": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["testSetId", "specimenId"],
+          "properties": {
+            "eventType": { "const": "BreakScheduled" },
+            "sourceSystem": { "const": "CMTLabSystem" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["breakAgeDays", "scheduledFor", "methodReferences"],
+              "properties": {
+                "breakAgeDays": { "type": "integer", "minimum": 1 },
+                "scheduledFor": { "type": "string", "format": "date-time" },
+                "methodReferences": { "type": "array", "items": { "$ref": "#/$defs/MethodReference" } }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "BreakResultRecorded": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["testSetId", "specimenId"],
+          "properties": {
+            "eventType": { "const": "BreakResultRecorded" },
+            "sourceSystem": { "const": "CMTLabSystem" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["testedAt", "breakAgeDays", "measuredDimensions", "crossSectionalArea", "maximumLoad", "compressiveStrength", "fractureType", "testingTechnician", "testingMachine", "methodReferences", "validationStatus", "evidenceReferences"],
+              "properties": {
+                "testedAt": { "type": "string", "format": "date-time" },
+                "breakAgeDays": { "type": "integer", "minimum": 1 },
+                "measuredDimensions": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["diameter", "height"],
+                  "properties": {
+                    "diameter": { "$ref": "#/$defs/Measurement" },
+                    "height": { "$ref": "#/$defs/Measurement" }
+                  }
+                },
+                "crossSectionalArea": { "$ref": "#/$defs/Measurement" },
+                "maximumLoad": { "$ref": "#/$defs/Measurement" },
+                "compressiveStrength": { "$ref": "#/$defs/Measurement" },
+                "fractureType": { "type": "string" },
+                "testingTechnician": { "type": "string" },
+                "testingMachine": { "$ref": "#/$defs/CalibrationReference" },
+                "methodReferences": { "type": "array", "items": { "$ref": "#/$defs/MethodReference" } },
+                "validationStatus": { "const": "recorded" },
+                "evidenceReferences": { "type": "array", "items": { "$ref": "#/$defs/EvidenceReference" } }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "LabResultReviewed": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["testSetId", "specimenId"],
+          "properties": {
+            "eventType": { "const": "LabResultReviewed" },
+            "sourceSystem": { "const": "CMTLabSystem" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reviewedAt", "reviewerId", "reviewDecision"],
+              "properties": {
+                "reviewedAt": { "type": "string", "format": "date-time" },
+                "reviewerId": { "type": "string" },
+                "reviewDecision": { "type": "string", "enum": ["ready_for_approval", "needs_correction"] },
+                "reviewNotes": { "type": "string" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "LabResultApproved": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["testSetId", "specimenId"],
+          "properties": {
+            "eventType": { "const": "LabResultApproved" },
+            "sourceSystem": { "const": "CMTLabSystem" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["approvedAt", "approverId", "approvalStatement"],
+              "properties": {
+                "approvedAt": { "type": "string", "format": "date-time" },
+                "approverId": { "type": "string" },
+                "approvalStatement": { "type": "string" },
+                "reportNumber": { "type": "string" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "LabResultAmended": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "required": ["testSetId", "specimenId", "supersedesEventId"],
+          "properties": {
+            "eventType": { "const": "LabResultAmended" },
+            "sourceSystem": { "const": "CMTLabSystem" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["amendedAt", "amendedBy", "amendmentReason", "correctedFields"],
+              "properties": {
+                "amendedAt": { "type": "string", "format": "date-time" },
+                "amendedBy": { "type": "string" },
+                "amendmentReason": { "type": "string", "minLength": 1 },
+                "correctedFields": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "NonconformanceRaised": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "properties": {
+            "eventType": { "const": "NonconformanceRaised" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["nonconformanceId", "raisedAt", "category", "description", "advisoryOnly"],
+              "properties": {
+                "nonconformanceId": { "type": "string" },
+                "raisedAt": { "type": "string", "format": "date-time" },
+                "category": { "type": "string" },
+                "description": { "type": "string" },
+                "advisoryOnly": { "const": true }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "OperationalStatusChanged": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "properties": {
+            "eventType": { "const": "OperationalStatusChanged" },
+            "sourceSystem": { "const": "CMTCommandDispatch" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "reason"],
+              "properties": {
+                "status": { "type": "string" },
+                "reason": { "type": "string" },
+                "derivedFromEventIds": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+                "attemptedLabResultMutation": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "WorkOrderClosed": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEnvelope" },
+        {
+          "type": "object",
+          "properties": {
+            "eventType": { "const": "WorkOrderClosed" },
+            "sourceSystem": { "const": "CMTCommandDispatch" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["closedAt", "closureReason"],
+              "properties": {
+                "closedAt": { "type": "string", "format": "date-time" },
+                "closureReason": { "type": "string" }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

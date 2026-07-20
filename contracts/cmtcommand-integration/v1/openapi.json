@@ -1,0 +1,320 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CMTCommand Integration API",
+    "version": "1.0.0",
+    "description": "Idempotent event intake and read-only integration queries for CMTCommand dispatch, field observations, specimen custody, and concrete lab results."
+  },
+  "servers": [
+    {
+      "url": "https://api.cmtcommand.example.com"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/events": {
+      "post": {
+        "summary": "Accept one integration event idempotently",
+        "operationId": "postIntegrationEvent",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "$ref": "#/components/parameters/BranchId" },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "./schemas/events.schema.json" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EventIntakeResult" }
+              }
+            }
+          },
+          "200": {
+            "description": "Duplicate already accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EventIntakeResult" }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision or idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid event or domain transition",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/feed": {
+      "get": {
+        "summary": "Read accepted changes after a cursor",
+        "operationId": "getIntegrationEventFeed",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "$ref": "#/components/parameters/BranchId" },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 500, "default": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Change feed page",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EventFeedPage" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/work-orders/{workOrderId}/operational-status": {
+      "get": {
+        "summary": "Read dispatch-owned operational status",
+        "operationId": "getWorkOrderOperationalStatus",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "$ref": "#/components/parameters/BranchId" },
+          { "$ref": "#/components/parameters/WorkOrderId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operational status derived from accepted events",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OperationalStatus" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/specimens/{specimenId}/trace": {
+      "get": {
+        "summary": "Read specimen trace from creation through lab result",
+        "operationId": "getSpecimenTrace",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "$ref": "#/components/parameters/BranchId" },
+          {
+            "name": "specimenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Specimen trace",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SpecimenTrace" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lab-results/{testSetId}/status": {
+      "get": {
+        "summary": "Read lab-owned result status",
+        "operationId": "getLabResultStatus",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "$ref": "#/components/parameters/BranchId" },
+          {
+            "name": "testSetId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lab result status with immutable approved value and amendments",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LabResultStatus" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lab-results/{testSetId}/amendments": {
+      "post": {
+        "summary": "Append a lab-owned amendment to an approved result",
+        "operationId": "postLabResultAmendment",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "$ref": "#/components/parameters/BranchId" },
+          {
+            "name": "testSetId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "./schemas/events.schema.json#/$defs/LabResultAmended" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Amendment accepted"
+          },
+          "409": {
+            "description": "Approved result not found or stale revision"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "parameters": {
+      "TenantId": {
+        "name": "X-Tenant-Id",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1 }
+      },
+      "BranchId": {
+        "name": "X-Branch-Id",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1 }
+      },
+      "WorkOrderId": {
+        "name": "workOrderId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" }
+      }
+    },
+    "schemas": {
+      "EventIntakeResult": {
+        "type": "object",
+        "required": ["status", "eventId", "idempotencyKey", "serverReceivedAt", "revision"],
+        "properties": {
+          "status": { "type": "string", "enum": ["accepted", "duplicate"] },
+          "eventId": { "type": "string", "format": "uuid" },
+          "idempotencyKey": { "type": "string" },
+          "serverReceivedAt": { "type": "string", "format": "date-time" },
+          "revision": { "type": "integer" },
+          "cursor": { "type": "string" }
+        }
+      },
+      "EventFeedPage": {
+        "type": "object",
+        "required": ["events", "nextCursor"],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": { "$ref": "./schemas/events.schema.json" }
+          },
+          "nextCursor": { "type": "string" },
+          "hasMore": { "type": "boolean" }
+        }
+      },
+      "OperationalStatus": {
+        "type": "object",
+        "required": ["workOrderId", "status", "derivedFromEventIds"],
+        "properties": {
+          "workOrderId": { "type": "string" },
+          "status": { "type": "string" },
+          "derivedFromEventIds": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          }
+        }
+      },
+      "SpecimenTrace": {
+        "type": "object",
+        "required": ["specimenId", "events"],
+        "properties": {
+          "specimenId": { "type": "string" },
+          "events": {
+            "type": "array",
+            "items": { "$ref": "./schemas/events.schema.json" }
+          }
+        }
+      },
+      "LabResultStatus": {
+        "type": "object",
+        "required": ["testSetId", "status", "approvedResultImmutable", "amendments"],
+        "properties": {
+          "testSetId": { "type": "string" },
+          "status": { "type": "string" },
+          "approvedResultImmutable": { "type": "object" },
+          "amendments": {
+            "type": "array",
+            "items": { "type": "object" }
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "eventId": { "type": "string", "format": "uuid" }
+        }
+      }
+    }
+  }
+}
