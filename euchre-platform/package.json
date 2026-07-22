@@ -6,6 +6,9 @@
     "dev": "node ./node_modules/next/dist/bin/next dev -H 127.0.0.1",
     "build": "node ./node_modules/next/dist/bin/next build",
     "lint": "node ./node_modules/eslint/bin/eslint.js .",
+    "playtest": "node ./scripts/playtest.cjs",
+    "compare-playtests": "node ./scripts/compare-playtests.cjs",
+    "simulate": "node ./scripts/simulate.cjs",
     "test": "node ./node_modules/vitest/vitest.mjs run",
     "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit"
   },

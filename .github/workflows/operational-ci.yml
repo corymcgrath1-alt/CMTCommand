@@ -5,6 +5,8 @@ on:
     paths:
       - ".github/workflows/operational-ci.yml"
       - "apps/operational/**"
+      - "contracts/cmtcommand-integration/**"
+      - "docs/integration/**"
       - "docs/CMTCOMMAND_BIBLE/**"
   push:
     branches:
@@ -12,6 +14,8 @@ on:
     paths:
       - ".github/workflows/operational-ci.yml"
       - "apps/operational/**"
+      - "contracts/cmtcommand-integration/**"
+      - "docs/integration/**"
       - "docs/CMTCOMMAND_BIBLE/**"
 
 jobs:

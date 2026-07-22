@@ -53,6 +53,13 @@ Confirmed foundations:
   sessions, immutable original media assets, separate preview/thumbnail
   derivatives, duplicate detection, signed short-lived reads, and media audit
   events.
+- A corrected local integration contract v1 for dispatch, offline field capture,
+  individual concrete specimens, chain of custody, lab break scheduling,
+  specimen-level compression results, age-group averages derived from individual
+  result-event IDs, review, approval, amendments, and operational
+  notifications. The contract is verified by a simulator and consumed by an
+  Operational vNext Zod adapter, but no production event store, field app, or
+  live lab synchronization exists.
 - Zod, Vitest, Playwright, health routes, and a PostgreSQL integration-test lane.
 
 Missing foundations that block the concrete-inspection vertical slice:
@@ -60,6 +67,9 @@ Missing foundations that block the concrete-inspection vertical slice:
 - A production identity provider and pilot-ready authentication verification.
 - A production private object-storage provider, IAM policy, malware/media
   inspection, retention, and controlled purge operations.
+- Production event intake persistence, cursor feeds, field-app outbox
+  synchronization, and live laboratory-system adapters for the integration
+  contract.
 - Detailed concrete report/template fields, customer/client rules, retention,
   and acceptance fixtures.
 

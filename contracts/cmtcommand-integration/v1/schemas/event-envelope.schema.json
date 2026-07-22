@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cmtcommand.local/contracts/cmtcommand-integration/v1/schemas/event-envelope.schema.json",
+  "title": "CMTCommand Integration Event Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "schemaVersion",
+    "eventType",
+    "sourceSystem",
+    "organizationId",
+    "officeId",
+    "occurredAt",
+    "producedAt",
+    "correlationId",
+    "workOrderId",
+    "actorId",
+    "actorRole",
+    "revision",
+    "idempotencyKey",
+    "payload"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "schemaVersion": {
+      "const": "cmtcommand.integration.event.v1"
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "WorkOrderCreated",
+        "AssignmentPublished",
+        "AssignmentAccepted",
+        "FieldVisitStarted",
+        "FieldVisitCompleted",
+        "ConcreteFreshPropertiesRecorded",
+        "SpecimenCreated",
+        "SpecimenCustodyTransferred",
+        "SpecimenReceivedByLab",
+        "BreakScheduled",
+        "BreakResultRecorded",
+        "AgeGroupAverageDerived",
+        "LabResultReviewed",
+        "LabResultApproved",
+        "LabResultAmended",
+        "NonconformanceRaised",
+        "OperationalStatusChanged",
+        "WorkOrderClosed"
+      ]
+    },
+    "sourceSystem": {
+      "type": "string",
+      "enum": [
+        "CMTCommandOperational",
+        "CMTCommandDispatch",
+        "CMTFieldApp",
+        "CMTLabSystem",
+        "CMTReadinessDashboard",
+        "CMTIntegrationSimulator"
+      ]
+    },
+    "organizationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "officeId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "producedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "serverReceivedAt": {
+      "type": "string",
+      "format": "date-time",
+      "readOnly": true
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workOrderId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "assignmentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fieldVisitId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "testSetId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "specimenId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "actorId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "actorRole": {
+      "type": "string",
+      "enum": [
+        "organization_admin",
+        "operations_manager",
+        "dispatcher",
+        "technical_reviewer",
+        "field_technician",
+        "viewer",
+        "lab_receiver",
+        "lab_technician",
+        "lab_reviewer",
+        "lab_approver",
+        "system",
+        "integration_adapter"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payload": {
+      "type": "object"
+    },
+    "supersedesEventId": {
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}

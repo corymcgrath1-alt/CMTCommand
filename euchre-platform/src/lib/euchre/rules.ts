@@ -154,11 +154,12 @@ export function legalActionsForPlayer(state: GameState, player: PlayerIndex): Le
   const orderPasses = state.bids.filter((bid) => bid.round === 1 && bid.decision === "pass").length;
   const callPasses = state.bids.filter((bid) => bid.round === 2 && bid.decision === "pass").length;
   const dealerMustStick = state.config.stickDealer && state.phase === "calling" && player === state.dealer && callPasses === 3;
-  const canClaimFarmersHand = active && state.phase === "farmersHand" && state.config.farmersHandMode !== "off" && isFarmersHandQualifier(hand);
+  const canCheckFarmersHand = state.phase === "farmersHand" || state.phase === "ordering" || state.phase === "calling";
+  const canClaimFarmersHand = active && canCheckFarmersHand && state.config.farmersHandMode !== "off" && isFarmersHandQualifier(hand);
 
   return {
     canClaimFarmersHand,
-    canDeclineFarmersHand: canClaimFarmersHand,
+    canDeclineFarmersHand: active && state.phase === "farmersHand" && canClaimFarmersHand,
     farmersHandReplaceableCards:
       canClaimFarmersHand && state.config.farmersHandMode === "replaceThree"
         ? farmersHandReplaceableCards(hand)

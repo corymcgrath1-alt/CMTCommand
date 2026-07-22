@@ -43,6 +43,11 @@ Implemented in this scaffold:
   media-type verification, immutable original media assets, separate preview
   and thumbnail derivatives, short-lived read grants, duplicate detection, and
   transactional audit events.
+- Corrected CMT integration contract adapter for dispatch, offline field
+  capture, individual concrete specimens, chain of custody, lab break results,
+  derived age-group averages, review, approval, amendments, and operational
+  notifications. The adapter imports the canonical JSON envelope schema from
+  `contracts/cmtcommand-integration/v1/` and validates event payloads with Zod.
 - `/api/health` liveness endpoint.
 - `/api/ready` database-readiness endpoint.
 - Vitest unit tests.
@@ -58,6 +63,9 @@ Not implemented:
 - Imports, equipment/certification/clearance records, readiness rules, coverage,
   Decision Log, operational impact, Field Sessions, field reports, OCR/AI
   extraction, samples, production storage, production identity, or deployment.
+- Production event intake persistence, live field-app outbox synchronization,
+  live laboratory-system adapters, and binary attachment storage for the
+  integration contract.
 
 ## Runtime
 
@@ -254,6 +262,7 @@ npm run start
 npm run lint
 npm run typecheck
 npm run test
+npm run test:contract
 npm run test:watch
 npm run test:db
 npm run test:integration
@@ -268,9 +277,11 @@ npm run db:studio
 npm run seed:identity:dev
 ```
 
-`npm run verify` is the stable default gate: lint, typecheck, unit tests, and
-production build. It does not require a live database, browser installation, or
-auth provider credentials.
+`npm run test:contract` runs the dependency-free integration contract simulator
+and the Operational vNext contract-drift unit test. `npm run verify` is the
+stable default gate: lint, typecheck, unit tests, contract tests, and production
+build. It does not require a live database, browser installation, or auth
+provider credentials.
 
 `npm run test:db` requires `APP_ENV=test`, a safe `TEST_DATABASE_URL`, and the
 exact expected database name and loopback host. It is intentionally not part of

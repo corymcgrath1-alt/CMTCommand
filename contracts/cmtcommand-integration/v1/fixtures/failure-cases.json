@@ -1,0 +1,355 @@
+{
+  "name": "cmtcommand-integration-v1-failure-fixtures",
+  "description": "Negative fixtures are materialized by applying overrides to the happy-path events so examples stay aligned with the canonical event vocabulary.",
+  "scenarios": [
+    {
+      "name": "duplicate event is acknowledged once",
+      "events": [
+        { "fromHappyIndex": 0 },
+        { "fromHappyIndex": 0 }
+      ],
+      "expected": { "accepted": 1, "duplicates": 1, "rejected": 0, "deadLettered": 0 }
+    },
+    {
+      "name": "conflicting idempotency key is rejected",
+      "events": [
+        { "fromHappyIndex": 0 },
+        {
+          "fromHappyIndex": 0,
+          "overrides": {
+            "eventId": "41414141-4141-4141-8141-414141414141",
+            "workOrderId": "WO-IDEMPOTENCY-CONFLICT",
+            "projectId": "PRJ-IDEMPOTENCY-CONFLICT",
+            "payload": {
+              "projectName": "Idempotency Conflict",
+              "serviceType": "Concrete compression testing",
+              "placementLocation": "Conflict deck",
+              "readinessRequirements": ["assignment"]
+            }
+          }
+        }
+      ],
+      "expected": { "accepted": 1, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "idempotency-conflict" }
+    },
+    {
+      "name": "stale assignment revision is rejected",
+      "setupThroughIndex": 1,
+      "events": [
+        {
+          "fromHappyIndex": 2,
+          "overrides": {
+            "eventId": "42424242-4242-4242-8242-424242424242",
+            "idempotencyKey": "idem-stale-assignment-accepted",
+            "revision": 1
+          }
+        }
+      ],
+      "expected": { "accepted": 2, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "stale-revision" }
+    },
+    {
+      "name": "four-cylinder fixture rejects specimenCount on a specimen event",
+      "events": [
+        { "fromHappyIndex": 0 },
+        { "fromHappyIndex": 1 },
+        { "fromHappyIndex": 2 },
+        { "fromHappyIndex": 3 },
+        { "fromHappyIndex": 4 },
+        {
+          "fromHappyIndex": 5,
+          "overrides": {
+            "eventId": "43434343-4343-4343-8343-434343434343",
+            "idempotencyKey": "idem-invalid-specimen-count",
+            "payload": {
+              "specimenLabel": "TRD-104-A-BAD",
+              "specimenKind": "concrete_cylinder",
+              "specimenCount": 4,
+              "dimensions": {
+                "diameter": { "value": 4, "unit": "in" },
+                "height": { "value": 8, "unit": "in" }
+              },
+              "curingMethod": "field box initial cure",
+              "moldedAt": "2026-07-21T11:45:00.000Z",
+              "createdAt": "2026-07-21T11:45:00.000Z"
+            }
+          }
+        }
+      ],
+      "expected": { "accepted": 5, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "schema-validation" }
+    },
+    {
+      "name": "reusing one specimen for 7-day and 28-day destructive results is rejected",
+      "setupThroughIndex": 22,
+      "events": [
+        {
+          "fromHappyIndex": 25,
+          "overrides": {
+            "eventId": "44444444-4444-4444-8444-444444444445",
+            "idempotencyKey": "idem-reuse-tested-specimen-for-28-day",
+            "specimenId": "SP-TRD-104-A-01",
+            "revision": 8,
+            "payload": {
+              "resultKind": "original_destructive",
+              "testedAt": "2026-08-18T15:18:00.000Z",
+              "breakAgeDays": 28,
+              "measuredDimensions": {
+                "diameter": { "value": 4.0, "unit": "in" },
+                "height": { "value": 8.01, "unit": "in" }
+              },
+              "crossSectionalArea": { "value": 12.57, "unit": "sq in" },
+              "maximumLoad": { "value": 62300, "unit": "lbf" },
+              "compressiveStrength": { "value": 4956, "unit": "psi" },
+              "fractureType": "type 3",
+              "testingTechnician": "lab-tech-owen",
+              "testingMachine": {
+                "equipmentId": "PRESS-DC-02",
+                "calibrationReference": "CAL-PRESS-DC-02-2026-07",
+                "calibrationStatus": "current",
+                "calibratedAt": "2026-07-01T12:00:00.000Z",
+                "expiresAt": "2026-12-31T12:00:00.000Z"
+              },
+              "methodReferences": [
+                { "identifier": "ASTM C39", "title": "Compressive Strength of Cylindrical Concrete Specimens" }
+              ],
+              "validationStatus": "recorded",
+              "evidenceReferences": [
+                { "evidenceId": "EV-REUSED-PRESS-READING", "evidenceType": "lab_machine_reading", "provenance": "PRESS-DC-02 raw reading", "capturedAt": "2026-08-18T15:18:00.000Z" }
+              ]
+            }
+          }
+        }
+      ],
+      "expected": { "accepted": 23, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "specimen-already-tested" }
+    },
+    {
+      "name": "reusing a specimen for conflicting break schedules is rejected",
+      "setupThroughIndex": 23,
+      "events": [
+        {
+          "fromHappyIndex": 23,
+          "overrides": {
+            "eventId": "45454545-4545-4545-8545-454545454545",
+            "idempotencyKey": "idem-conflicting-break-schedule",
+            "revision": 5,
+            "payload": {
+              "breakAgeDays": 56,
+              "scheduledFor": "2026-09-15T15:00:00.000Z",
+              "destructiveTest": true,
+              "methodReferences": [
+                { "identifier": "ASTM C39", "title": "Compressive Strength of Cylindrical Concrete Specimens" }
+              ]
+            }
+          }
+        }
+      ],
+      "expected": { "accepted": 24, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "specimen-break-already-scheduled" }
+    },
+    {
+      "name": "result for an unknown specimen is rejected",
+      "setupThroughIndex": 0,
+      "events": [
+        {
+          "fromHappyIndex": 20,
+          "overrides": {
+            "eventId": "46464646-4646-4646-8646-464646464646",
+            "idempotencyKey": "idem-unknown-specimen-result",
+            "specimenId": "SP-UNKNOWN",
+            "testSetId": "TS-UNKNOWN",
+            "revision": 1
+          }
+        }
+      ],
+      "expected": { "accepted": 1, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "unknown-specimen" }
+    },
+    {
+      "name": "result before lab receipt is rejected",
+      "setupThroughIndex": 5,
+      "events": [
+        {
+          "fromHappyIndex": 20,
+          "overrides": {
+            "eventId": "47474747-4747-4747-8747-474747474747",
+            "idempotencyKey": "idem-result-before-lab-receipt",
+            "revision": 2
+          }
+        }
+      ],
+      "expected": { "accepted": 6, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "result-before-lab-receipt" }
+    },
+    {
+      "name": "lab receipt before custody transfer is rejected",
+      "setupThroughIndex": 5,
+      "events": [
+        {
+          "fromHappyIndex": 15,
+          "overrides": {
+            "eventId": "48484848-4848-4848-8848-484848484848",
+            "idempotencyKey": "idem-lab-receipt-before-custody",
+            "revision": 2
+          }
+        }
+      ],
+      "expected": { "accepted": 6, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "out-of-order-custody" }
+    },
+    {
+      "name": "missing or expired calibration evidence is rejected",
+      "setupThroughIndex": 19,
+      "events": [
+        {
+          "fromHappyIndex": 20,
+          "overrides": {
+            "eventId": "49494949-4949-4949-8949-494949494949",
+            "idempotencyKey": "idem-expired-calibration-result",
+            "payload": {
+              "resultKind": "original_destructive",
+              "testedAt": "2026-07-28T15:12:00.000Z",
+              "breakAgeDays": 7,
+              "measuredDimensions": {
+                "diameter": { "value": 4.01, "unit": "in" },
+                "height": { "value": 8.02, "unit": "in" }
+              },
+              "crossSectionalArea": { "value": 12.63, "unit": "sq in" },
+              "maximumLoad": { "value": 40250, "unit": "lbf" },
+              "compressiveStrength": { "value": 3187, "unit": "psi" },
+              "fractureType": "type 2",
+              "testingTechnician": "lab-tech-owen",
+              "testingMachine": {
+                "equipmentId": "PRESS-DC-02",
+                "calibrationReference": "CAL-PRESS-DC-02-2026-01",
+                "calibrationStatus": "current",
+                "calibratedAt": "2026-01-01T12:00:00.000Z",
+                "expiresAt": "2026-07-01T12:00:00.000Z"
+              },
+              "methodReferences": [
+                { "identifier": "ASTM C39", "title": "Compressive Strength of Cylindrical Concrete Specimens" }
+              ],
+              "validationStatus": "recorded",
+              "evidenceReferences": [
+                { "evidenceId": "EV-EXPIRED-CAL", "evidenceType": "lab_machine_reading", "provenance": "PRESS-DC-02 raw reading", "capturedAt": "2026-07-28T15:12:00.000Z" }
+              ]
+            }
+          }
+        }
+      ],
+      "expected": { "accepted": 20, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "missing-or-expired-calibration" }
+    },
+    {
+      "name": "dispatch cannot create or approve lab-owned technical results",
+      "setupThroughIndex": 27,
+      "events": [
+        {
+          "fromHappyIndex": 28,
+          "overrides": {
+            "eventId": "51515151-5151-4151-8151-515151515151",
+            "sourceSystem": "CMTCommandOperational",
+            "actorId": "dispatch-amy",
+            "actorRole": "dispatcher",
+            "idempotencyKey": "idem-dispatch-approve-lab-result"
+          }
+        }
+      ],
+      "expected": { "accepted": 28, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "forbidden-lab-approver" }
+    },
+    {
+      "name": "dispatch cannot mutate approved lab result through operational status",
+      "setupThroughIndex": 28,
+      "events": [
+        {
+          "fromHappyIndex": 33,
+          "overrides": {
+            "eventId": "52525252-5252-4252-8252-525252525252",
+            "idempotencyKey": "idem-dispatch-lab-mutation-attempt",
+            "payload": {
+              "status": "attempted_lab_result_edit",
+              "reason": "negative test",
+              "attemptedLabResultMutation": true
+            }
+          }
+        }
+      ],
+      "expected": { "accepted": 29, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "dispatch-lab-result-mutation" }
+    },
+    {
+      "name": "approved result cannot be overwritten",
+      "setupThroughIndex": 28,
+      "events": [
+        {
+          "fromHappyIndex": 28,
+          "overrides": {
+            "eventId": "53535353-5353-4353-8353-535353535353",
+            "idempotencyKey": "idem-overwrite-approved-result",
+            "revision": 8
+          }
+        }
+      ],
+      "expected": { "accepted": 29, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "approved-result-immutable" }
+    },
+    {
+      "name": "approved result amendment is append only",
+      "setupThroughIndex": 28,
+      "events": [
+        {
+          "fromHappyIndex": 28,
+          "overrides": {
+            "eventId": "54545454-5454-4454-8454-545454545454",
+            "eventType": "LabResultAmended",
+            "actorId": "approver-kim",
+            "actorRole": "lab_approver",
+            "revision": 8,
+            "idempotencyKey": "idem-approved-result-amended-sp-trd-104-a-02",
+            "supersedesEventId": "26262626-2626-4626-8626-262626262626",
+            "payload": {
+              "resultEventId": "23232323-2323-4323-8323-232323232323",
+              "approvedEventId": "26262626-2626-4626-8626-262626262626",
+              "amendedAt": "2026-08-19T14:00:00.000Z",
+              "amendedBy": "approver-kim",
+              "amendmentReason": "Corrected report note; measured value unchanged.",
+              "correctedFields": {
+                "reportNote": "Corrected curing note from field box to moist room after receipt."
+              }
+            }
+          }
+        }
+      ],
+      "expected": { "accepted": 30, "duplicates": 0, "rejected": 0, "deadLettered": 0, "amendments": 1, "approvedStrength": 4956 }
+    },
+    {
+      "name": "cross-organization access is rejected",
+      "setupThroughIndex": 0,
+      "events": [
+        {
+          "fromHappyIndex": 1,
+          "overrides": {
+            "eventId": "55555555-5555-4555-8555-555555555556",
+            "organizationId": "org-beta-testing",
+            "officeId": "office-fairfax",
+            "idempotencyKey": "idem-cross-org-assignment"
+          }
+        }
+      ],
+      "expected": { "accepted": 1, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "cross-organization-access" }
+    },
+    {
+      "name": "cross-office access is rejected unless explicitly authorized",
+      "setupThroughIndex": 0,
+      "events": [
+        {
+          "fromHappyIndex": 1,
+          "overrides": {
+            "eventId": "56565656-5656-4656-8656-565656565656",
+            "officeId": "office-richmond",
+            "idempotencyKey": "idem-cross-office-assignment"
+          }
+        }
+      ],
+      "expected": { "accepted": 1, "duplicates": 0, "rejected": 1, "deadLettered": 0, "lastCode": "cross-office-access" }
+    },
+    {
+      "name": "network outage keeps outbox item and retry acknowledges once",
+      "outbox": {
+        "networkPlan": ["offline", "offline", "online"],
+        "eventFromHappyIndex": 0
+      },
+      "expected": { "attempts": 3, "accepted": 1, "queuedAfterOfflineAttempts": 2 }
+    }
+  ]
+}

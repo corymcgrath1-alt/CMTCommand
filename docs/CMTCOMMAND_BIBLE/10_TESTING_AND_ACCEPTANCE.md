@@ -95,6 +95,7 @@ Phase 4 added app-local testing and verification commands under
 npm run lint
 npm run typecheck
 npm run test
+npm run test:contract
 npm run build
 npm run verify
 npm run test:e2e
@@ -103,9 +104,11 @@ npm run test:integration
 npm run verify:db
 ```
 
-`npm run verify` runs lint, typecheck, Vitest unit tests, and a production
-Next.js build. It does not require PostgreSQL, Playwright browser execution,
-auth credentials, deployment credentials, or customer data.
+`npm run test:contract` runs the dependency-free integration contract simulator
+and the Operational vNext contract-drift unit test. `npm run verify` runs lint,
+typecheck, Vitest unit tests, contract tests, and a production Next.js build. It
+does not require PostgreSQL, Playwright browser execution, auth credentials,
+deployment credentials, or customer data.
 
 `npm run test:e2e` runs the non-blocking Playwright scaffold smoke. It is
 configured as a single-worker check so it owns one local dev server and avoids
@@ -276,6 +279,7 @@ viewer/Beta denials.
 | Pilot V1 database change | Migration tests plus affected integration tests, referential behavior checks, and rollback/recovery notes. |
 | General audit change | Taxonomy/serializer unit tests, PostgreSQL immutability and atomicity, tenant/office/security authorization, protected API/browser scenarios, and privacy scans. |
 | Private media-storage change | Storage guard unit tests, upload/complete/read service integration tests, immutable original/derivative database checks, audit privacy checks, and signed-route Playwright coverage. |
+| Integration contract change | Contract simulator tests, schema/fixture/OpenAPI reference checks, Operational vNext contract-drift test, `npm run verify`, root verifier, and scoped `git diff --check`. |
 | Pilot V1 permission change | Allowed and denied cases for each affected role, organization, and office boundary. |
 | Pilot V1 import behavior | Valid import, malformed file, missing required fields, duplicate records, sensitive columns, preview/apply flow, and import history. |
 | Bug fix | Regression test reproducing original failure when practical, plus related verifier/browser smoke. |

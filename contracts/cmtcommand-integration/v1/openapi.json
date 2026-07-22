@@ -1,0 +1,461 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CMTCommand Integration API",
+    "version": "1.0.0",
+    "description": "Idempotent event intake and read-only integration queries for CMTCommand operational dispatch, offline field capture, specimen custody, concrete lab results, derived averages, review, approval, and amendments. This is a contract and local verification foundation, not a production deployment."
+  },
+  "servers": [
+    {
+      "url": "https://api.cmtcommand.example.com"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/events": {
+      "post": {
+        "summary": "Accept one integration event idempotently",
+        "operationId": "postIntegrationEvent",
+        "description": "Organization and office headers are routing/context hints. A production implementation must derive authorization from the authenticated server context and reject mismatches.",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          { "$ref": "#/components/parameters/OfficeId" },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "./schemas/events.schema.json" },
+              "examples": {
+                "workOrderCreated": {
+                  "summary": "Work order created",
+                  "value": {
+                    "eventId": "11111111-1111-4111-8111-111111111111",
+                    "schemaVersion": "cmtcommand.integration.event.v1",
+                    "eventType": "WorkOrderCreated",
+                    "sourceSystem": "CMTCommandOperational",
+                    "organizationId": "org-alpha-engineering",
+                    "officeId": "office-alexandria",
+                    "occurredAt": "2026-07-20T11:00:00.000Z",
+                    "producedAt": "2026-07-20T11:00:05.000Z",
+                    "correlationId": "corr-trd-104-lab-cycle",
+                    "workOrderId": "WO-TRD-104",
+                    "projectId": "PRJ-POTOMAC-PLAZA",
+                    "actorId": "dispatch-amy",
+                    "actorRole": "dispatcher",
+                    "revision": 1,
+                    "idempotencyKey": "idem-work-order-created-wo-trd-104",
+                    "payload": {
+                      "projectName": "Potomac Plaza",
+                      "serviceType": "Concrete compression testing",
+                      "placementLocation": "Level 3 east slab",
+                      "readinessRequirements": ["qualified technician", "field cylinder kit", "lab break schedule"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EventIntakeResult" }
+              }
+            }
+          },
+          "200": {
+            "description": "Duplicate already accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EventIntakeResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Schema validation failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization, office, actor, or role is not authorized by server context",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision or idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid domain ordering or transition",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/feed": {
+      "get": {
+        "summary": "Read accepted changes after a cursor",
+        "operationId": "getIntegrationEventFeed",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          { "$ref": "#/components/parameters/OfficeId" },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 500, "default": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Change feed page",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EventFeedPage" }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden scope",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/work-orders/{workOrderId}/operational-status": {
+      "get": {
+        "summary": "Read dispatch-owned operational status",
+        "operationId": "getWorkOrderOperationalStatus",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          { "$ref": "#/components/parameters/OfficeId" },
+          { "$ref": "#/components/parameters/WorkOrderId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operational status derived from accepted events",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OperationalStatus" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or inaccessible",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/specimens/{specimenId}/trace": {
+      "get": {
+        "summary": "Read specimen trace from creation through lab result",
+        "operationId": "getSpecimenTrace",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          { "$ref": "#/components/parameters/OfficeId" },
+          {
+            "name": "specimenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Specimen trace",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SpecimenTrace" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or inaccessible",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/test-sets/{testSetId}/lab-status": {
+      "get": {
+        "summary": "Read lab-owned test-set status",
+        "operationId": "getTestSetLabStatus",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          { "$ref": "#/components/parameters/OfficeId" },
+          {
+            "name": "testSetId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lab result status with individual results, derived averages, immutable approvals, and amendments",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TestSetLabStatus" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or inaccessible",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lab-results/{resultEventId}/amendments": {
+      "post": {
+        "summary": "Append a lab-owned amendment to an approved result",
+        "operationId": "postLabResultAmendment",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          { "$ref": "#/components/parameters/OfficeId" },
+          {
+            "name": "resultEventId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "./schemas/events.schema.json#/$defs/LabResultAmended" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Amendment accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EventIntakeResult" }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated actor is not authorized to amend this lab result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          },
+          "409": {
+            "description": "Approved result not found or stale revision",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "parameters": {
+      "OrganizationId": {
+        "name": "X-Organization-Id",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1 }
+      },
+      "OfficeId": {
+        "name": "X-Office-Id",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1 }
+      },
+      "WorkOrderId": {
+        "name": "workOrderId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1 }
+      }
+    },
+    "schemas": {
+      "EventIntakeResult": {
+        "type": "object",
+        "required": ["status", "eventId", "idempotencyKey", "serverReceivedAt", "revision"],
+        "properties": {
+          "status": { "type": "string", "enum": ["accepted", "duplicate"] },
+          "eventId": { "type": "string", "format": "uuid" },
+          "idempotencyKey": { "type": "string" },
+          "serverReceivedAt": { "type": "string", "format": "date-time" },
+          "revision": { "type": "integer" },
+          "cursor": { "type": "string" }
+        }
+      },
+      "EventFeedPage": {
+        "type": "object",
+        "required": ["events", "nextCursor", "hasMore"],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": { "$ref": "./schemas/events.schema.json" }
+          },
+          "nextCursor": { "type": "string" },
+          "hasMore": { "type": "boolean" }
+        }
+      },
+      "OperationalStatus": {
+        "type": "object",
+        "required": ["workOrderId", "status", "derivedFromEventIds"],
+        "properties": {
+          "workOrderId": { "type": "string" },
+          "status": { "type": "string" },
+          "derivedFromEventIds": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          }
+        }
+      },
+      "SpecimenTrace": {
+        "type": "object",
+        "required": ["specimenId", "testSetId", "specimenLabel", "custody", "events"],
+        "properties": {
+          "specimenId": { "type": "string" },
+          "testSetId": { "type": "string" },
+          "specimenLabel": { "type": "string" },
+          "custody": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "events": {
+            "type": "array",
+            "items": { "$ref": "./schemas/events.schema.json" }
+          }
+        }
+      },
+      "TestSetLabStatus": {
+        "type": "object",
+        "required": ["testSetId", "specimens", "results", "ageGroupAverages", "amendments"],
+        "properties": {
+          "testSetId": { "type": "string" },
+          "specimens": {
+            "type": "array",
+            "items": { "type": "object" }
+          },
+          "results": {
+            "type": "array",
+            "items": { "type": "object" }
+          },
+          "ageGroupAverages": {
+            "type": "array",
+            "items": { "type": "object" }
+          },
+          "amendments": {
+            "type": "array",
+            "items": { "type": "object" }
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "validation_error",
+              "unauthorized",
+              "forbidden",
+              "not_found_or_inaccessible",
+              "duplicate_event",
+              "idempotency_conflict",
+              "stale_revision",
+              "invalid_ordering",
+              "cross_organization_access",
+              "cross_office_access",
+              "calibration_invalid",
+              "lab_result_immutable",
+              "persistence_failure"
+            ]
+          },
+          "message": { "type": "string" },
+          "eventId": { "type": "string", "format": "uuid" },
+          "requestId": { "type": "string" },
+          "issues": {
+            "type": "array",
+            "items": { "type": "object" }
+          }
+        }
+      }
+    }
+  }
+}

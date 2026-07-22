@@ -93,6 +93,7 @@ npm run dev
 npm run lint
 npm run typecheck
 npm run test
+npm run test:contract
 npm run build
 npm run verify
 npm run test:e2e
@@ -106,8 +107,10 @@ npm run verify:full
 npm run db:studio
 ```
 
-`npm run verify` is the stable operational gate and runs lint, typecheck, unit
-tests, and production build. It must not require a live database, browser
+`npm run test:contract` runs the CMT integration contract simulator and the
+Operational vNext contract-drift unit test. `npm run verify` is the stable
+operational gate and runs lint, typecheck, unit tests, contract tests, and
+production build. It must not require a live database, browser
 installation, auth provider credentials, deployment account, or customer data.
 `npm run verify:db` applies test migrations and runs PostgreSQL integration
 tests with explicit `APP_ENV=test`, `TEST_DATABASE_URL`, the exact repository

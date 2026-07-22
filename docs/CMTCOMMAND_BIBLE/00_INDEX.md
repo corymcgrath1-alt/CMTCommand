@@ -65,6 +65,7 @@ Founder decisions dated 2026-07-13 are authoritative product-direction evidence,
 | Deployment and operations | [11_DEPLOYMENT_AND_OPERATIONS](11_DEPLOYMENT_AND_OPERATIONS.md) |
 | Decisions, roadmap, questions | [12_DECISIONS_ROADMAP_AND_OPEN_QUESTIONS](12_DECISIONS_ROADMAP_AND_OPEN_QUESTIONS.md) |
 | Future field operations capture and reporting | [13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING](13_FIELD_OPERATIONS_CAPTURE_AND_REPORTING.md) |
+| Field/lab integration contract | [Integration Architecture](../integration/architecture.md), [Integration Identifiers And States](../integration/identifiers-and-states.md), [Integration Ownership Matrix](../integration/ownership-matrix.md), [Integration Threat Model](../integration/threat-model.md), [Integration Migration Plan](../integration/migration-plan.md) |
 | Production governance threat model | [security/PRODUCTION_THREAT_MODEL](security/PRODUCTION_THREAT_MODEL.md) |
 | Data lifecycle and retention draft | [policies/DATA_LIFECYCLE_AND_RETENTION_DRAFT](policies/DATA_LIFECYCLE_AND_RETENTION_DRAFT.md) |
 | Pilot production readiness checklist | [checklists/PILOT_PRODUCTION_READINESS](checklists/PILOT_PRODUCTION_READINESS.md) |
@@ -74,6 +75,11 @@ Pilot V1 additions:
 - [Pilot V1 Feature Specification](specs/PILOT_V1_TOMORROW_READINESS_AND_COVERAGE.md): read before operational product design or implementation.
 - [ADR-001 Preserve Static Demo And Build Operational vNext](decisions/ADR-001_PRESERVE_STATIC_DEMO_AND_BUILD_OPERATIONAL_VNEXT.md): read before changing architecture or proposing a backend path.
 - [Pilot V1 Implementation Sequence](plans/PILOT_V1_IMPLEMENTATION_SEQUENCE.md): read before sequencing operationalization work.
+
+Integration contract foundation:
+
+- [CMTCommand Integration Contract v1](../../contracts/cmtcommand-integration/v1/README.md): corrected local contract for dispatch, offline field capture, individual concrete specimens, chain of custody, laboratory break results, review, approval, amendments, and operational notifications.
+- [Integration Architecture](../integration/architecture.md): source-of-truth boundaries, organization/office identifier decision, specimen identity correction, sync behavior, and explicit production deferrals.
 
 Operational vNext architecture:
 
@@ -170,6 +176,15 @@ Do not treat inferred statements as product commitments. Do not treat founder ta
   provider, malware scanner, internal Field Operations alpha, customer Field
   Operations pilot, Field Sessions, reports, OCR/AI extraction, samples, or
   production field-reporting runtime exists.
+- A corrected CMT integration contract v1 exists under
+  `contracts/cmtcommand-integration/v1/` with local simulator/schema fixture
+  verification and an Operational vNext Zod adapter under
+  `apps/operational/src/server/integration/cmt-events.ts`. It uses
+  `organizationId` and `officeId`, models each concrete cylinder as one
+  `specimenId`, and verifies destructive break, custody, idempotency,
+  calibration, review, approval, amendment, and isolation rules. It does not
+  implement production event persistence, a field app, live laboratory sync,
+  binary attachment storage, or deployment.
 - `euchre-platform/` and `brackethub/` are unrelated to root CMTCommand scope based on `AGENTS.md`, `MIGRATION_CLEANUP_REPORT.md`, and vNext docs.
 - `node scripts\verify-root.mjs` is the root verification command found in repository evidence.
 
